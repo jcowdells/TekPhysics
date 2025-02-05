@@ -1,0 +1,6 @@
+/snap/clion/314/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/snap/clion/314/bin/ninja/linux/x64/ninja -G Ninja -S /media/legendmixer/HDD/TekPhysics -B /media/legendmixer/HDD/TekPhysics/cmake-build-debug
+-- Including Wayland support
+-- Including X11 support
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /media/legendmixer/HDD/TekPhysics/cmake-build-debug
