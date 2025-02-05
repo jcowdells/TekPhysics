@@ -1,0 +1,6 @@
+[submodule "glfw"]
+	path = glfw
+	url = /glfw
+[submodule "cglm"]
+	path = cglm
+	url = /cglm
