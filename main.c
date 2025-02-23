@@ -7,100 +7,61 @@
 #include "tekgl/shader.h"
 #include "tekgl/texture.h"
 #include "tekgl/font.h"
+#include "tekgl/text.h"
+
+#include <cglm/cam.h>
+
+#include "tekgl/manager.h"
+#include "tekgui/primitives.h"
 
 #define printException(x) if (x) tekPrintException()
 
+float width, height;
+
+void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
+    width = (float)fb_width;
+    height = (float)fb_height;
+}
+
 int render() {
-    printf("Hello World!\n");
-    /* Initialize the library */
-    if (!glfwInit())
-        tekThrow(GLFW_EXCEPTION, "GLFW failed to initialise.")
+    printException(tekInit("TekPhysics", 640, 480));
+    width = 640.0f;
+    height = 480.0f;
 
-    /* Create a windowed mode window and its OpenGL context */
-    GLFWwindow* window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
-    if (!window) {
-        glfwTerminate();
-        tekThrow(GLFW_EXCEPTION, "GLFW failed to create window.")
-    }
+    tekAddFramebufferCallback(tekMainFramebufferCallback);
 
-    /* Make the window's context current */
-    glfwMakeContextCurrent(window);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        tekThrow(GLAD_EXCEPTION, "GLAD failed to load loader.")
-    }
-
-    const float vertices[] = {
-        -1.0f, -1.0f, 0.0f, 0.0f, 1.0f,
-         1.0f, -1.0f, 0.0f, 1.0f, 1.0f,
-         1.0f,  1.0f, 0.0f, 1.0f, 0.0f,
-        -1.0f,  1.0f, 0.0f, 0.0f, 0.0f
-    };
-
-    const unsigned int indices[] = {
-        0, 1, 2,
-        0, 2, 3
-    };
-
-    TekMesh mesh;
-    if (tekCreateMesh(vertices, 20, indices, 6, &mesh)) {
-        tekPrintException();
-    }
-
-    GLuint shader_program = 0;
-    if (tekCreateShaderProgramVF("../shader/vertex.glvs", "../shader/fragment.glfs", &shader_program)) {
-        tekPrintException();
-    }
-    glUseProgram(shader_program);
-
-
-
-    TekGlyph glyphs[ATLAS_SIZE];
-
+    TekBitmapFont verdana;
     printException(tekCreateFreeType());
 
-    FT_Face font_face;
-    printException(tekCreateFontFace("../res/verdana.ttf", 0, 20, &font_face));
+    printException(tekCreateBitmapFont("../res/verdana.ttf", 0, 64, &verdana));
 
-    uint texture = 0;
-    printException(tekCreateFontAtlasTexture(&font_face, &texture, glyphs));
+    TekText text;
+    printException(tekCreateText("TekPhysics Alpha v1.0", 20, &verdana, &text));
 
-    tekDeleteFontFace(font_face);
     tekDeleteFreeType();
 
-    //if (tekCreateTexture("../res/xavier.png", &texture)) {
-    //     tekPrintException();
-    //}
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
+    vec2 point_a = {0.0f, 0.0f};
+    vec2 point_b = {640.0f, 480.0f};
+    vec4 line_color = {1.f, 1.f, 1.f, 1.f};
 
-    glViewport(0, 0, 640, 480);
+    TekGuiLine line;
 
-    /* Loop until the user closes the window */
-    while (!glfwWindowShouldClose(window)) {
-        /* Render here */
-        glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
+    printException(tekCreateLine(point_a, point_b, 1.f, line_color, &line));
 
-        glClear(GL_COLOR_BUFFER_BIT);
+    while (tekRunning()) {
+        glClearColor(0.2f, 0.2f, 0.21f, 1.0f);
 
-        tekBindShaderProgram(shader_program);
-        tekBindTexture(texture, 0);
-        tekDrawMesh(&mesh);
-
-        /* Swap front and back buffers */
-        glfwSwapBuffers(window);
-
-        /* Poll for and process events */
-        glfwPollEvents();
+        printException(tekDrawText(&text, width - 185.0f, 5.0f));
+        printException(tekDrawLine(&line));
+        tekUpdate();
     }
 
-    tekDeleteTexture(texture);
-    tekDeleteMesh(&mesh);
-    tekDeleteShaderProgram(shader_program);
-    glfwTerminate();
+    tekDeleteTextEngine();
+    tekDeleteText(&text);
+    tekDelete();
     return SUCCESS;
 }
 

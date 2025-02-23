@@ -1,0 +1,15 @@
+#version 330 core
+
+layout (location = 0) in vec2 position;
+layout (location = 1) in vec2 tex_coord_v;
+
+out vec2 tex_coord_f;
+
+uniform mat4 projection;
+uniform float draw_x;
+uniform float draw_y;
+
+void main() {
+    gl_Position = projection * vec4(draw_x + position.x, draw_y + position.y, 0.0f, 1.0f);
+    tex_coord_f = tex_coord_v;
+}

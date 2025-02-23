@@ -18,8 +18,16 @@ typedef struct TekGlyph {
     unsigned short advance;
 } TekGlyph;
 
+typedef struct TekBitmapFont {
+    uint atlas_id;
+    uint atlas_size;
+    uint original_size;
+    TekGlyph glyphs[ATLAS_SIZE];
+} TekBitmapFont;
+
 exception tekCreateFreeType();
 void tekDeleteFreeType();
 exception tekCreateFontFace(const char* filename, uint face_index, uint face_size, FT_Face* face);
 exception tekTempLoadGlyph(const FT_Face* face, uint glyph_id, TekGlyph* glyph, byte** glyph_data);
-exception tekCreateFontAtlasTexture(const FT_Face* face, uint* texture_id, TekGlyph* glyphs);
+//exception tekCreateFontAtlasTexture(const FT_Face* face, uint* texture_id, TekGlyph* glyphs);
+exception tekCreateBitmapFont(const char* filename, uint face_index, uint face_size, TekBitmapFont* bitmap_font);

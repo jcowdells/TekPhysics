@@ -21,10 +21,11 @@ exception tekCreateFreeType() {
 }
 
 void tekDeleteFreeType() {
-    FT_Done_FreeType(ft_library);
+    if (ft_library) FT_Done_FreeType(ft_library);
 }
 
 exception tekCreateFontFace(const char* filename, const uint face_index, const uint face_size, FT_Face* face) {
+    // make sure that the font is large enough
     if (face_size < MIN_FONT_SIZE) tekThrow(FREETYPE_EXCEPTION, "Font size is too small.");
 
     // make sure that freetype has been initialised
@@ -189,16 +190,15 @@ exception tekCreateFontAtlasData(const FT_Face* face, const uint atlas_size, byt
     return SUCCESS;
 }
 
-exception tekCreateFontAtlasTexture(const FT_Face* face, uint* texture_id, TekGlyph* glyphs) {
-    uint atlas_size = 0;
-    tekChainThrow(tekGetAtlasSize(face, &atlas_size));
+exception tekCreateFontAtlasTexture(const FT_Face* face, uint* texture_id, uint* atlas_size, TekGlyph* glyphs) {
+    tekChainThrow(tekGetAtlasSize(face, atlas_size));
 
     // allocate enough data for the atlas texture
-    byte* atlas_data = (byte*)calloc(1, atlas_size * atlas_size);
+    byte* atlas_data = (byte*)malloc(*atlas_size * *atlas_size);
     if (!atlas_data) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for atlas data.");
 
     // pass empty buffer and fill it with atlas texture data
-    const exception result = tekCreateFontAtlasData(face, atlas_size, &atlas_data, glyphs);
+    const exception result = tekCreateFontAtlasData(face, *atlas_size, &atlas_data, glyphs);
     if (result) {
         free(atlas_data);
         tekChainThrow(result);
@@ -215,9 +215,18 @@ exception tekCreateFontAtlasTexture(const FT_Face* face, uint* texture_id, TekGl
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     // write atlas texture data to buffer
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, (int)atlas_size, (int)atlas_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, (int)*atlas_size, (int)*atlas_size, 0, GL_RED, GL_UNSIGNED_BYTE, atlas_data);
 
     // free the atlas data as it is no longer needed
     free(atlas_data);
+    return SUCCESS;
+}
+
+exception tekCreateBitmapFont(const char* filename, const uint face_index, const uint face_size, TekBitmapFont* bitmap_font) {
+    FT_Face face;
+    tekChainThrow(tekCreateFontFace(filename, face_index, face_size, &face));
+    tekChainThrow(tekCreateFontAtlasTexture(&face, &bitmap_font->atlas_id, &bitmap_font->atlas_size, &bitmap_font->glyphs));
+    bitmap_font->original_size = face->size->metrics.height >> 6;
+    tekDeleteFontFace(face);
     return SUCCESS;
 }

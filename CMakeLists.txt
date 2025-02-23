@@ -21,6 +21,18 @@ add_executable(
         tekgl/texture.h
         tekgl/font.c
         tekgl/font.h
+        tekgl/text.c
+        tekgl/text.h
+        tekgl/manager.c
+        tekgl/manager.h
+#        tekgui/tekgui.c
+#        tekgui/tekgui.h
+#        tekgui/container.c
+#        tekgui/container.h
+#        tekgui/size.c
+#        tekgui/size.h
+        tekgui/primitives.c
+        tekgui/primitives.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})

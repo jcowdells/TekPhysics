@@ -26,8 +26,13 @@ exception tekCreateBuffer(const GLenum buffer_type, const void* buffer_data, con
     }
 }
 
-exception tekCreateMesh(const float* vertices, const long len_vertices, const uint* indices, const long len_indices, TekMesh* mesh_ptr) {
+exception tekCreateMesh(const float* vertices, const long len_vertices, const uint* indices, const long len_indices, const int* layout, const uint len_layout, TekMesh* mesh_ptr) {
     if (!mesh_ptr) tekThrow(NULL_PTR_EXCEPTION, "Mesh pointer cannot be null.")
+
+    // unbind the vertex array so we don't interfere with anything else
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // vertex array will keep track of buffers and attribute pointers for us
     // create and bind the vertex array, the currently bound vertex array will track what we do next
@@ -42,6 +47,21 @@ exception tekCreateMesh(const float* vertices, const long len_vertices, const ui
     tekChainThrow(tekCreateBuffer(
         GL_ELEMENT_ARRAY_BUFFER, indices, len_indices * sizeof(uint), GL_STATIC_DRAW, &mesh_ptr->element_buffer_id
         ));
+
+    // find the total size of each vertex
+    int layout_size = 0;
+    for (uint i = 0; i < len_layout; i++) layout_size += layout[i];
+
+    // convert size to bytes
+    layout_size *= sizeof(float);
+
+    // create attrib pointer for each section of the layout
+    int prev_layout = 0;
+    for (uint i = 0; i < len_layout; i++) {
+        glVertexAttribPointer(i, layout[i], GL_FLOAT, GL_FALSE, layout_size, (void*)(prev_layout * sizeof(float)));
+        glEnableVertexAttribArray(i);
+        prev_layout = layout[i];
+    }
 
     // keep track of how many elements are in element buffer - we need this to draw later on
     mesh_ptr->num_elements = (int)len_indices;

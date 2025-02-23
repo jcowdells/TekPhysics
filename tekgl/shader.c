@@ -80,3 +80,24 @@ exception tekShaderUniformInt(const uint shader_program_id, const char* uniform_
     glUniform1i(uniform_location, uniform_value);
     return SUCCESS;
 }
+
+exception tekShaderUniformFloat(const uint shader_program_id, const char* uniform_name, const float uniform_value) {
+    int uniform_location;
+    tekChainThrow(tekGetShaderUniformLocation(shader_program_id, uniform_name, &uniform_location));
+    glUniform1f(uniform_location, uniform_value);
+    return SUCCESS;
+}
+
+exception tekShaderUniformVec4(const uint shader_program_id, const char* uniform_name, const vec4 uniform_value) {
+    int uniform_location;
+    tekChainThrow(tekGetShaderUniformLocation(shader_program_id, uniform_name, &uniform_location));
+    glUniform4fv(uniform_location, 1, uniform_value);
+    return SUCCESS;
+}
+
+exception tekShaderUniformMat4(const uint shader_program_id, const char* uniform_name, const mat4 uniform_value) {
+    int uniform_location;
+    tekChainThrow(tekGetShaderUniformLocation(shader_program_id, uniform_name, &uniform_location));
+    glUniformMatrix4fv(uniform_location, 1, GL_FALSE, uniform_value);
+    return SUCCESS;
+}
