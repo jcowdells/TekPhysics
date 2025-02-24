@@ -5,5 +5,5 @@
 	path = cglm
 	url = https://github.com/recp/cglm.git
 [submodule "freetype"]
-    path = freetype
-    url = https://github.com/freetype/freetype
+	path = freetype
+	url = https://github.com/freetype/freetype
