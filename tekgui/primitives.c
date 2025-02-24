@@ -7,6 +7,7 @@
 
 mat4 projection;
 uint line_shader_program = 0;
+uint oval_shader_program = 0;
 float pwidth, pheight;
 
 void tekPrimitiveFramebufferCallback(const int window_width, const int window_height) {
@@ -17,6 +18,7 @@ void tekPrimitiveFramebufferCallback(const int window_width, const int window_he
 
 exception tekInitPrimitives() {
     tekChainThrow(tekCreateShaderProgramVF("../shader/line_vertex.glvs", "../shader/line_fragment.glfs", &line_shader_program));
+    tekChainThrow(tekCreateShaderProgramVF("../shader/oval_vertex.glvs", "../shader/oval_fragment.glfs", &oval_shader_program));
     int window_width, window_height;
     tekChainThrow(tekAddFramebufferCallback(tekPrimitiveFramebufferCallback));
     tekGetWindowSize(&window_width, &window_height);
@@ -80,4 +82,57 @@ exception tekDrawLine(const TekGuiLine* line) {
 
 void tekDeleteLine(const TekGuiLine* line) {
     tekDeleteMesh(&line->mesh);
+}
+
+exception tekCreateOval(vec2 point_a, vec2 point_b, const float thickness, const flag fill, vec4 color, TekGuiOval* oval) {
+    const float vertices[] = {
+        point_a[0], point_a[1],
+        point_a[0], point_b[1],
+        point_b[0], point_b[1],
+        point_b[0], point_a[1]
+    };
+
+    const uint indices[] = {
+        0, 1, 2,
+        0, 2, 3
+    };
+
+    const int layout[] = {
+        2
+    };
+
+    tekChainThrow(tekCreateMesh(vertices, 8, indices, 6, layout, 1, &oval->mesh));
+    oval->center[0] = (point_a[0] + point_b[0]) * 0.5f;
+    oval->center[1] = (point_a[1] + point_b[1]) * 0.5f;
+
+    oval->inv_width = 2.0f / (point_b[0] - point_a[0]);
+    oval->inv_height = 2.0f / (point_b[1] - point_a[1]);
+
+    if (fill) {
+        oval->min_dist = 0.0f;
+    } else {
+        const float radius = (point_b[0] - point_a[0]) * 0.5f;
+        const float fill_dist = radius - thickness;
+        oval->min_dist = oval->inv_width * fill_dist;
+    }
+
+    glm_vec4_copy(color, oval->color);
+
+    return SUCCESS;
+}
+
+exception tekDrawOval(const TekGuiOval* oval) {
+    tekBindShaderProgram(oval_shader_program);
+    tekChainThrow(tekShaderUniformMat4(oval_shader_program, "projection", projection));
+    tekChainThrow(tekShaderUniformFloat(oval_shader_program, "inv_width", oval->inv_width));
+    tekChainThrow(tekShaderUniformFloat(oval_shader_program, "inv_height", oval->inv_height));
+    tekChainThrow(tekShaderUniformFloat(oval_shader_program, "min_dist", oval->min_dist));
+    tekChainThrow(tekShaderUniformVec2(oval_shader_program, "center", oval->center));
+    tekChainThrow(tekShaderUniformVec4(oval_shader_program, "oval_color", oval->color));
+    tekDrawMesh(&oval->mesh);
+    return SUCCESS;
+}
+
+void tekDeleteOval(const TekGuiOval* oval) {
+    tekDeleteMesh(&oval->mesh);
 }

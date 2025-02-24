@@ -1,0 +1,23 @@
+#version 330 core
+
+in vec2 frag_pos;
+
+out vec4 color;
+
+uniform float inv_width;
+uniform float inv_height;
+uniform float min_dist;
+uniform vec4 oval_color;
+uniform vec2 center;
+
+void main() {
+    vec2 delta = frag_pos - center;
+    delta.x *= inv_width;
+    delta.y *= inv_height;
+    float distance = delta.x * delta.x + delta.y * delta.y;
+    if (distance < 1.0f && distance > min_dist) {
+        color = oval_color;
+    } else {
+        color = vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+}

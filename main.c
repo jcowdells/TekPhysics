@@ -51,11 +51,17 @@ int render() {
 
     printException(tekCreateLine(point_a, point_b, 1.f, line_color, &line));
 
+    TekGuiOval oval;
+
+    printException(tekCreateOval(point_a, point_b, 10.0f, 0, line_color, &oval));
+
     while (tekRunning()) {
         glClearColor(0.2f, 0.2f, 0.21f, 1.0f);
 
-        printException(tekDrawText(&text, width - 185.0f, 5.0f));
         printException(tekDrawLine(&line));
+        printException(tekDrawOval(&oval));
+
+        printException(tekDrawText(&text, width - 185.0f, 5.0f));
         tekUpdate();
     }
 
