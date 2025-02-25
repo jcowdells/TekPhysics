@@ -16,7 +16,7 @@
 
 #define printException(x) if (x) tekPrintException()
 
-#define GRID_SIZE 3
+#define GRID_SIZE 4
 #define PADDING_X 120.0f
 #define PADDING_Y 40.0f
 #define GRID_THICKNESS 1.0f
@@ -26,6 +26,7 @@
 float width, height;
 double mouse_x = 0, mouse_y = 0;
 flag turn = X_TURN;
+flag winner = 0;
 vec4 black = {0.0f, 0.0f, 0.0f, 1.0f};
 
 typedef struct Bbox {
@@ -74,7 +75,53 @@ void mousePosCallback(GLFWwindow* window, const double x_pos, const double y_pos
     mouse_y = height - y_pos;
 }
 
+flag getWinner() {
+    flag prev_x = 0, prev_y = 0;
+    int chain_x = 0;
+    int chain_y = 0;
+    for (int x = 0; x < GRID_SIZE; x++) {
+        for (int y = 0; y < GRID_SIZE; y++) {
+            if (prev_x == grid_data[y][x]) {
+                chain_x++;
+            } else {
+                chain_x = 0;
+            }
+            prev_x = grid_data[y][x];
+            if (prev_y == grid_data[x][y]) {
+                chain_y++;
+            } else {
+                chain_y = 0;
+            }
+            prev_y = grid_data[x][y];
+        }
+        if (chain_x == GRID_SIZE - 1) return prev_x;
+        if (chain_y == GRID_SIZE - 1) return prev_y;
+        chain_x = 0;
+        chain_y = 0;
+    }
+    prev_x = 0;
+    prev_y = 0;
+    for (int i = 0; i < GRID_SIZE; i++) {
+        if (prev_x == grid_data[i][i]) {
+            chain_x++;
+        } else {
+            chain_x = 0;
+        }
+        prev_x = grid_data[i][i];
+        if (prev_y == grid_data[GRID_SIZE - i - 1][i]) {
+            chain_y++;
+        } else {
+            chain_y = 0;
+        }
+        prev_y = grid_data[GRID_SIZE - i - 1][i];
+    }
+    if (chain_x == GRID_SIZE - 1) return prev_x;
+    if (chain_y == GRID_SIZE - 1) return prev_y;
+    return 0;
+}
+
 void mouseButtonCallback(GLFWwindow* window, const int button, const int action, const int mods) {
+    if (winner) return;
     if (action == GLFW_PRESS) return;
     if (button != GLFW_MOUSE_BUTTON_1) return;
     int x_index = -1;
@@ -107,6 +154,7 @@ void mouseButtonCallback(GLFWwindow* window, const int button, const int action,
             turn = X_TURN;
         }
     }
+    winner = getWinner();
 }
 
 int render() {
@@ -156,14 +204,6 @@ int render() {
             glm_vec2_copy(a_ptr, grid_sections[y][x].a);
             glm_vec2_copy(b_ptr, grid_sections[y][x].b);
         }
-
-        for (int i = 0; i < nought_index; i++) {
-            printException(tekDrawOval(&noughts[i]));
-        }
-
-        for (int i = 0; i < cross_index; i++) {
-            printException(drawCross(&crosses[i]));
-        }
     }
 
     const vec4 grid_color = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -202,8 +242,13 @@ int render() {
         }
 
         printException(tekDrawText(&tekgl_version, width - 185.0f, 5.0f));
-
-        if (nought_index + cross_index == GRID_SIZE * GRID_SIZE) {
+        if (winner) {
+            if (winner == X_TURN) {
+                printException(tekDrawText(&x_win, text_x, text_y));
+            } else {
+                printException(tekDrawText(&o_win, text_x, text_y));
+            }
+        } else if (nought_index + cross_index == GRID_SIZE * GRID_SIZE) {
             printException(tekDrawText(&draw, text_x, text_y));
         } else if (turn == X_TURN) {
             printException(tekDrawText(&x_turn, text_x, text_y));
