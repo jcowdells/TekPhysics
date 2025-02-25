@@ -8,5 +8,5 @@ uniform sampler2D atlas;
 
 void main() {
     vec4 sampled_color = texture(atlas, tex_coord_f);
-    color = vec4(1.0f, 1.0f, 1.0f, sampled_color.r);
+    color = vec4(0.0f, 0.0f, 0.0f, sampled_color.r);
 }

@@ -17,6 +17,16 @@ int tek_window_width   = 0;
 int tek_window_height  = 0;
 TekFbCallbackNode* tek_framebuffer_callbacks = 0;
 
+// TODO: delete these two callback setters
+
+void tekSetMousePositionCallback(void* callback) {
+    glfwSetCursorPosCallback(tek_window, (GLFWcursorposfun)callback);
+}
+
+void tekSetMouseButtonCallback(void* callback) {
+    glfwSetMouseButtonCallback(tek_window, (GLFWmousebuttonfun)callback);
+}
+
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
     // allocate memory for a new callback item in list
     TekFbCallbackNode* node = (TekFbCallbackNode*)malloc(sizeof(TekFbCallbackNode));

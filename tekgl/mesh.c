@@ -1,10 +1,14 @@
 #include "mesh.h"
 
+#include <stdio.h>
+
 #include "glad/glad.h"
 
 exception tekCreateBuffer(const GLenum buffer_type, const void* buffer_data, const long buffer_size, const GLenum buffer_usage, uint* buffer_id) {
     if (!buffer_data) tekThrow(NULL_PTR_EXCEPTION, "Buffer data cannot be null.");
     if (!buffer_id) tekThrow(NULL_PTR_EXCEPTION, "Buffer id cannot be null.");
+
+    printf("Creating %s\n", buffer_type == GL_ARRAY_BUFFER ? "array buffer" : "index buffer");
 
     // create and bind a new empty buffer
     glGenBuffers(1, buffer_id);
