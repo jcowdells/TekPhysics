@@ -144,12 +144,12 @@ exception tekDrawText(const TekText* tek_text, const float x, const float y) {
 
     // set all of our shader uniforms for drawing text
     tekChainThrow(tekShaderUniformMat4(text_shader_program_id, "projection", text_projection));
-    tekChainThrow(tekShaderUniformInt(text_shader_program_id, "atlas", GL_TEXTURE0));
+    tekChainThrow(tekShaderUniformInt(text_shader_program_id, "atlas", 0));
     tekChainThrow(tekShaderUniformFloat(text_shader_program_id, "draw_x", x));
     tekChainThrow(tekShaderUniformFloat(text_shader_program_id, "draw_y", y));
 
     // bind font atlas texture
-    tekBindTexture(tek_text->font->atlas_id, GL_TEXTURE0);
+    tekBindTexture(tek_text->font->atlas_id, 0);
 
     // draw mesh
     tekDrawMesh(&tek_text->mesh);

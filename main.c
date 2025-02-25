@@ -71,7 +71,7 @@ void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
 
 void mousePosCallback(GLFWwindow* window, const double x_pos, const double y_pos) {
     mouse_x = x_pos;
-    mouse_y = y_pos;
+    mouse_y = height - y_pos;
 }
 
 void mouseButtonCallback(GLFWwindow* window, const int button, const int action, const int mods) {
@@ -103,7 +103,7 @@ void mouseButtonCallback(GLFWwindow* window, const int button, const int action,
             printException(createCross(section.a, section.b, 2.f, black, &crosses[cross_index++]));
             turn = O_TURN;
         } else {
-            printException(tekCreateOval(section.a, section.b, 2.f, 0, black, &noughts[nought_index++]));
+            printException(tekCreateOval(section.a, section.b, 6.f, 0, black, &noughts[nought_index++]));
             turn = X_TURN;
         }
     }
@@ -126,11 +126,12 @@ int render() {
     TekText tekgl_version;
     printException(tekCreateText("TekPhysics Alpha v1.0", 20, &verdana, &tekgl_version));
 
-    TekText x_turn, o_turn, x_win, o_win;
+    TekText x_turn, o_turn, x_win, o_win, draw;
     printException(tekCreateText("It's X's turn", 20, &verdana, &x_turn));
     printException(tekCreateText("It's O's turn", 20, &verdana, &o_turn));
     printException(tekCreateText("X has won!", 20, &verdana, &x_win));
     printException(tekCreateText("O has won!", 20, &verdana, &o_win));
+    printException(tekCreateText("It's a draw!", 20, &verdana, &draw));
 
     tekDeleteFreeType();
 
@@ -180,11 +181,6 @@ int render() {
             GRID_THICKNESS, grid_color, &grid[grid_ptr++]));
     }
 
-    Cross cross;
-    vec2 a = {0.0f, 0.0f};
-    vec2 b = {100.0f, 100.0f};
-    printException(createCross(grid_sections[0][0].a, grid_sections[0][0].b, 2.f, black, &crosses[0]));
-
     const int num_lines = GRID_SIZE + GRID_SIZE - 2;
 
     const float text_x = grid_sections[GRID_SIZE - 1][0].a[0];
@@ -197,10 +193,24 @@ int render() {
             printException(tekDrawLine(&grid[i]));
         }
 
-        printException(drawCross(&cross));
+        for (int i = 0; i < cross_index; i++) {
+            printException(drawCross(&crosses[i]));
+        }
+
+        for (int i = 0; i < nought_index; i++) {
+            printException(tekDrawOval(&noughts[i]));
+        }
 
         printException(tekDrawText(&tekgl_version, width - 185.0f, 5.0f));
-        printException(tekDrawText(&x_turn, text_x, text_y));
+
+        if (nought_index + cross_index == GRID_SIZE * GRID_SIZE) {
+            printException(tekDrawText(&draw, text_x, text_y));
+        } else if (turn == X_TURN) {
+            printException(tekDrawText(&x_turn, text_x, text_y));
+        } else {
+            printException(tekDrawText(&o_turn, text_x, text_y));
+        }
+
         tekUpdate();
     }
 
@@ -212,6 +222,12 @@ int render() {
     tekDeleteText(&o_win);
     for (int i = 0; i < num_lines; i++) {
         tekDeleteLine(&grid[i]);
+    }
+    for (int i = 0; i < cross_index; i++) {
+        deleteCross(&crosses[i]);
+    }
+    for (int i = 0; i < nought_index; i++) {
+        tekDeleteOval(&noughts[i]);
     }
     tekDelete();
     return SUCCESS;

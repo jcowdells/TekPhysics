@@ -8,14 +8,15 @@ exception tekCreateBuffer(const GLenum buffer_type, const void* buffer_data, con
     if (!buffer_data) tekThrow(NULL_PTR_EXCEPTION, "Buffer data cannot be null.");
     if (!buffer_id) tekThrow(NULL_PTR_EXCEPTION, "Buffer id cannot be null.");
 
-    printf("Creating %s\n", buffer_type == GL_ARRAY_BUFFER ? "array buffer" : "index buffer");
-
     // create and bind a new empty buffer
     glGenBuffers(1, buffer_id);
     glBindBuffer(buffer_type, *buffer_id);
 
     // fill with data and check for errors
     glBufferData(buffer_type, buffer_size, buffer_data, buffer_usage);
+
+    printf("%u: %u %ld %p %u\n", *buffer_id, buffer_type, buffer_size, buffer_data, buffer_usage);
+
     switch (glGetError()) {
     case GL_INVALID_ENUM:
         tekThrow(OPENGL_EXCEPTION, "Invalid buffer type or invalid draw type.");
@@ -76,9 +77,12 @@ exception tekCreateMesh(const float* vertices, const long len_vertices, const ui
 void tekDrawMesh(const TekMesh* mesh_ptr) {
     // binding vertex array buffer - OpenGL should know which vertex buffer and element buffer we want from this
     glBindVertexArray(mesh_ptr->vertex_array_id);
+    //printf("vertex_array = %u", mesh_ptr->vertex_array_id);
+    //printf("step 1: %d\n", glGetError());
 
     // draw elements as triangles, using the number of elements we tracked before
     glDrawElements(GL_TRIANGLES, mesh_ptr->num_elements, GL_UNSIGNED_INT, 0);
+    //printf("step 2: %d\n", glGetError());
 }
 
 void tekDeleteMesh(const TekMesh* mesh_ptr) {
