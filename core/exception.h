@@ -1,7 +1,8 @@
 #pragma once
 
-#define E_MESSAGE_SIZE 128
-#define E_BUFFER_SIZE  128 + E_MESSAGE_SIZE
+#define E_MESSAGE_SIZE          128
+#define E_BUFFER_SIZE           128 + E_MESSAGE_SIZE
+#define STACK_TRACE_BUFFER_SIZE 16
 
 #define SUCCESS            0
 #define FAILURE            1
@@ -18,10 +19,12 @@
 typedef int exception;
 
 #define tekThrow(exception_code, exception_message) { const exception __tek_exception = exception_code; if (__tek_exception) { tekSetException(__tek_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); return __tek_exception; } }
-#define tekChainThrow(exception_code) { const exception __tek_exception = exception_code; if (__tek_exception) return __tek_exception; }
+#define tekChainThrow(exception_code) { const exception __tek_exception = exception_code; if (__tek_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); return __tek_exception; } }
+#define tekLog(exception_code) { const exception __tek_exception = exception_code; if (__tek_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); tekPrintException(); } }
 
 void tekInitExceptions();
 void tekCloseExceptions();
 const char* tekGetException();
 void tekPrintException();
 void tekSetException(int exception_code, int exception_line, const char* exception_function, const char* exception_file, const char* exception_message);
+void tekTraceException(int exception_line, const char* exception_function, const char* exception_file);

@@ -33,6 +33,10 @@ add_executable(
 #        tekgui/size.h
         tekgui/primitives.c
         tekgui/primitives.h
+        tekgl/material.c
+        tekgl/material.h
+        core/list.c
+        core/list.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})

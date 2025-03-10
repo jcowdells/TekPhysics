@@ -11,10 +11,11 @@
 
 #include <cglm/cam.h>
 
+#include "core/list.h"
 #include "tekgl/manager.h"
 #include "tekgui/primitives.h"
 
-#define printException(x) if (x) tekPrintException()
+#define printException(x) tekLog(x)
 
 float width, height;
 
@@ -71,10 +72,35 @@ int render() {
     return SUCCESS;
 }
 
+void testList() {
+    List list;
+    listCreate(&list);
+
+    for (int i = 0; i < 10; i++) {
+        tekLog(listInsertItem(&list, 0, (void*)i));
+    }
+
+    void* data;
+    uint index = 8;
+
+    listGetItem(&list, index, &data);
+    printf("index %u = %p\n", index, data);
+
+    printf("length = %d\n", list.length);
+
+    while (!listRemoveItem(&list, 1, &data)) {
+        printf("popped: %p\n", data);
+        listPrint(&list);
+    }
+
+    listDelete(&list);
+}
+
 int main(void) {
     tekInitExceptions();
-    if (render()) {
-        tekPrintException();
-    }
+    // if (render()) {
+    //     tekPrintException();
+    // }
+    testList();
     tekCloseExceptions();
 }

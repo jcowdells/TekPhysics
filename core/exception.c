@@ -7,6 +7,9 @@
 
 flag initialised = 0;
 char exception_buffer[E_BUFFER_SIZE];
+char stack_trace_buffer[STACK_TRACE_BUFFER_SIZE][E_MESSAGE_SIZE];
+uint stack_trace_index = 0;
+flag stack_trace_overflowed = 0;
 char* default_exception = "Unknown Exception";
 char* exceptions[NUM_EXCEPTIONS];
 
@@ -49,6 +52,9 @@ const char* tekGetException() {
 
 void tekPrintException() {
     printf("%s", exception_buffer);
+    for (uint i = 0; i < stack_trace_index; i++) {
+        printf("%s", stack_trace_buffer[i]);
+    }
 }
 
 void tekSetException(const int exception_code, const int exception_line, const char* exception_function, const char* exception_file, const char* exception_message) {
@@ -59,4 +65,16 @@ void tekSetException(const int exception_code, const int exception_line, const c
         exception_name = default_exception;
     }
     sprintf(exception_buffer, "%s (%d) in function '%s', line %d of %s:\n    %s\n", exception_name, exception_code, exception_function, exception_line, exception_file, exception_message);
+    stack_trace_index = 0;
+    stack_trace_overflowed = 0;
+}
+
+void tekTraceException(const int exception_line, const char* exception_function, const char* exception_file) {
+    sprintf(stack_trace_buffer[stack_trace_index], "... in function '%s', line %d of %s\n", exception_function, exception_line, exception_file);
+    if ((stack_trace_index == STACK_TRACE_BUFFER_SIZE - 1) && !stack_trace_overflowed) {
+        sprintf(stack_trace_buffer[stack_trace_index - 1], "... stack trace too large to display entirely ...\n");
+        stack_trace_overflowed = 1;
+    } else {
+        stack_trace_index++;
+    }
 }
