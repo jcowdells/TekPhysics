@@ -14,7 +14,8 @@
 #define OPENGL_EXCEPTION   7
 #define STBI_EXCEPTION     8
 #define FREETYPE_EXCEPTION 9
-#define NUM_EXCEPTIONS     9
+#define LIST_EXCEPTION     10
+#define NUM_EXCEPTIONS     10
 
 typedef int exception;
 

@@ -14,6 +14,7 @@
 #include "core/list.h"
 #include "tekgl/manager.h"
 #include "tekgui/primitives.h"
+#include "core/yml.h"
 
 #define printException(x) tekLog(x)
 
@@ -72,28 +73,9 @@ int render() {
     return SUCCESS;
 }
 
-void testList() {
-    List list;
-    listCreate(&list);
-
-    for (int i = 0; i < 10; i++) {
-        tekLog(listInsertItem(&list, 0, (void*)i));
-    }
-
-    void* data;
-    uint index = 8;
-
-    listGetItem(&list, index, &data);
-    printf("index %u = %p\n", index, data);
-
-    printf("length = %d\n", list.length);
-
-    while (!listRemoveItem(&list, 1, &data)) {
-        printf("popped: %p\n", data);
-        listPrint(&list);
-    }
-
-    listDelete(&list);
+void testYml() {
+    YmlFile yml_file;
+    tekLog(ymlReadFile("../res/test.yml", &yml_file));
 }
 
 int main(void) {
@@ -101,6 +83,6 @@ int main(void) {
     // if (render()) {
     //     tekPrintException();
     // }
-    testList();
+    testYml();
     tekCloseExceptions();
 }

@@ -31,6 +31,7 @@ void tekInitExceptions() {
     tekAddException(OPENGL_EXCEPTION, "OpenGL Exception");
     tekAddException(STBI_EXCEPTION, "STBI Exception");
     tekAddException(FREETYPE_EXCEPTION, "FreeType Exception");
+    tekAddException(LIST_EXCEPTION, "List Exception");
 }
 
 void tekCloseExceptions() {

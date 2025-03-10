@@ -1,16 +1,23 @@
 hello:
-  whats_up: "haoijsaoijsa"
+  whats_up                        : "haoijsaoijsa"
   dfsgsd:
     lets_go_deeper:
       and_so_on:
-        pit_stop: "hi"
-        until:
-          this: "happens"
+        pit_stop
+        : "hi"
+        until    :
+          this : "happens"
       and: "then"
+
+
+
+
       have: "some"
       more: "stuff"
-  list:
+  list    :
     - afssdfg
     - sdfsdf1
     - sdfsdf2
     - sdfsdf3
+  single_letter:
+    0
