@@ -1,4 +1,4 @@
-hello:
+:hello:
   whats_up                        : "haoijsaoijsa"
   dfsgsd:
     lets_go_deeper:
@@ -9,7 +9,8 @@ hello:
           this : "happens"
       and: "then"
 
-
+      "thing":
+        ?
 
 
       have: "some"

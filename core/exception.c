@@ -32,6 +32,7 @@ void tekInitExceptions() {
     tekAddException(STBI_EXCEPTION, "STBI Exception");
     tekAddException(FREETYPE_EXCEPTION, "FreeType Exception");
     tekAddException(LIST_EXCEPTION, "List Exception");
+    tekAddException(YML_EXCEPTION, "YML Exception");
 }
 
 void tekCloseExceptions() {

@@ -15,7 +15,8 @@
 #define STBI_EXCEPTION     8
 #define FREETYPE_EXCEPTION 9
 #define LIST_EXCEPTION     10
-#define NUM_EXCEPTIONS     10
+#define YML_EXCEPTION      11
+#define NUM_EXCEPTIONS     11
 
 typedef int exception;
 
