@@ -25,6 +25,16 @@ void listDelete(List* list) {
     list->length = 0;
 }
 
+void listFreeAllData(List* list) {
+    ListItem* item = list->data;
+    while (item) {
+        // free each data ptr, and set it to 0 to avoid accidental usage
+        free(item->data);
+        item->data = 0;
+        item = item->next;
+    }
+}
+
 exception listAddItem(List* list, void* data) {
     // iterator variables
     // also get a pointer to next pointer so we can overwrite it

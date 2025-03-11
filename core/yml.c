@@ -7,14 +7,15 @@
 #include "file.h"
 #include "list.h"
 
-#define ID_TOKEN     0b00000001
-#define STRING_TOKEN 0b00000010
-#define INT_TOKEN    0b00000100
-#define FLOAT_TOKEN  0b00001000
-#define BOOL_TOKEN   0b00010000
-#define LIST_TOKEN   0b00100000
-#define IN_TOKEN     0b01000000
-#define OUT_TOKEN    0b10000000
+#define ID_TOKEN     0b001
+#define IN_TOKEN     0b010
+#define LIST_TOKEN   0b011
+#define OUT_TOKEN    0b100
+
+#define STRING_TOKEN 0b00001000
+#define INT_TOKEN    0b00010000
+#define FLOAT_TOKEN  0b00100000
+#define BOOL_TOKEN   0b01000000
 
 #define ID_STAGE  0
 #define SEP_STAGE 1
@@ -100,36 +101,77 @@ exception ymlThrowSyntax(const Word* word) {
     tekThrow(YML_EXCEPTION, error_message);
 }
 
+exception ymlCreateKeyToken(Word* word, Token** token) {
+    *token = (Token*)malloc(sizeof(Token));
+    (*token)->word = word;
+    (*token)->type = ID_TOKEN;
+    return SUCCESS;
+}
+
+exception ymlCreateValueToken(Word* word, Token** token) {
+    *token = (Token*)malloc(sizeof(Token));
+    (*token)->word = word;
+    (*token)->type = STRING_TOKEN;
+    return SUCCESS;
+}
+
+exception ymlCreateListToken(Word* word, Token** token) {
+    *token = (Token*)malloc(sizeof(Token));
+    (*token)->word = word;
+    (*token)->type = LIST_TOKEN;
+    return SUCCESS;
+}
+
 exception ymlCreateTokens(List* split_text, List* tokens) {
     ListItem* item = split_text->data;
     uint indent = 0;
     while (item) {
         Word* word = (Word*)item->data;
+        // Token* token = (Token*)malloc(sizeof(Token));
 
-        if (word->indent > indent) {
-            Token* step_token = (Token*)malloc(sizeof(Token));
-            step_token->word = 0;
-            step_token->type = OUT_TOKEN;
-            tekChainThrow(listAddItem(tokens, step_token));
-            indent = word->indent;
-        }
+        // if (word->indent > indent) {
+        //     Token* step_token = (Token*)malloc(sizeof(Token));
+        //     step_token->word = 0;
+        //     step_token->type = OUT_TOKEN;
+        //     tekChainThrow(listAddItem(tokens, step_token));
+        //     indent = word->indent;
+        // }
 
         if (word->start[0] == ':') tekChainThrow(ymlThrowSyntax(word));
-        Word* id_word = word;
 
-        item = item->next;
-        if (!item); // TODO: idk
-
-        word = (Word*)item->data;
-        if (word->start[0] == ':') {
-            // add key token
+        Token* token = 0;
+        if (word->start[0] == '-') {
+            if (!item->next) tekChainThrow(ymlThrowSyntax(word));
+            item = item->next;
+            Word* next_word = (Word*)item->data;
+            tekChainThrow(ymlCreateListToken(next_word, &token));
         } else {
-            if (word->indent < indent)
+            if (!item->next) {
+                tekChainThrow(ymlCreateValueToken(word, &token));
+            } else {
+                const Word* next_word = (Word*)item->next->data;
+                if (next_word->start[0] == ':') {
+                    tekChainThrow(ymlCreateKeyToken(word, &token));
+                    if (word->indent != indent) {
+                        Token* indent_token = (Token*)malloc(sizeof(Token));
+                        indent_token->word = 0;
+                        if (word->indent > indent) {
+                            indent_token->type = OUT_TOKEN;
+                        } else if (word->indent < indent) {
+                            indent_token->type = IN_TOKEN;
+                        }
+                        indent = word->indent;
+                        tekChainThrow(listAddItem(tokens, indent_token));
+                    }
+                    item = item->next;
+                } else {
+                    tekChainThrow(ymlCreateValueToken(word, &token));
+                }
+            }
         }
-
+        tekChainThrow(listAddItem(tokens, token));
         item = item->next;
     }
-
     return SUCCESS;
 }
 
@@ -148,10 +190,46 @@ exception ymlReadFile(const char* filename, YmlFile* yml) {
     List split_text;
     List tokens;
     listCreate(&split_text);
+    listCreate(&tokens);
     tekChainThrow(ymlSplitText(buffer, file_size, &split_text));
     tekChainThrow(ymlCreateTokens(&split_text, &tokens));
 
+    ListItem* item = tokens.data;
+    while (item) {
+        Token* token = (Token*)item->data;
+        Word* word = token->word;
+        switch (token->type) {
+            case OUT_TOKEN:
+                printf("out token");
+                break;
+            case IN_TOKEN:
+                printf("in token");
+                break;
+            case ID_TOKEN:
+                printf("id token  : ");
+                break;
+            case STRING_TOKEN:
+                printf("var token : ");
+                break;
+            case LIST_TOKEN:
+                printf("list token: ");
+                break;
+            default:
+                printf("UD token!");
+        }
+        if (word) {
+            for (uint i = 0; i < word->length; i++) {
+                printf("%c", word->start[i]);
+            }
+        }
+        printf("\n");
+        item = item->next;
+    }
+
+    listFreeAllData(&split_text);
+    listFreeAllData(&tokens);
     listDelete(&split_text);
+    listDelete(&tokens);
 
     return SUCCESS;
 }
