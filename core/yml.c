@@ -6,6 +6,7 @@
 
 #include "file.h"
 #include "list.h"
+#include "stack.h"
 
 #define VAR_TOKEN    0b000
 #define ID_TOKEN     0b001
@@ -114,6 +115,7 @@ exception ymlThrowSyntax(const Word* word) {
 
 exception ymlCreateKeyToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
+    if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for key token.");
     (*token)->word = word;
     (*token)->type = ID_TOKEN;
     return SUCCESS;
@@ -121,6 +123,7 @@ exception ymlCreateKeyToken(Word* word, Token** token) {
 
 exception ymlCreateValueToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
+    if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for value token.");
     (*token)->word = word;
     (*token)->type = STRING_TOKEN;
     return SUCCESS;
@@ -128,14 +131,49 @@ exception ymlCreateValueToken(Word* word, Token** token) {
 
 exception ymlCreateListToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
+    if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for list token.");
     (*token)->word = word;
     (*token)->type = LIST_TOKEN;
     return SUCCESS;
 }
 
-exception ymlCreateTokens(const List* split_text, List* tokens) {
+exception ymlCreateIndentToken(const flag type, Token** token) {
+    *token = (Token*)malloc(sizeof(Token));
+    if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for indent token.");
+    (*token)->type = type;
+    (*token)->word = 0;
+    return SUCCESS;
+}
+
+exception ymlUpdateIndent(uint* indent, const Word* word, List* tokens, Stack* indent_stack) {
+    if (word->indent != *indent) {
+        Token* indent_token;
+        if (word->indent > *indent) {
+            ymlCreateIndentToken(OUT_TOKEN, &indent_token);
+            stackPush(indent_stack, (void*)*indent);
+            tekChainThrow(listAddItem(tokens, indent_token));
+        } else if (word->indent < *indent) {
+            uint prev_indent = 0;
+            while (!stackPop(indent_stack, &prev_indent)) {
+                ymlCreateIndentToken(IN_TOKEN, &indent_token);
+                tekChainThrow(listAddItem(tokens, indent_token));
+                if (prev_indent == word->indent) {
+                    break;
+                }
+                if (prev_indent < word->indent) {
+                    tekChainThrow(ymlThrowSyntax(word));
+                }
+            }
+        }
+        *indent = word->indent;
+    }
+    return SUCCESS;
+}
+
+exception ymlCreateTokensWithStack(const List* split_text, List* tokens, Stack* indent_stack) {
     const ListItem* item = split_text->data;
     uint indent = 0;
+    stackPush(indent_stack, (void*)indent);
     while (item) {
         Word* word = (Word*)item->data;
 
@@ -154,17 +192,7 @@ exception ymlCreateTokens(const List* split_text, List* tokens) {
                 const Word* next_word = (Word*)item->next->data;
                 if (next_word->start[0] == ':') {
                     tekChainThrow(ymlCreateKeyToken(word, &token));
-                    if (word->indent != indent) {
-                        Token* indent_token = (Token*)malloc(sizeof(Token));
-                        indent_token->word = 0;
-                        if (word->indent > indent) {
-                            indent_token->type = OUT_TOKEN;
-                        } else if (word->indent < indent) {
-                            indent_token->type = IN_TOKEN;
-                        }
-                        indent = word->indent;
-                        tekChainThrow(listAddItem(tokens, indent_token));
-                    }
+                    tekChainThrow(ymlUpdateIndent(&indent, word, tokens, indent_stack));
                     item = item->next;
                 } else {
                     tekChainThrow(ymlCreateValueToken(word, &token));
@@ -175,6 +203,14 @@ exception ymlCreateTokens(const List* split_text, List* tokens) {
         item = item->next;
     }
     return SUCCESS;
+}
+
+exception ymlCreateTokens(const List* split_text, List* tokens) {
+    Stack indent_stack;
+    stackCreate(&indent_stack);
+    const exception yml_exception = ymlCreateTokensWithStack(split_text, tokens, &indent_stack);
+    stackDelete(&indent_stack);
+    return yml_exception;
 }
 
 exception ymlFromTokens(const List* tokens, YmlFile* yml) {

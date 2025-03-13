@@ -22,3 +22,15 @@ hello:
     - sdfsdf3
   single_letter:
     0
+  boolean: false
+  float: 124.234235
+  integer: 129023409
+  string: "adsfsdfsdfg"
+another:
+  thing:
+    is:
+      if:
+         i:
+           do: "this"
+         stupid: "hi"
+then__this: "hi"
