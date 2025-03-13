@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void hashtableDelete(HashTable* hashtable) {
+void hashtableDelete(const HashTable* hashtable) {
     // iterate over every possible index in the hash table
     for (int i = 0; i < hashtable->length; i++) {
         HashNode* node_ptr = hashtable->internal[i];
@@ -49,7 +49,7 @@ exception hashtableHash(HashTable* hashtable, const char* key, unsigned int* has
     return SUCCESS;
 }
 
-exception hashtableCreateNode(const HashTable* hashtable, const char* key, unsigned int hash, HashNode** out_ptr) {
+exception hashtableCreateNode(const HashTable* hashtable, const char* key, const unsigned int hash, HashNode** out_ptr) {
     // ensure there isn't a null ptr
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot create node from null ptr.");
 
@@ -126,7 +126,7 @@ exception hashtableGetKeys(const HashTable* hashtable, char*** keys) {
     return SUCCESS;
 }
 
-exception hashtableGetValues(HashTable* hashtable, void*** values) {
+exception hashtableGetValues(const HashTable* hashtable, void*** values) {
     // allocate some memory to store a list of all values
     *values = (void**)malloc(hashtable->num_items * sizeof(void*));
     if (!(*values)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for list of values.");
@@ -135,7 +135,7 @@ exception hashtableGetValues(HashTable* hashtable, void*** values) {
     unsigned int count = 0;
     for (unsigned int i = 0; i < hashtable->length; i++) {
         // iterate over each value in the linked list
-        HashNode* node_ptr = hashtable->internal[i];
+        const HashNode* node_ptr = hashtable->internal[i];
         while (node_ptr) {
             // add to list
             (*values)[count++] = node_ptr->data;
@@ -145,7 +145,7 @@ exception hashtableGetValues(HashTable* hashtable, void*** values) {
     return SUCCESS;
 }
 
-exception hashtableRehash(HashTable* hashtable, unsigned int new_length) {
+exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
     // make room to copy the keys and values of the hash table
     char** keys = (char**)malloc(hashtable->num_items * sizeof(char*));
     if (!keys) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for copy of keys.");
@@ -159,11 +159,11 @@ exception hashtableRehash(HashTable* hashtable, unsigned int new_length) {
     unsigned int count = 0;
     for (unsigned int i = 0; i < hashtable->length; i++) {
         // iterate over each item in the linked list
-        HashNode* node_ptr = hashtable->internal[i];
+        const HashNode* node_ptr = hashtable->internal[i];
         while (node_ptr) {
             // find the length of the key and copy it to a new array, and store the pointer
             // also store the value in the values array
-            size_t len_key = strlen(node_ptr->key) + 1;
+            const size_t len_key = strlen(node_ptr->key) + 1;
             char* key_copy = (char*)malloc(len_key * sizeof(char));
             if (!key_copy) {
                 for (unsigned int j = 0; j < count; j++) free(keys[j]);
@@ -186,7 +186,7 @@ exception hashtableRehash(HashTable* hashtable, unsigned int new_length) {
     for (unsigned int i = 0; i < count; i++) {
         // iterate over each item in the linked list
         // add the record we copied
-        exception tek_exception = hashtableSet(hashtable, keys[i], values[i]);
+        const exception tek_exception = hashtableSet(hashtable, keys[i], values[i]);
 
         // catch exception if it occurs
         if (tek_exception) {
@@ -206,9 +206,9 @@ exception hashtableRehash(HashTable* hashtable, unsigned int new_length) {
     return SUCCESS;
 }
 
-flag hashtableTooFull(HashTable* hashtable) {
+flag hashtableTooFull(const HashTable* hashtable) {
     // return true if the hashtable is more than 75% full
-    return (4 * hashtable->num_items) >= (3 * hashtable->length);
+    return (flag)((4 * hashtable->num_items) >= (3 * hashtable->length));
 }
 
 exception hashtableGet(HashTable* hashtable, const char* key, void** data) {
@@ -287,12 +287,12 @@ exception hashtableRemove(HashTable* hashtable, const char* key) {
     return found;
 }
 
-void hashtablePrint(HashTable* hashtable) {
+void hashtablePrint(const HashTable* hashtable) {
     printf("HashNode* internal  = %p\n", hashtable->internal);
     printf("unsigned int length = %u\n", hashtable->length);
 }
 
-void hashtablePrintItems(HashTable* hashtable) {
+void hashtablePrintItems(const HashTable* hashtable) {
     printf("{\n");
     for (unsigned int i = 0; i < hashtable->length; i++) {
         HashNode* node_ptr = hashtable->internal[i];
@@ -304,7 +304,7 @@ void hashtablePrintItems(HashTable* hashtable) {
     printf("}\n");
 }
 
-void hashtablePrintInternal(HashTable* hashtable) {
+void hashtablePrintInternal(const HashTable* hashtable) {
     printf("{\n");
     for (unsigned int i = 0; i < hashtable->length; i++) {
         printf("    internal[%u] = %p\n", i, hashtable->internal[i]);
