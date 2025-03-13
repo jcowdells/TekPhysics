@@ -63,7 +63,7 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
         if (buffer[i] == '"') {
             inside_marks = (flag)!inside_marks;
         }
-        if (isWhitespace(buffer[i]) || buffer[i] == ':' || buffer[i] == '"') {
+        if (isWhitespace(buffer[i]) || buffer[i] == ':') {
             if ((i > start_index + 1) && !inside_marks) {
                 Word* word = (Word*)malloc(sizeof(Word));
                 if (!word) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for word.");
@@ -94,7 +94,7 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
                 line++;
                 trace_indent = 1;
             }
-            if (!inside_marks || (inside_marks & (buffer[i] == '"'))) {
+            if (!inside_marks) {
                 start_index = i;
             }
         }
@@ -113,6 +113,24 @@ exception ymlThrowSyntax(const Word* word) {
     tekThrow(YML_EXCEPTION, error_message);
 }
 
+flag ymlDetectType(const Word* word) {
+    if ((word->start[0] == '"') && (word->start[word->length - 1] == '"')) return STRING_TOKEN;
+    flag contains_digits = 0;
+    uint num_decimals = 0;
+    flag contains_letters = 0;
+    for (uint i = 0; i < word->length; i++) {
+        const char c = word->start[i];
+        if (c == '.') num_decimals += 1;
+        else if ((c >= '0') && (c <= '9')) contains_digits = 1;
+        else contains_letters = 1;
+    }
+    if (contains_letters) return STRING_TOKEN;
+    if (num_decimals > 1) return STRING_TOKEN;
+    if ((num_decimals == 1) && contains_digits) return FLOAT_TOKEN;
+    if ((num_decimals == 0) && contains_digits) return INT_TOKEN;
+    return STRING_TOKEN;
+}
+
 exception ymlCreateKeyToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
     if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for key token.");
@@ -125,7 +143,7 @@ exception ymlCreateValueToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
     if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for value token.");
     (*token)->word = word;
-    (*token)->type = STRING_TOKEN;
+    (*token)->type = ymlDetectType(word);
     return SUCCESS;
 }
 
@@ -133,7 +151,7 @@ exception ymlCreateListToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
     if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for list token.");
     (*token)->word = word;
-    (*token)->type = LIST_TOKEN;
+    (*token)->type = LIST_TOKEN | ymlDetectType(word);
     return SUCCESS;
 }
 
@@ -252,7 +270,13 @@ exception ymlReadFile(const char* filename, YmlFile* yml) {
                 printf("id token  : ");
                 break;
             case STRING_TOKEN:
-                printf("var token : ");
+                printf("str token : ");
+                break;
+            case INT_TOKEN:
+                printf("int token : ");
+                break;
+            case FLOAT_TOKEN:
+                printf("num token : ");
                 break;
             case LIST_TOKEN:
                 printf("list token: ");

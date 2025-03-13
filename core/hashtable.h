@@ -1,7 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "exception.h"
+#include "../tekgl.h"
 
 typedef struct HashNode {
     char* key;
@@ -15,19 +13,18 @@ typedef struct HashTable {
     unsigned int num_items;
 } HashTable;
 
-void hashtable_free(HashTable*);
-int hashtable_create(HashTable*, unsigned int);
-int hashtable_hash(HashTable*, const char*, unsigned int*);
-int hashtable_create_node(const HashTable*, const char*, unsigned int, HashNode**);
-int hashtable_get_node(HashTable*, const char*, HashNode**);
-int hashtable_get_keys(const HashTable*, char***);
-int hashtable_get_values(HashTable*, void***);
-int hashtable_rehash(HashTable*, unsigned int);
-int hashtable_too_full(HashTable*);
-int hashtable_get(HashTable*, const char*, void**);
-int hashtable_set(HashTable*, const char*, void*);
-int hashtable_delete(HashTable*, const char*);
-void hashtable_print(HashTable*);
-void hashtable_print_items(HashTable*);
-void hashtable_print_internal(HashTable*);
-int main(int, char**);
+void hashtableDelete(HashTable*);
+exception hashtableCreate(HashTable*, unsigned int);
+exception hashtableHash(HashTable*, const char*, unsigned int*);
+exception hashtableCreateNode(const HashTable*, const char*, unsigned int, HashNode**);
+exception hashtableGetNode(HashTable*, const char*, HashNode**);
+exception hashtableGetKeys(const HashTable*, char***);
+exception hashtableGetValues(HashTable*, void***);
+exception hashtableRehash(HashTable*, unsigned int);
+flag hashtableTooFull(HashTable*);
+exception hashtableGet(HashTable*, const char*, void**);
+exception hashtableSet(HashTable*, const char*, void*);
+exception hashtableRemove(HashTable*, const char*);
+void hashtablePrint(HashTable*);
+void hashtablePrintItems(HashTable*);
+void hashtablePrintInternal(HashTable*);

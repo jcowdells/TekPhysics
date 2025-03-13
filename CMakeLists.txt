@@ -39,6 +39,8 @@ add_executable(
         core/list.h
         core/stack.c
         core/stack.h
+        core/hashtable.h
+        core/hashtable.c
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})

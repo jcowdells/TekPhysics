@@ -33,6 +33,8 @@ void tekInitExceptions() {
     tekAddException(FREETYPE_EXCEPTION, "FreeType Exception");
     tekAddException(LIST_EXCEPTION, "List Exception");
     tekAddException(YML_EXCEPTION, "YML Exception");
+    tekAddException(STACK_EXCEPTION, "Stack Exception");
+    tekAddException(HASHTABLE_EXCEPTION, "Hash Table Exception");
 }
 
 void tekCloseExceptions() {
