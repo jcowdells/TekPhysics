@@ -37,6 +37,8 @@ add_executable(
         tekgl/material.h
         core/list.c
         core/list.h
+        core/stack.c
+        core/stack.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})

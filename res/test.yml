@@ -6,10 +6,10 @@ hello:
         pit_stop
         : "hi"
         until    :
-          this : "happens"
+          this : "happens \"with \n\n\n\n\n\n\n\n lots of spaces\""
       and: "then"
 
-      "thing":
+      "thi\n\n\n\"\"ng":
         ?
 
 
