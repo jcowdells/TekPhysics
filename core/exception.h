@@ -4,19 +4,21 @@
 #define E_BUFFER_SIZE           128 + E_MESSAGE_SIZE
 #define STACK_TRACE_BUFFER_SIZE 16
 
-#define SUCCESS            0
-#define FAILURE            1
-#define MEMORY_EXCEPTION   2
-#define NULL_PTR_EXCEPTION 3
-#define GLFW_EXCEPTION     4
-#define GLAD_EXCEPTION     5
-#define FILE_EXCEPTION     6
-#define OPENGL_EXCEPTION   7
-#define STBI_EXCEPTION     8
-#define FREETYPE_EXCEPTION 9
-#define LIST_EXCEPTION     10
-#define YML_EXCEPTION      11
-#define NUM_EXCEPTIONS     11
+#define SUCCESS             0
+#define FAILURE             1
+#define MEMORY_EXCEPTION    2
+#define NULL_PTR_EXCEPTION  3
+#define GLFW_EXCEPTION      4
+#define GLAD_EXCEPTION      5
+#define FILE_EXCEPTION      6
+#define OPENGL_EXCEPTION    7
+#define STBI_EXCEPTION      8
+#define FREETYPE_EXCEPTION  9
+#define LIST_EXCEPTION      10
+#define YML_EXCEPTION       11
+#define STACK_EXCEPTION     12
+#define HASHTABLE_EXCEPTION 13
+#define NUM_EXCEPTIONS      13
 
 typedef int exception;
 

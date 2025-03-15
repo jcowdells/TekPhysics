@@ -1,4 +1,6 @@
 hello:
+  ip_address: 127.0.0.1
+  bogus_number: "234098723598"
   whats_up                        : "haoijsaoijsa"
   dfsgsd:
     lets_go_deeper:
@@ -22,3 +24,15 @@ hello:
     - sdfsdf3
   single_letter:
     0
+  boolean: false
+  float: 124.234235
+  integer: 129023409
+  string: "adsfsdfsdfg"
+another:
+  thing:
+    is:
+      if:
+         i:
+           do: "this"
+         stupid: "hi"
+then__this: "hi"
