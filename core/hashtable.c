@@ -25,7 +25,7 @@ void hashtableDelete(const HashTable* hashtable) {
 exception hashtableCreate(HashTable* hashtable, const unsigned int length) {
     // check for random scenarios such as no hashtable or already allocated hashtable
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot create hashtable from null ptr.");
-    if (hashtable->internal) hashtableDelete(hashtable);
+    //if (hashtable->internal) hashtableDelete(hashtable);
 
     // allocate room for the internal array, and set some default values
     hashtable->internal = (HashNode**)calloc(length, sizeof(HashNode*));
@@ -246,7 +246,7 @@ exception hashtableSet(HashTable* hashtable, const char* key, void* data) {
     // set the data and update num of items
     node_ptr->data = data;
     hashtable->num_items += 1;
-    return 1;
+    return SUCCESS;
 }
 
 exception hashtableRemove(HashTable* hashtable, const char* key) {

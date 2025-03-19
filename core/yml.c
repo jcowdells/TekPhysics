@@ -3,10 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "file.h"
 #include "list.h"
 #include "stack.h"
+
+#define YML_HASHTABLE_SIZE 4
 
 #define VAR_TOKEN    0b000
 #define ID_TOKEN     0b001
@@ -19,6 +22,9 @@
 #define FLOAT_TOKEN  0b00100000
 #define BOOL_TOKEN   0b01000000
 
+#define YML_DATA   0
+#define STRING_DATA 1
+
 typedef struct Word {
     const char* start;
     uint length;
@@ -30,6 +36,121 @@ typedef struct Token {
     Word* word;
     flag type;
 } Token;
+
+exception ymlCreateStringData(const char* string, YmlData* yml_data) {
+    uint size_string = (strlen(string) + 1) * sizeof(char);
+    yml_data->value = (char*)malloc(size_string);
+    if (!yml_data->value) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for string data.");
+    memcpy(yml_data->value, string, size_string);
+    yml_data->type = STRING_DATA;
+    return SUCCESS;
+}
+
+exception ymlDeleteData(YmlData* yml_data) {
+    switch (yml_data->type) {
+        case STRING_DATA:
+            free(yml_data->value);
+            break;
+        default:
+            break;
+    }
+    free(yml_data);
+    return SUCCESS;
+}
+
+exception ymlCreate(YmlFile* yml) {
+    tekChainThrow(hashtableCreate(yml, YML_HASHTABLE_SIZE));
+    return SUCCESS;
+}
+
+exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
+    va_list keys;
+    va_start(keys, data);
+    const char* key;
+    HashTable* hashtable = yml;
+    YmlData* loop_data;
+    exception tek_exception = SUCCESS;
+    while ((key = va_arg(keys, const char*))) {
+        if (!hashtable) {
+            tek_exception = YML_EXCEPTION;
+            tekExcept(tek_exception, "Invalid key - inaccessible type.");
+            break;
+        }
+
+        tek_exception = hashtableGet(hashtable, key, &loop_data);
+        if (tek_exception) {
+            tekExcept(tek_exception, "Invalid key - key does not exist.");
+            break;        
+        }
+
+        if (loop_data->type == YML_DATA) {
+            hashtable = loop_data->value;
+        }
+    }
+    *data = loop_data;
+    va_end(keys);
+    tekChainThrow(tek_exception);
+}
+
+exception ymlSetVA(YmlFile* yml, YmlData* data, ...) {
+    va_list keys;
+    va_start(keys, data);
+    const char* key = va_arg(keys, const char*);
+    const char* next_key;
+    HashTable* hashtable = yml;
+    YmlData* loop_data;
+    exception tek_exception = SUCCESS;
+    while ((next_key = va_arg(keys, const char*))) {
+        tek_exception = hashtableGet(hashtable, key, &loop_data);
+        
+        // if there is something at that key
+        if (!tek_exception && (loop_data->type == YML_DATA)) {
+            hashtable = loop_data->value;
+            key = next_key;
+            continue;
+        }
+
+        HashTable* next_hashtable = (HashTable*)malloc(sizeof(HashTable));
+        if (!next_hashtable) {
+            tek_exception = MEMORY_EXCEPTION;
+            tekExcept(tek_exception, "Failed to allocate memory for new hash table.");
+            break;
+        }
+        hashtableCreate(next_hashtable, YML_HASHTABLE_SIZE);
+        YmlData* yml_data = (YmlData*)malloc(sizeof(YmlData));
+        if (!yml_data) {
+            tek_exception = MEMORY_EXCEPTION;
+            tekExcept(tek_exception, "Failed to allocate memory for new yml data.");
+            break;
+        }
+        yml_data->type = YML_DATA;
+        yml_data->value = next_hashtable;
+
+        tek_exception = hashtableSet(hashtable, key, yml_data);
+        if (tek_exception) break;
+        hashtable = next_hashtable;
+        key = next_key;
+    }
+    va_end(keys);
+    tekChainThrow(tek_exception);
+    tekChainThrow(hashtableSet(hashtable, key, data));
+}
+
+exception ymlRemove() {
+    return SUCCESS;
+}
+
+//exception ymlSet(const char* key, YmlNode** yml, YmlData* data) {
+//    return SUCCESS;
+//}
+
+exception ymlDelete() {
+    return SUCCESS;
+}
+
+exception ymlPrint(YmlFile* yml) {
+    return SUCCESS;
+}
 
 int isWhitespace(const char c) {
     switch (c) {
@@ -113,8 +234,13 @@ exception ymlThrowSyntax(const Word* word) {
     tekThrow(YML_EXCEPTION, error_message);
 }
 
-flag ymlDetectType(const Word* word) {
-    if ((word->start[0] == '"') && (word->start[word->length - 1] == '"')) return STRING_TOKEN;
+flag ymlDetectType(Word* word) {
+    if ((word->start[0] == '"') && (word->start[word->length - 1] == '"')) {
+        if (word->length <= 1) return STRING_TOKEN;
+        word->start += 1;
+        word->length -= 2;
+        return STRING_TOKEN;
+    }
     flag contains_digits = 0;
     uint num_decimals = 0;
     flag contains_letters = 0;
@@ -135,7 +261,7 @@ exception ymlCreateKeyToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
     if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for key token.");
     (*token)->word = word;
-    (*token)->type = ID_TOKEN;
+    (*token)->type = ID_TOKEN | ymlDetectType(word);
     return SUCCESS;
 }
 
@@ -191,7 +317,7 @@ exception ymlUpdateIndent(uint* indent, const Word* word, List* tokens, Stack* i
 exception ymlCreateTokensWithStack(const List* split_text, List* tokens, Stack* indent_stack) {
     const ListItem* item = split_text->data;
     uint indent = 0;
-    stackPush(indent_stack, (void*)indent);
+    tekChainThrow(stackPush(indent_stack, (void*)indent));
     while (item) {
         Word* word = (Word*)item->data;
 
@@ -232,8 +358,7 @@ exception ymlCreateTokens(const List* split_text, List* tokens) {
 }
 
 exception ymlFromTokens(const List* tokens, YmlFile* yml) {
-
-    return SUCCESS;
+    
 }
 
 exception ymlReadFile(const char* filename, YmlFile* yml) {
@@ -254,6 +379,8 @@ exception ymlReadFile(const char* filename, YmlFile* yml) {
     listCreate(&tokens);
     tekChainThrow(ymlSplitText(buffer, file_size, &split_text));
     tekChainThrow(ymlCreateTokens(&split_text, &tokens));
+    
+    
 
     const ListItem* item = tokens.data;
     while (item) {
