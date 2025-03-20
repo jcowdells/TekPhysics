@@ -75,13 +75,16 @@ int render() {
 
 void testYml() {
     YmlFile yml_file = {};
-    YmlData yml_data = {127, 0};
-    YmlData yml_2 = {100, 0};
+    YmlData* yml_data = (YmlData*)malloc(sizeof(YmlData));
+    yml_data->type = 1;
+    YmlData* yml_2 = (YmlData*)malloc(sizeof(YmlData));
     YmlData* yml_ptr = &yml_2;
     tekLog(ymlCreate(&yml_file));
-    tekLog(ymlSet(&yml_file, &yml_data, "test", "test2"));
-    tekLog(ymlSet(&yml_file, &yml_data, "test", "test3"));
+    tekLog(ymlSet(&yml_file, yml_data, "test", "test2"));
+    tekLog(ymlSet(&yml_file, yml_data, "test", "test3"));
     
+    tekLog(ymlRemove(&yml_file, "test", "test3"));
+
     YmlData* internal_data;
     tekLog(hashtableGet(&yml_file, "test", &internal_data));
     HashTable* internal = internal_data->value;

@@ -46,105 +46,252 @@ exception ymlCreateStringData(const char* string, YmlData* yml_data) {
     return SUCCESS;
 }
 
-exception ymlDeleteData(YmlData* yml_data) {
-    switch (yml_data->type) {
-        case STRING_DATA:
-            free(yml_data->value);
-            break;
-        default:
-            break;
+void ymlDeleteData(YmlData* yml_data) {
+    if (yml_data->value) {
+        switch (yml_data->type) {
+            case STRING_DATA:
+                free(yml_data->value);
+                break;
+            default:
+                break;
+        }
     }
     free(yml_data);
+}
+
+exception ymlDelete(YmlFile* yml) {
+    // create pointer to store list of values
+    YmlData** values;
+
+    // get number of values
+    const uint num_items = yml->num_items;
+
+    // get values from hashtable
+    tekChainThrow(hashtableGetValues(yml, &values));
+    exception tek_exception = SUCCESS;    
+    
+    // iterate over the values we got
+    for (uint i = 0; i < num_items; i++) {
+        // if this is a pointer to another hashtable, we need to recursively free it
+        if (values[i]->type == YML_DATA) {
+            HashTable* hashtable = values[i]->value;
+            tek_exception = ymlDelete(hashtable);
+            if (tek_exception) break;
+            free(values[i]);
+        // otherwise, just delete as normal
+        } else {
+            ymlDeleteData(values[i]);
+        }
+        
+    }
+
+    // clean up the array we used
+    free(values);
+    tekChainThrow(tek_exception);
     return SUCCESS;
 }
 
 exception ymlCreate(YmlFile* yml) {
+    // simply need to create the hashtable which the yml file needs to work
+    // this is just the root hash table
     tekChainThrow(hashtableCreate(yml, YML_HASHTABLE_SIZE));
     return SUCCESS;
 }
 
 exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
+    // separate method. should be called from a macro ymlGet
+    // the macro will force the final argument to be null
+
+    // start variadic arguments
     va_list keys;
     va_start(keys, data);
     const char* key;
+
+    // initial hashtable pointer
     HashTable* hashtable = yml;
+
+    // place to store data we get during the loop
     YmlData* loop_data;
+
+    // store any exceptions that occur during the loop
     exception tek_exception = SUCCESS;
     while ((key = va_arg(keys, const char*))) {
+        // say we had something like
+        // key: "value"
+        // and i tried to do yml[key][something]
+        // obviously that can't work, so don't allow access if not a hashtable
         if (!hashtable) {
             tek_exception = YML_EXCEPTION;
             tekExcept(tek_exception, "Invalid key - inaccessible type.");
             break;
         }
-
+        
+        // get the data stored in the hashtable, and make sure that it is a valid key
         tek_exception = hashtableGet(hashtable, key, &loop_data);
         if (tek_exception) {
             tekExcept(tek_exception, "Invalid key - key does not exist.");
             break;        
         }
 
+        // if the data stored is type 'yml data', then a hashtable is stored there
+        // set this as the new hashtable
         if (loop_data->type == YML_DATA) {
             hashtable = loop_data->value;
         }
     }
-    *data = loop_data;
+
+    // finish variadic arguments
     va_end(keys);
+
+    // write data and throw any exceptions if they occurred
     tekChainThrow(tek_exception);
+    *data = loop_data;
+    return SUCCESS;
 }
 
 exception ymlSetVA(YmlFile* yml, YmlData* data, ...) {
+    // separate method. should be called from a macro ymlSet
+    // the macro will force the final argument to be null
+
+    // begin variadic argumentss
     va_list keys;
     va_start(keys, data);
+
+    // get the first argument, this sets us up for the loop
     const char* key = va_arg(keys, const char*);
     const char* next_key;
+
+    // set up some variables
     HashTable* hashtable = yml;
     YmlData* loop_data;
     exception tek_exception = SUCCESS;
+
+    // if the next key is 0, we don't want to process this
+    // hence the use of the separate key and next_key variables
     while ((next_key = va_arg(keys, const char*))) {
+        // get the data stored at current key
         tek_exception = hashtableGet(hashtable, key, &loop_data);
-        
-        // if there is something at that key
+
+        // if there is another hash table at that key
         if (!tek_exception && (loop_data->type == YML_DATA)) {
+            // update searched hash table and increment key
             hashtable = loop_data->value;
             key = next_key;
+            
+            // go to next iteration
             continue;
         }
-
+        
+        // if there isn't a hashtable there, assume that one should be created
         HashTable* next_hashtable = (HashTable*)malloc(sizeof(HashTable));
         if (!next_hashtable) {
             tek_exception = MEMORY_EXCEPTION;
             tekExcept(tek_exception, "Failed to allocate memory for new hash table.");
             break;
         }
+
+        // init the hashtable if no memory errors happened
         hashtableCreate(next_hashtable, YML_HASHTABLE_SIZE);
+
+        // create a yml data struct to store the hashtable pointer
         YmlData* yml_data = (YmlData*)malloc(sizeof(YmlData));
         if (!yml_data) {
             tek_exception = MEMORY_EXCEPTION;
             tekExcept(tek_exception, "Failed to allocate memory for new yml data.");
             break;
         }
+        
+        // fill with necessary data if all went well
         yml_data->type = YML_DATA;
         yml_data->value = next_hashtable;
+        
+        // delete the old data that was stored here, in the appropriate way
+        if (loop_data) {
+            if (loop_data->type == YML_DATA) {
+                tek_exception = ymlDelete(loop_data->value);
+                if (tek_exception) break;
+                free(loop_data);
+            } else {
+                ymlDeleteData(loop_data);
+            }
+        }
 
+        // set the hashtable at this index
         tek_exception = hashtableSet(hashtable, key, yml_data);
         if (tek_exception) break;
+
+        // update hashtable pointer and increment to the next key
         hashtable = next_hashtable;
         key = next_key;
     }
+    // end variadic arguments
     va_end(keys);
+
+    // check for errors, and then set the data at the correct key
     tekChainThrow(tek_exception);
     tekChainThrow(hashtableSet(hashtable, key, data));
-}
-
-exception ymlRemove() {
     return SUCCESS;
 }
 
-//exception ymlSet(const char* key, YmlNode** yml, YmlData* data) {
-//    return SUCCESS;
-//}
+exception ymlRemoveVA(YmlFile* yml, ...) {
+    // separate method. should be called from a macro ymlRemove
+    // the macro will force the final argument to be null
 
-exception ymlDelete() {
+    // start variadic arguments
+    va_list keys;
+    va_start(keys, yml);
+    const char* key;
+
+    // initial hashtable pointer
+    HashTable* hashtable = yml;
+
+    // place to store data we get during the loop
+    YmlData* loop_data;
+
+    // store any exceptions that occur during the loop
+    exception tek_exception = SUCCESS;
+    while ((key = va_arg(keys, const char*))) {
+        // say we had something like
+        // key: "value"
+        // and i tried to do yml[key][something]
+        // obviously that can't work, so don't allow access if not a hashtable
+        if (!hashtable) {
+            tek_exception = YML_EXCEPTION;
+            tekExcept(tek_exception, "Invalid key - inaccessible type.");
+            break;
+        }
+        
+        // get the data stored in the hashtable, and make sure that it is a valid key
+        tek_exception = hashtableGet(hashtable, key, &loop_data);
+        if (tek_exception) {
+            tekExcept(tek_exception, "Invalid key - key does not exist.");
+            break;        
+        }
+
+        // if the data stored is type 'yml data', then a hashtable is stored there
+        // set this as the new hashtable
+        if (loop_data->type == YML_DATA) {
+            hashtable = loop_data->value;
+        }
+    }
+
+    // finish variadic arguments
+    va_end(keys);
+
+    // write data and throw any exceptions if they occurred
+    tekChainThrow(tek_exception);
+
+    // delete the old data that was stored here, in the appropriate way
+    if (loop_data) {
+        if (loop_data->type == YML_DATA) {
+            tek_exception = ymlDelete(loop_data->value);
+            free(loop_data);
+            tekChainThrow(tek_exception);
+        } else {
+            ymlDeleteData(loop_data);
+        }
+    }
+    hashtable
     return SUCCESS;
 }
 
