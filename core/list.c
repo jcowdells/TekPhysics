@@ -123,7 +123,7 @@ exception listGetItem(const List* list, const uint index, void** data) {
     }
 
     // return data
-    *data = item->data;
+    if (data) *data = item->data;
     return SUCCESS;
 }
 
@@ -144,7 +144,7 @@ exception listPopItem(List* list, void** data) {
     }
 
     // return the original data before we free it
-    *data = item->data;
+    if (data) *data = item->data;
     free(item);
 
     // if there is not a previous item, then we have just emptied the list completely
@@ -181,7 +181,7 @@ exception listRemoveItem(List* list, const uint index, void** data) {
     }
 
     // return data before we free it
-    *data = item->data;
+    if (data) *data = item->data;
 
     // pass the next pointer to the previous item, so the list remains contiguous
     // could be either the previous item, or the root of the list

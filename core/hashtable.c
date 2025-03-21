@@ -38,7 +38,7 @@ exception hashtableCreate(HashTable* hashtable, const unsigned int length) {
 exception hashtableHash(HashTable* hashtable, const char* key, unsigned int* hash) {
     // make sure we dont have bogus data
     if (!hashtable || !key || !hash) tekThrow(NULL_PTR_EXCEPTION, "Cannot hash key from null ptr.");
-
+    if (!hashtable->length) tekThrow(HASHTABLE_EXCEPTION, "Cannot get hash index for an empty hashtable.");
     // simple hashing algortithm for strings
     // sum ascii values, and then modulo to stop it exceeding the maximum size of the internal array
     const size_t len_key = strlen(key);
@@ -147,9 +147,9 @@ exception hashtableGetValues(const HashTable* hashtable, void*** values) {
 
 exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
     // make room to copy the keys and values of the hash table
-    char** keys = (char**)malloc(hashtable->num_items * sizeof(char*));
+    char** keys = (char**)calloc(hashtable->num_items, sizeof(char*));
     if (!keys) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for copy of keys.");
-    void** values = (void**)malloc(hashtable->num_items * sizeof(void*));
+    void** values = (void**)calloc(hashtable->num_items, sizeof(void*));
     if (!values) {
         free(keys);
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for copy of values.");
@@ -293,6 +293,15 @@ void hashtablePrint(const HashTable* hashtable) {
 }
 
 void hashtablePrintItems(const HashTable* hashtable) {
+    printf("%p\n", hashtable);
+    if (!hashtable) {
+        printf("shit pointer");
+        return;
+    }
+    if (!hashtable->internal) {
+        printf("internal shit pointer");
+        return;
+    }
     printf("{\n");
     for (unsigned int i = 0; i < hashtable->length; i++) {
         HashNode* node_ptr = hashtable->internal[i];

@@ -22,3 +22,7 @@ exception ymlSetVA(YmlFile* yml, YmlData* data, ...);
 
 exception ymlRemoveVA(YmlFile* yml, ...);
 #define ymlRemove(yml, ...) ymlRemoveVA(yml, __VA_ARGS__, 0)
+
+exception ymlDelete(YmlFile* yml);
+
+exception ymlPrint(YmlFile* yml);

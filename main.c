@@ -75,23 +75,29 @@ int render() {
 
 void testYml() {
     YmlFile yml_file = {};
-    YmlData* yml_data = (YmlData*)malloc(sizeof(YmlData));
-    yml_data->type = 1;
-    YmlData* yml_2 = (YmlData*)malloc(sizeof(YmlData));
-    YmlData* yml_ptr = &yml_2;
-    tekLog(ymlCreate(&yml_file));
-    tekLog(ymlSet(&yml_file, yml_data, "test", "test2"));
-    tekLog(ymlSet(&yml_file, yml_data, "test", "test3"));
+    tekLog(ymlReadFile("../res/test.yml", &yml_file));
+    YmlData* yml_data;
     
-    tekLog(ymlRemove(&yml_file, "test", "test3"));
+    tekLog(ymlGet(&yml_file, &yml_data, "hello", "ip_address"));
+//    printf("ip address: %s\n", yml_data->value);
+//    YmlData* yml_data;
+//    ymlCreateStringData("hello", &yml_data);
+//    YmlData* yml_2;
+//    ymlCreateStringData("goodbye", &yml_2);
+//    YmlData* yml_ptr = &yml_2;
+//    tekLog(ymlCreate(&yml_file));
+//    tekLog(ymlSet(&yml_file, yml_data, "test", "test2", "test3"));
+//    tekLog(ymlSet(&yml_file, yml_2, "test", "test3"));
+//    const char** keys;
+//    hashtableGetKeys(&yml_file, &keys);
+//    for (uint i = 0; i < yml_file.num_items; i++) {
+//        printf("%s\n", keys[i]);
+//    }
+    tekLog(ymlPrint(&yml_file));
 
-    YmlData* internal_data;
-    tekLog(hashtableGet(&yml_file, "test", &internal_data));
-    HashTable* internal = internal_data->value;
+    printf("===> %s\n", yml_data->value);
 
-    hashtablePrintItems(internal);
-    tekLog(ymlGet(&yml_file, &yml_ptr, "test", "test3"));
-    printf("yml_2 = {%d, %p}\n", yml_ptr->type, yml_ptr->value);
+    ymlDelete(&yml_file);
 }
 
 int main(void) {

@@ -37,13 +37,59 @@ typedef struct Token {
     flag type;
 } Token;
 
-exception ymlCreateStringData(const char* string, YmlData* yml_data) {
-    uint size_string = (strlen(string) + 1) * sizeof(char);
-    yml_data->value = (char*)malloc(size_string);
-    if (!yml_data->value) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for string data.");
-    memcpy(yml_data->value, string, size_string);
-    yml_data->type = STRING_DATA;
+exception ymlWordToString(const Word* word, char** string) {
+    // allocate memory for string
+    *string = (char*)malloc(word->length + 1);
+    if (!(*string)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for word string.");
+
+    // copy in string data from token
+    memcpy(*string, word->start, word->length);
+
+    // add null termminator character
+    (*string)[word->length] = 0;
+
     return SUCCESS;
+}
+
+exception ymlCreateStringData(const char* string, YmlData** yml_data) {
+    // allocate some memory for yml data
+    *yml_data = (YmlData*)malloc(sizeof(YmlData));
+    if (!(*yml_data)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for string data.");
+
+    // set type of data to be string
+    (*yml_data)->type = STRING_DATA;
+
+    // allocate memory for said string
+    char* string_copy = (char*)malloc(strlen(string) + 1);
+    if (!string_copy) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for string data.");
+
+    // copy in string data
+    memcpy(string_copy, string, strlen(string) + 1);
+
+    // set value ptr of data to be the string
+    (*yml_data)->value = string_copy;
+    return SUCCESS;
+}
+
+exception ymlCreateStringDataToken(const Token* token, YmlData** yml_data) {
+    // allocate some memory for yml data
+    *yml_data = (YmlData*)malloc(sizeof(YmlData));
+    if (!(*yml_data)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for string data.");
+
+    // set type of data to be string
+    (*yml_data)->type = STRING_DATA;
+
+    // allocate memory for said string
+    char* string;
+    ymlWordToString(token->word, &string);
+
+    // set value ptr of data to be the string
+    (*yml_data)->value = string;
+    return SUCCESS;
+}
+
+exception ymlCreateIntegerData(const Token* token, YmlData** yml_data) {
+    
 }
 
 void ymlDeleteData(YmlData* yml_data) {
@@ -60,6 +106,8 @@ void ymlDeleteData(YmlData* yml_data) {
 }
 
 exception ymlDelete(YmlFile* yml) {
+    if (!yml) tekThrow(NULL_PTR_EXCEPTION, "Cannot free null pointer.");
+
     // create pointer to store list of values
     YmlData** values;
 
@@ -68,8 +116,8 @@ exception ymlDelete(YmlFile* yml) {
 
     // get values from hashtable
     tekChainThrow(hashtableGetValues(yml, &values));
-    exception tek_exception = SUCCESS;    
-    
+    exception tek_exception = SUCCESS;
+
     // iterate over the values we got
     for (uint i = 0; i < num_items; i++) {
         // if this is a pointer to another hashtable, we need to recursively free it
@@ -82,7 +130,7 @@ exception ymlDelete(YmlFile* yml) {
         } else {
             ymlDeleteData(values[i]);
         }
-        
+
     }
 
     // clean up the array we used
@@ -98,15 +146,7 @@ exception ymlCreate(YmlFile* yml) {
     return SUCCESS;
 }
 
-exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
-    // separate method. should be called from a macro ymlGet
-    // the macro will force the final argument to be null
-
-    // start variadic arguments
-    va_list keys;
-    va_start(keys, data);
-    const char* key;
-
+exception ymlGetList(YmlFile* yml, YmlData** data, const List* keys) {
     // initial hashtable pointer
     HashTable* hashtable = yml;
 
@@ -115,7 +155,8 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
 
     // store any exceptions that occur during the loop
     exception tek_exception = SUCCESS;
-    while ((key = va_arg(keys, const char*))) {
+    ListItem* key = keys->data;
+    while (key) {
         // say we had something like
         // key: "value"
         // and i tried to do yml[key][something]
@@ -127,10 +168,10 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
         }
         
         // get the data stored in the hashtable, and make sure that it is a valid key
-        tek_exception = hashtableGet(hashtable, key, &loop_data);
+        tek_exception = hashtableGet(hashtable, key->data, &loop_data);
         if (tek_exception) {
             tekExcept(tek_exception, "Invalid key - key does not exist.");
-            break;        
+            break;
         }
 
         // if the data stored is type 'yml data', then a hashtable is stored there
@@ -138,10 +179,9 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
         if (loop_data->type == YML_DATA) {
             hashtable = loop_data->value;
         }
-    }
 
-    // finish variadic arguments
-    va_end(keys);
+        key = key->next;
+    }
 
     // write data and throw any exceptions if they occurred
     tekChainThrow(tek_exception);
@@ -149,39 +189,58 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
     return SUCCESS;
 }
 
-exception ymlSetVA(YmlFile* yml, YmlData* data, ...) {
-    // separate method. should be called from a macro ymlSet
+exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
+    // separate method. should be called from a macro ymlGet
     // the macro will force the final argument to be null
 
-    // begin variadic argumentss
+    // start variadic arguments
     va_list keys;
     va_start(keys, data);
+    const char* key;
 
-    // get the first argument, this sets us up for the loop
-    const char* key = va_arg(keys, const char*);
-    const char* next_key;
+    List keys_list = {};
+    listCreate(&keys_list);
 
+    while ((key = va_arg(keys, const char*))) {
+        listAddItem(&keys_list, key);
+    }
+
+    // finish variadic arguments
+    va_end(keys);
+
+    // get item and throw any exceptions if they occurred
+    exception tek_exception = ymlGetList(yml, data, &keys_list);
+    listDelete(&keys_list);
+    
+    return tek_exception;
+}
+
+exception ymlSetList(YmlFile* yml, YmlData* data, const List* keys) {
     // set up some variables
+    ListItem* key = keys->data;
+
     HashTable* hashtable = yml;
     YmlData* loop_data;
     exception tek_exception = SUCCESS;
 
     // if the next key is 0, we don't want to process this
     // hence the use of the separate key and next_key variables
-    while ((next_key = va_arg(keys, const char*))) {
+    while (key->next) {
         // get the data stored at current key
-        tek_exception = hashtableGet(hashtable, key, &loop_data);
+        tek_exception = hashtableGet(hashtable, key->data, &loop_data);
 
         // if there is another hash table at that key
         if (!tek_exception && (loop_data->type == YML_DATA)) {
             // update searched hash table and increment key
             hashtable = loop_data->value;
-            key = next_key;
-            
+            key = key->next;
+
             // go to next iteration
             continue;
         }
-        
+
+        loop_data = 0;
+
         // if there isn't a hashtable there, assume that one should be created
         HashTable* next_hashtable = (HashTable*)malloc(sizeof(HashTable));
         if (!next_hashtable) {
@@ -200,36 +259,118 @@ exception ymlSetVA(YmlFile* yml, YmlData* data, ...) {
             tekExcept(tek_exception, "Failed to allocate memory for new yml data.");
             break;
         }
-        
+
         // fill with necessary data if all went well
         yml_data->type = YML_DATA;
         yml_data->value = next_hashtable;
-        
+
         // delete the old data that was stored here, in the appropriate way
-        if (loop_data) {
+        if (loop_data && !tek_exception) {
             if (loop_data->type == YML_DATA) {
                 tek_exception = ymlDelete(loop_data->value);
                 if (tek_exception) break;
-                free(loop_data);
+                //free(loop_data);
             } else {
                 ymlDeleteData(loop_data);
             }
         }
 
         // set the hashtable at this index
-        tek_exception = hashtableSet(hashtable, key, yml_data);
+        tek_exception = hashtableSet(hashtable, key->data, yml_data);
         if (tek_exception) break;
 
         // update hashtable pointer and increment to the next key
         hashtable = next_hashtable;
-        key = next_key;
+        key = key->next;
     }
-    // end variadic arguments
-    va_end(keys);
 
     // check for errors, and then set the data at the correct key
     tekChainThrow(tek_exception);
-    tekChainThrow(hashtableSet(hashtable, key, data));
+    tekChainThrow(hashtableSet(hashtable, key->data, data));
+    return tek_exception;
+}
+
+
+exception ymlSetVA(YmlFile* yml, YmlData* data, ...) {
+    // separate method. should be called from a macro ymlGet
+    // the macro will force the final argument to be null
+
+    // start variadic arguments
+    va_list keys;
+    va_start(keys, data);
+    const char* key;
+
+    List keys_list = {};
+    listCreate(&keys_list);
+
+    while ((key = va_arg(keys, const char*))) {
+        listAddItem(&keys_list, key);
+    }
+
+    // finish variadic arguments
+    va_end(keys);
+
+    // get item and throw any exceptions if they occurred
+    exception tek_exception = ymlSetList(yml, data, &keys_list);
+    listDelete(&keys_list);
+    
+    return tek_exception;
+}
+
+exception ymlRemoveList(YmlFile* yml, const List* keys) {
+    ListItem* key = keys->data;
+    const char* prev_key = 0;
+
+    // initial hashtable pointer
+    HashTable* hashtable = yml;
+
+    // place to store data we get during the loop
+    YmlData* loop_data = 0;
+
+    // store any exceptions that occur during the loop
+    exception tek_exception = SUCCESS;
+    while (key) {
+        // say we had something like
+        // key: "value"
+        // and i tried to do yml[key][something]
+        // obviously that can't work, so don't allow access if not a hashtable
+        if (!hashtable) {
+            tek_exception = YML_EXCEPTION;
+            tekExcept(tek_exception, "Invalid key - inaccessible type.");
+            break;
+        }
+
+        // get the data stored in the hashtable, and make sure that it is a valid key
+        tek_exception = hashtableGet(hashtable, key->data, &loop_data);
+        if (tek_exception) {
+            tekExcept(tek_exception, "Invalid key - key does not exist.");
+            break;
+        }
+
+        // if the data stored is type 'yml data', then a hashtable is stored there
+        // set this as the new hashtable
+        if (loop_data->type == YML_DATA) {
+            hashtable = loop_data->value;
+        }
+
+        prev_key = key->data;
+        key = key->next;
+    }
+
+    // write data and throw any exceptions if they occurred
+    tekChainThrow(tek_exception);
+
+    // delete the old data that was stored here, in the appropriate way
+    if (loop_data) {
+        if (loop_data->type == YML_DATA) {
+            tek_exception = ymlDelete(loop_data->value);
+            // free(loop_data);
+            tekChainThrow(tek_exception);
+        } else {
+            ymlDeleteData(loop_data);
+        }
+    }
+    tekChainThrow(hashtableRemove(hashtable, prev_key));
     return SUCCESS;
 }
 
@@ -242,61 +383,21 @@ exception ymlRemoveVA(YmlFile* yml, ...) {
     va_start(keys, yml);
     const char* key;
 
-    // initial hashtable pointer
-    HashTable* hashtable = yml;
+    List keys_list = {};
+    listCreate(&keys_list);
 
-    // place to store data we get during the loop
-    YmlData* loop_data;
-
-    // store any exceptions that occur during the loop
-    exception tek_exception = SUCCESS;
     while ((key = va_arg(keys, const char*))) {
-        // say we had something like
-        // key: "value"
-        // and i tried to do yml[key][something]
-        // obviously that can't work, so don't allow access if not a hashtable
-        if (!hashtable) {
-            tek_exception = YML_EXCEPTION;
-            tekExcept(tek_exception, "Invalid key - inaccessible type.");
-            break;
-        }
-        
-        // get the data stored in the hashtable, and make sure that it is a valid key
-        tek_exception = hashtableGet(hashtable, key, &loop_data);
-        if (tek_exception) {
-            tekExcept(tek_exception, "Invalid key - key does not exist.");
-            break;        
-        }
-
-        // if the data stored is type 'yml data', then a hashtable is stored there
-        // set this as the new hashtable
-        if (loop_data->type == YML_DATA) {
-            hashtable = loop_data->value;
-        }
+        listAddItem(&keys_list, key);
     }
 
     // finish variadic arguments
     va_end(keys);
 
-    // write data and throw any exceptions if they occurred
-    tekChainThrow(tek_exception);
-
-    // delete the old data that was stored here, in the appropriate way
-    if (loop_data) {
-        if (loop_data->type == YML_DATA) {
-            tek_exception = ymlDelete(loop_data->value);
-            free(loop_data);
-            tekChainThrow(tek_exception);
-        } else {
-            ymlDeleteData(loop_data);
-        }
-    }
-    hashtable
-    return SUCCESS;
-}
-
-exception ymlPrint(YmlFile* yml) {
-    return SUCCESS;
+    // get item and throw any exceptions if they occurred
+    exception tek_exception = ymlRemoveList(yml, &keys_list);
+    listDelete(&keys_list);
+    
+    return tek_exception;
 }
 
 int isWhitespace(const char c) {
@@ -408,7 +509,7 @@ exception ymlCreateKeyToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
     if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for key token.");
     (*token)->word = word;
-    (*token)->type = ID_TOKEN | ymlDetectType(word);
+    (*token)->type = ID_TOKEN;// | ymlDetectType(word);
     return SUCCESS;
 }
 
@@ -501,14 +602,105 @@ exception ymlCreateTokens(const List* split_text, List* tokens) {
     stackCreate(&indent_stack);
     const exception yml_exception = ymlCreateTokensWithStack(split_text, tokens, &indent_stack);
     stackDelete(&indent_stack);
-    return yml_exception;
+    tekChainThrow(yml_exception);
+    return SUCCESS;
 }
 
 exception ymlFromTokens(const List* tokens, YmlFile* yml) {
-    
+    List keys_list = {};
+    listCreate(&keys_list);
+    listAddItem(&keys_list, 0);
+    char* key = 0;
+    exception tek_exception = SUCCESS;
+
+    ListItem* item = tokens->data;
+    while (item) {
+        Token* token = item->data;
+        if (token->type == ID_TOKEN) {
+            listPopItem(&keys_list, &key);
+            //if (key) free(key);
+            ymlWordToString(token->word, &key);
+            tek_exception = listAddItem(&keys_list, key);
+            if (tek_exception) break;
+            item = item->next;
+            continue;
+        }
+        if (token->type == OUT_TOKEN) {
+            listAddItem(&keys_list, 0);
+            item = item->next;
+            continue;
+        }
+        if (token->type == IN_TOKEN) {
+            listPopItem(&keys_list, &key);
+            //if (key) free(key);
+            item = item->next;
+            continue;
+        }
+
+        YmlData* yml_data;
+        if (token->type == STRING_TOKEN) {
+            tek_exception = ymlCreateStringDataToken(token, &yml_data);
+            if (tek_exception) break;
+
+            tek_exception = ymlSetList(yml, yml_data, &keys_list);
+            if (tek_exception) break;
+        }
+        
+        item = item->next;
+    }
+
+    listDelete(&keys_list);
+    tekChainThrow(tek_exception);
+    return SUCCESS;
+}
+
+exception ymlPrintIndent(YmlFile* yml, uint indent) {
+    if (!yml) tekThrow(NULL_PTR_EXCEPTION, "Cannot print null pointer.");
+
+    // create pointer to store list of values
+    YmlData** values;
+
+    // get number of values
+    const uint num_items = yml->num_items;
+
+    // get values from hashtable
+    tekChainThrow(hashtableGetValues(yml, &values));
+
+    const char** keys;
+    tekChainThrow(hashtableGetKeys(yml, &keys));
+
+    exception tek_exception = SUCCESS;
+
+    // iterate over the values we got
+    for (uint i = 0; i < num_items; i++) {
+        for (uint i = 0; i < indent; i++) printf("  ");
+        printf("%s: ", keys[i]);
+        // if this is a pointer to another hashtable, we need to recursively print it
+        if (values[i]->type == YML_DATA) {
+            HashTable* hashtable = values[i]->value;
+            printf("\n");
+            tek_exception = ymlPrintIndent(hashtable, indent + 1);
+            if (tek_exception) break;
+        // otherwise, just print as normal
+        } else {
+            if (values[i]->type == STRING_DATA) printf(" %s\n", values[i]->value);
+        }
+    }
+
+    // clean up the array we used
+    free(keys);
+    free(values);
+    tekChainThrow(tek_exception);
+    return SUCCESS;
+}
+
+exception ymlPrint(YmlFile* yml) {
+    tekChainThrow(ymlPrintIndent(yml, 0));
 }
 
 exception ymlReadFile(const char* filename, YmlFile* yml) {
+    tekChainThrow(ymlCreate(yml));
+
     // get size of file to read
     uint file_size;
     tekChainThrow(getFileSize(filename, &file_size));
@@ -526,46 +718,46 @@ exception ymlReadFile(const char* filename, YmlFile* yml) {
     listCreate(&tokens);
     tekChainThrow(ymlSplitText(buffer, file_size, &split_text));
     tekChainThrow(ymlCreateTokens(&split_text, &tokens));
-    
-    
 
-    const ListItem* item = tokens.data;
-    while (item) {
-        const Token* token = (Token*)item->data;
-        const Word* word = token->word;
-        switch (token->type) {
-            case OUT_TOKEN:
-                printf("out token");
-                break;
-            case IN_TOKEN:
-                printf("in token");
-                break;
-            case ID_TOKEN:
-                printf("id token  : ");
-                break;
-            case STRING_TOKEN:
-                printf("str token : ");
-                break;
-            case INT_TOKEN:
-                printf("int token : ");
-                break;
-            case FLOAT_TOKEN:
-                printf("num token : ");
-                break;
-            case LIST_TOKEN:
-                printf("list token: ");
-                break;
-            default:
-                printf("UD token!");
-        }
-        if (word) {
-            for (uint i = 0; i < word->length; i++) {
-                printf("%c", word->start[i]);
-            }
-        }
-        printf("\n");
-        item = item->next;
-    }
+    tekChainThrow(ymlFromTokens(&tokens, yml));
+
+//    const ListItem* item = tokens.data;
+//    while (item) {
+//        const Token* token = (Token*)item->data;
+//        const Word* word = token->word;
+//        switch (token->type) {
+//            case OUT_TOKEN:
+//                printf("out token");
+//                break;
+//            case IN_TOKEN:
+//                printf("in token");
+//                break;
+//            case ID_TOKEN:
+//                printf("id token  : ");
+//                break;
+//            case STRING_TOKEN:
+//                printf("str token : ");
+//                break;
+//            case INT_TOKEN:
+//                printf("int token : ");
+//                break;
+//            case FLOAT_TOKEN:
+//                printf("num token : ");
+//                break;
+//            case LIST_TOKEN:
+//                printf("list token: ");
+//                break;
+//            default:
+//                printf("UD token!");
+//        }
+//        if (word) {
+//            for (uint i = 0; i < word->length; i++) {
+//                printf("%c", word->start[i]);
+//            }
+//        }
+//        printf("\n");
+//        item = item->next;
+//    }
 
     listFreeAllData(&split_text);
     listFreeAllData(&tokens);
