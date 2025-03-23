@@ -101,6 +101,8 @@ void testYml() {
 }
 
 int main(void) {
+
+    printf("size of void* = %lu", sizeof(double));
     tekInitExceptions();
     // if (render()) {
     //     tekPrintException();

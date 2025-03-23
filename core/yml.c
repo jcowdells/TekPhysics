@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include "file.h"
 #include "list.h"
@@ -22,8 +23,10 @@
 #define FLOAT_TOKEN  0b00100000
 #define BOOL_TOKEN   0b01000000
 
-#define YML_DATA   0
-#define STRING_DATA 1
+#define YML_DATA     0
+#define STRING_DATA  1
+#define INTEGER_DATA 2
+#define FLOAT_DATA   3
 
 typedef struct Word {
     const char* start;
@@ -88,8 +91,64 @@ exception ymlCreateStringDataToken(const Token* token, YmlData** yml_data) {
     return SUCCESS;
 }
 
-exception ymlCreateIntegerData(const Token* token, YmlData** yml_data) {
-    
+exception ymlCreateIntegerData(const long integer, YmlData** yml_data) {
+    // allocate some memory for yml data
+    *yml_data = (YmlData*)malloc(sizeof(YmlData));
+    if (!(*yml_data)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for integer data.");
+    (*yml_data)->type = INTEGER_DATA;
+    (*yml_data)->value = (void*)integer;
+    return SUCCESS;
+}
+
+exception ymlCreateIntegerDataToken(const Token* token, YmlData** yml_data) {
+    // allocate some memory for yml data
+    *yml_data = (YmlData*)malloc(sizeof(YmlData));
+    if (!(*yml_data)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for integer data.");
+    (*yml_data)->type = INTEGER_DATA;
+
+    // allocate memory to store integer in a string
+    char* string;
+    ymlWordToString(token->word, &string);
+
+    // convert string to be an integer, and check for errors
+    const long integer = strtol(string, NULL, 10);
+    const int error = errno;
+    free(string);
+    if (error == ERANGE) tekThrow(YML_EXCEPTION, "Integer is either too small or large.");
+
+    // set value ptr of data to be the number
+    (*yml_data)->value = (void*)integer;
+    return SUCCESS;
+}
+
+exception ymlCreateFloatData(const double number, YmlData** yml_data) {
+    // allocate some memory for yml data
+    *yml_data = (YmlData*)malloc(sizeof(YmlData));
+    if (!(*yml_data)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for integer data.");
+    (*yml_data)->type = FLOAT_DATA;
+    memcpy(&(*yml_data)->value, &number, sizeof(void*));
+    return SUCCESS;
+}
+
+exception ymlCreateFloatDataToken(const Token* token, YmlData** yml_data) {
+    // allocate some memory for yml data
+    *yml_data = (YmlData*)malloc(sizeof(YmlData));
+    if (!(*yml_data)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for integer data.");
+    (*yml_data)->type = FLOAT_DATA;
+
+    // allocate memory to store number in a string
+    char* string;
+    ymlWordToString(token->word, &string);
+
+    // convert string to be a number, and check for errors
+    const double number = strtod(string, NULL);
+    const int error = errno;
+    free(string);
+    if (error == ERANGE) tekThrow(YML_EXCEPTION, "Number is either too small or large.");
+
+    // set value ptr of data to be the number
+    memcpy(&(*yml_data)->value, &number, sizeof(void*));
+    return SUCCESS;
 }
 
 void ymlDeleteData(YmlData* yml_data) {
@@ -155,7 +214,7 @@ exception ymlGetList(YmlFile* yml, YmlData** data, const List* keys) {
 
     // store any exceptions that occur during the loop
     exception tek_exception = SUCCESS;
-    ListItem* key = keys->data;
+    const ListItem* key = keys->data;
     while (key) {
         // say we had something like
         // key: "value"
@@ -217,7 +276,7 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
 
 exception ymlSetList(YmlFile* yml, YmlData* data, const List* keys) {
     // set up some variables
-    ListItem* key = keys->data;
+    const ListItem* key = keys->data;
 
     HashTable* hashtable = yml;
     YmlData* loop_data;
@@ -318,7 +377,7 @@ exception ymlSetVA(YmlFile* yml, YmlData* data, ...) {
 }
 
 exception ymlRemoveList(YmlFile* yml, const List* keys) {
-    ListItem* key = keys->data;
+    const ListItem* key = keys->data;
     const char* prev_key = 0;
 
     // initial hashtable pointer
@@ -613,12 +672,12 @@ exception ymlFromTokens(const List* tokens, YmlFile* yml) {
     char* key = 0;
     exception tek_exception = SUCCESS;
 
-    ListItem* item = tokens->data;
+    const ListItem* item = tokens->data;
     while (item) {
-        Token* token = item->data;
+        const Token* token = item->data;
         if (token->type == ID_TOKEN) {
             listPopItem(&keys_list, &key);
-            //if (key) free(key);
+            if (key) free(key);
             ymlWordToString(token->word, &key);
             tek_exception = listAddItem(&keys_list, key);
             if (tek_exception) break;
@@ -632,7 +691,7 @@ exception ymlFromTokens(const List* tokens, YmlFile* yml) {
         }
         if (token->type == IN_TOKEN) {
             listPopItem(&keys_list, &key);
-            //if (key) free(key);
+            if (key) free(key);
             item = item->next;
             continue;
         }
@@ -640,6 +699,22 @@ exception ymlFromTokens(const List* tokens, YmlFile* yml) {
         YmlData* yml_data;
         if (token->type == STRING_TOKEN) {
             tek_exception = ymlCreateStringDataToken(token, &yml_data);
+            if (tek_exception) break;
+
+            tek_exception = ymlSetList(yml, yml_data, &keys_list);
+            if (tek_exception) break;
+        }
+
+        if (token->type == INT_TOKEN) {
+            tek_exception = ymlCreateIntegerDataToken(token, &yml_data);
+            if (tek_exception) break;
+
+            tek_exception = ymlSetList(yml, yml_data, &keys_list);
+            if (tek_exception) break;
+        }
+
+        if (token->type == FLOAT_TOKEN) {
+            tek_exception = ymlCreateFloatDataToken(token, &yml_data);
             if (tek_exception) break;
 
             tek_exception = ymlSetList(yml, yml_data, &keys_list);
@@ -683,7 +758,13 @@ exception ymlPrintIndent(YmlFile* yml, uint indent) {
             if (tek_exception) break;
         // otherwise, just print as normal
         } else {
-            if (values[i]->type == STRING_DATA) printf(" %s\n", values[i]->value);
+            if (values[i]->type == STRING_DATA) printf("%s\n", (char*)values[i]->value);
+            if (values[i]->type == INTEGER_DATA) printf("%ld\n", (long)values[i]->value);
+            if (values[i]->type == FLOAT_DATA) {
+                double number = 0;
+                memcpy(&number, &values[i]->value, sizeof(void*));
+                printf("%f\n", number);
+            }
         }
     }
 
