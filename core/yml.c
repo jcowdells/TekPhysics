@@ -18,15 +18,17 @@
 #define IN_TOKEN     0b011
 #define OUT_TOKEN    0b100
 
-#define STRING_TOKEN 0b00001000
-#define INT_TOKEN    0b00010000
-#define FLOAT_TOKEN  0b00100000
-#define BOOL_TOKEN   0b01000000
+#define STRING_TOKEN  0b00001000
+#define INTEGER_TOKEN 0b00010000
+#define FLOAT_TOKEN   0b00100000
+#define BOOL_TOKEN    0b01000000
+#define TYPE_MASK     0b01111000
 
 #define YML_DATA     0
 #define STRING_DATA  1
 #define INTEGER_DATA 2
 #define FLOAT_DATA   3
+#define LIST_DATA    4
 
 typedef struct Word {
     const char* start;
@@ -151,12 +153,47 @@ exception ymlCreateFloatDataToken(const Token* token, YmlData** yml_data) {
     return SUCCESS;
 }
 
+exception ymlCreateAutoDataToken(const Token* token, YmlData** yml_data) {
+    switch (token->type & TYPE_MASK) {
+        case STRING_TOKEN:
+            tekChainThrow(ymlCreateStringDataToken(token, yml_data));
+            break;
+        case INTEGER_TOKEN:
+            tekChainThrow(ymlCreateIntegerDataToken(token, yml_data));
+            break;
+        case FLOAT_TOKEN:
+            tekChainThrow(ymlCreateFloatDataToken(token, yml_data));
+            break;
+        default:
+            tekThrow(YML_EXCEPTION, "Bad token type.");
+    }
+    return SUCCESS;
+}
+
+exception ymlCreateListData(List* list, YmlData** yml_data) {
+    // allocate some memory for yml data
+    *yml_data = (YmlData*)malloc(sizeof(YmlData));
+    if (!(*yml_data)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for integer data.");
+    (*yml_data)->type = LIST_DATA;
+    (*yml_data)->value = (void*)list;
+    return SUCCESS;
+}
+
 void ymlDeleteData(YmlData* yml_data) {
     if (yml_data->value) {
         switch (yml_data->type) {
             case STRING_DATA:
                 free(yml_data->value);
                 break;
+            case LIST_DATA:
+                List* yml_list = yml_data->value;
+                const ListItem* item = yml_list->data;
+                while (item) {
+                    YmlData* list_data = item->data;
+                    ymlDeleteData(list_data);
+                    item = item->next;
+                }
+                listDelete(yml_list);
             default:
                 break;
         }
@@ -560,7 +597,7 @@ flag ymlDetectType(Word* word) {
     if (contains_letters) return STRING_TOKEN;
     if (num_decimals > 1) return STRING_TOKEN;
     if ((num_decimals == 1) && contains_digits) return FLOAT_TOKEN;
-    if ((num_decimals == 0) && contains_digits) return INT_TOKEN;
+    if ((num_decimals == 0) && contains_digits) return INTEGER_TOKEN;
     return STRING_TOKEN;
 }
 
@@ -697,36 +734,60 @@ exception ymlFromTokens(const List* tokens, YmlFile* yml) {
         }
 
         YmlData* yml_data;
-        if (token->type == STRING_TOKEN) {
-            tek_exception = ymlCreateStringDataToken(token, &yml_data);
+        if ((token->type & LIST_TOKEN) == LIST_TOKEN) {
+            List* yml_list = (List*)malloc(sizeof(List));
+            if (!yml_list) {
+                tek_exception = MEMORY_EXCEPTION;
+                tekExcept(tek_exception, "Failed to allocate memory for yml list.");
+                break;
+            }
+            listCreate(yml_list);
+            const ListItem* prev_item = item;
+            while (item) {
+                const Token* list_token = (Token*)item->data;
+                if ((list_token->type & LIST_TOKEN) != LIST_TOKEN) break;
+                YmlData* list_data;
+                tek_exception = ymlCreateAutoDataToken(list_token, &list_data);
+                if (tek_exception) break;
+                tek_exception = listAddItem(yml_list, list_data);
+                if (tek_exception) break;
+                prev_item = item;
+                item = item->next;
+            }
             if (tek_exception) break;
-
-            tek_exception = ymlSetList(yml, yml_data, &keys_list);
+            tek_exception = ymlCreateListData(yml_list, &yml_data);
             if (tek_exception) break;
-        }
-
-        if (token->type == INT_TOKEN) {
-            tek_exception = ymlCreateIntegerDataToken(token, &yml_data);
-            if (tek_exception) break;
-
-            tek_exception = ymlSetList(yml, yml_data, &keys_list);
-            if (tek_exception) break;
-        }
-
-        if (token->type == FLOAT_TOKEN) {
-            tek_exception = ymlCreateFloatDataToken(token, &yml_data);
-            if (tek_exception) break;
-
-            tek_exception = ymlSetList(yml, yml_data, &keys_list);
+            item = prev_item;
+        } else {
+            tek_exception = ymlCreateAutoDataToken(token, &yml_data);
             if (tek_exception) break;
         }
         
+        if (!yml_data) {
+            tek_exception = FAILURE;
+            tekExcept(tek_exception, "Something fuckd..");
+            break;
+        }
+
+        tek_exception = ymlSetList(yml, yml_data, &keys_list);
+        if (tek_exception) break;
         item = item->next;
     }
 
     listDelete(&keys_list);
     tekChainThrow(tek_exception);
     return SUCCESS;
+}
+
+void ymlPrintData(YmlData* data) {
+     if (data->type == STRING_DATA) printf("%s\n", (char*)data->value);
+     if (data->type == INTEGER_DATA) printf("%ld\n", (long)data->value);
+     if (data->type == FLOAT_DATA) {
+         double number = 0;
+         memcpy(&number, &data->value, sizeof(void*));
+         printf("%f\n", number);
+     }
+
 }
 
 exception ymlPrintIndent(YmlFile* yml, uint indent) {
@@ -758,12 +819,19 @@ exception ymlPrintIndent(YmlFile* yml, uint indent) {
             if (tek_exception) break;
         // otherwise, just print as normal
         } else {
-            if (values[i]->type == STRING_DATA) printf("%s\n", (char*)values[i]->value);
-            if (values[i]->type == INTEGER_DATA) printf("%ld\n", (long)values[i]->value);
-            if (values[i]->type == FLOAT_DATA) {
-                double number = 0;
-                memcpy(&number, &values[i]->value, sizeof(void*));
-                printf("%f\n", number);
+            if (values[i]->type == LIST_DATA) {
+                List* yml_list = values[i]->value;
+                ListItem* item = yml_list->data;
+                printf("\n");
+                while (item) {
+                    const YmlData* list_data = item->data;
+                    for (uint i = 0; i <= indent; i++) printf("  ");
+                    printf("- ");
+                    ymlPrintData(list_data);
+                    item = item->next;
+                }
+            } else {
+                ymlPrintData(values[i]);
             }
         }
     }
@@ -819,7 +887,7 @@ exception ymlReadFile(const char* filename, YmlFile* yml) {
 //            case STRING_TOKEN:
 //                printf("str token : ");
 //                break;
-//            case INT_TOKEN:
+//            case INTEGER_TOKEN:
 //                printf("int token : ");
 //                break;
 //            case FLOAT_TOKEN:

@@ -22,7 +22,7 @@ hello:
     - sdfsdf3
   single_letter:
     0
-  boolean: false
+  boolean: true
   float: 124.234235
   integer: 129023409
   string: "adsfsdfsdfg"
