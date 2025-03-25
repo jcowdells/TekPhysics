@@ -4,6 +4,8 @@ hello:
   whats_up: "haoijsaoijsa"
   dfsgsd:
     lets_go_deeper:
+      something: "here"
+      something_else: 100.45
       and_so_on:
         pit_stop: "hi"
         until:
@@ -17,7 +19,8 @@ hello:
       more: "stuff"
   list:
     - afssdfg
-    - sdfsdf1
+    - trguyg
+    - sdfsdf1e
     - sdfsdf2
     - sdfsdf3
   single_letter:

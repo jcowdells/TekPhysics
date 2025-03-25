@@ -170,6 +170,161 @@ exception ymlCreateAutoDataToken(const Token* token, YmlData** yml_data) {
     return SUCCESS;
 }
 
+exception ymlDataToString(const YmlData* yml_data, char** string) {
+    // make sure that the data is actually of a string
+    if (yml_data->type != STRING_DATA) tekThrow(YML_EXCEPTION, "Data is not of string type.");
+    *string = yml_data->value;
+    return SUCCESS;
+}
+
+exception ymlDataToInteger(const YmlData* yml_data, long* integer) {
+    // make sure that the data is actually of an integer
+    if (yml_data->type != INTEGER_DATA) tekThrow(YML_EXCEPTION, "Data is not of integer type.");
+    *integer = (long)yml_data->value;
+    return SUCCESS;
+}
+
+exception ymlDataToFloat(const YmlData* yml_data, double* number) {
+    // make sure that the data is actually of an integer
+    if (yml_data->type != FLOAT_DATA) tekThrow(YML_EXCEPTION, "Data is not of floating point type.");
+    memcpy(number, &yml_data->value, sizeof(void*));
+    return SUCCESS;
+}
+
+exception ymlListGetString(const YmlData* yml_list, uint index, char** string) {
+    if (yml_list->type != LIST_DATA) tekThrow(YML_EXCEPTION, "Data is not of list type.");
+    YmlData* yml_data;
+    tekChainThrow(listGetItem(yml_list->value, index, &yml_data));
+    tekChainThrow(ymlDataToString(yml_data, string));
+    return SUCCESS;
+}
+
+exception ymlListGetInteger(const YmlData* yml_list, uint index, long* integer) {
+    if (yml_list->type != LIST_DATA) tekThrow(YML_EXCEPTION, "Data is not of list type.");
+    YmlData* yml_data;
+    tekChainThrow(listGetItem(yml_list->value, index, &yml_data));
+    tekChainThrow(ymlDataToInteger(yml_data, integer));
+    return SUCCESS;
+}
+
+exception ymlListGetFloat(const YmlData* yml_list, uint index, double* number) {
+    if (yml_list->type != LIST_DATA) tekThrow(YML_EXCEPTION, "Data is not of list type.");
+    YmlData* yml_data;
+    tekChainThrow(listGetItem(yml_list->value, index, &yml_data));
+    tekChainThrow(ymlDataToFloat(yml_data, number));
+    return SUCCESS;
+}
+
+exception ymlListToStringArray(const YmlData* yml_list, char*** array, uint* len_array) {
+    *len_array = 0;
+
+    // get the internal list (if exists)
+    if (yml_list->type != LIST_DATA) tekThrow(YML_EXCEPTION, "Data is not of list type.");
+    const List* internal_list = yml_list->value;
+
+    // mallocate some memory for array
+    *array = (char**)malloc(sizeof(char*) * internal_list->length);
+    if (!(*array)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for array.");
+
+    // iterate over the yml list
+    const ListItem* item = internal_list->data;
+    uint index = 0;
+    exception tek_exception = SUCCESS;
+    while (item) {
+        // get data from list
+        const YmlData* yml_data = (YmlData*)item->data;
+        char* value = 0;
+
+        // attempt to convert
+        tek_exception = ymlDataToString(yml_data, &value);
+        if (tek_exception) break;
+
+        // set array at correct index
+        (*array)[index] = value;
+        item = item->next;
+
+        index++;
+    }
+    if (tek_exception) {
+        free(*array);
+        tekChainThrow(tek_exception);
+    }
+    *len_array = internal_list->length;
+    return SUCCESS;
+}
+
+exception ymlListToIntegerArray(const YmlData* yml_list, long** array, uint* len_array) {
+    *len_array = 0;
+
+    // get the internal list (if exists)
+    if (yml_list->type != LIST_DATA) tekThrow(YML_EXCEPTION, "Data is not of list type.");
+    const List* internal_list = yml_list->value;
+
+    // mallocate some memory for array
+    *array = (long*)malloc(sizeof(long) * internal_list->length);
+    if (!(*array)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for array.");
+
+    // iterate over the yml list
+    const ListItem* item = internal_list->data;
+    uint index = 0;
+    exception tek_exception = SUCCESS;
+    while (item) {
+        // get data from list
+        const YmlData* yml_data = (YmlData*)item->data;
+        long value = 0;
+
+        // attempt to convert
+        tek_exception = ymlDataToInteger(yml_data, &value);
+        if (tek_exception) break;
+
+        // set array at correct index
+        (*array)[index] = value;
+        item = item->next;
+    }
+    if (tek_exception) {
+        free(*array);
+        tekChainThrow(tek_exception);
+    }
+    *len_array = internal_list->length;
+    return SUCCESS;
+}
+
+exception ymlListToFloatArray(const YmlData* yml_list, double** array, uint* len_array) {
+    *len_array = 0;
+
+    // get the internal list (if exists)
+    if (yml_list->type != LIST_DATA) tekThrow(YML_EXCEPTION, "Data is not of list type.");
+    const List* internal_list = yml_list->value;
+
+    // mallocate some memory for array
+    *array = (double*)malloc(sizeof(double) * internal_list->length);
+    if (!(*array)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for array.");
+
+    // iterate over the yml list
+    const ListItem* item = internal_list->data;
+    uint index = 0;
+    exception tek_exception = SUCCESS;
+    while (item) {
+        // get data from list
+        const YmlData* yml_data = (YmlData*)item->data;
+        double value = 0.0;
+
+        // attempt to convert
+        tek_exception = ymlDataToFloat(yml_data, &value);
+        if (tek_exception) break;
+
+        // set array at correct index
+        (*array)[index] = value;
+        item = item->next;
+    }
+    if (tek_exception) {
+        free(*array);
+        tekChainThrow(tek_exception);
+    }
+    *len_array = internal_list->length;
+    return SUCCESS;
+}
+
 exception ymlCreateListData(List* list, YmlData** yml_data) {
     // allocate some memory for yml data
     *yml_data = (YmlData*)malloc(sizeof(YmlData));
@@ -183,9 +338,11 @@ void ymlDeleteData(YmlData* yml_data) {
     if (yml_data->value) {
         switch (yml_data->type) {
             case STRING_DATA:
+                // for string data, we need to deallocate the copy of the original string
                 free(yml_data->value);
                 break;
             case LIST_DATA:
+                // for list data, we need to deallocate each item in the list first
                 List* yml_list = yml_data->value;
                 const ListItem* item = yml_list->data;
                 while (item) {

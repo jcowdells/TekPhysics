@@ -77,32 +77,19 @@ void testYml() {
     YmlFile yml_file = {};
     tekLog(ymlReadFile("../res/test.yml", &yml_file));
     YmlData* yml_data;
-    
-    tekLog(ymlGet(&yml_file, &yml_data, "hello", "ip_address"));
-//    printf("ip address: %s\n", yml_data->value);
-//    YmlData* yml_data;
-//    ymlCreateStringData("hello", &yml_data);
-//    YmlData* yml_2;
-//    ymlCreateStringData("goodbye", &yml_2);
-//    YmlData* yml_ptr = &yml_2;
-//    tekLog(ymlCreate(&yml_file));
-//    tekLog(ymlSet(&yml_file, yml_data, "test", "test2", "test3"));
-//    tekLog(ymlSet(&yml_file, yml_2, "test", "test3"));
-//    const char** keys;
-//    hashtableGetKeys(&yml_file, &keys);
-//    for (uint i = 0; i < yml_file.num_items; i++) {
-//        printf("%s\n", keys[i]);
-//    }
-    tekLog(ymlPrint(&yml_file));
 
-    printf("===> %s\n", yml_data->value);
+    tekLog(ymlGet(&yml_file, &yml_data, "hello", "list"));
+    char** array; uint length;
+    tekLog(ymlListToStringArray(yml_data, &array, &length));
+
+    for (uint i = 0; i < length; i++) {
+        printf("%s\n", array[i]);
+    }
 
     ymlDelete(&yml_file);
 }
 
 int main(void) {
-
-    printf("size of void* = %lu", sizeof(double));
     tekInitExceptions();
     // if (render()) {
     //     tekPrintException();
