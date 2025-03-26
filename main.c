@@ -15,6 +15,7 @@
 #include "tekgl/manager.h"
 #include "tekgui/primitives.h"
 #include "core/yml.h"
+#include "tekgl/material.h"
 
 #define printException(x) tekLog(x)
 
@@ -74,19 +75,8 @@ int render() {
 }
 
 void testYml() {
-    YmlFile yml_file = {};
-    tekLog(ymlReadFile("../res/test.yml", &yml_file));
-    YmlData* yml_data;
-
-    tekLog(ymlGet(&yml_file, &yml_data, "hello", "list"));
-    char** array; uint length;
-    tekLog(ymlListToStringArray(yml_data, &array, &length));
-
-    for (uint i = 0; i < length; i++) {
-        printf("%s\n", array[i]);
-    }
-
-    ymlDelete(&yml_file);
+    TekMaterial material = {};
+    tekLog(tekCreateMaterial("../res/material.yml", &material));
 }
 
 int main(void) {

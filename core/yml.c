@@ -173,7 +173,12 @@ exception ymlCreateAutoDataToken(const Token* token, YmlData** yml_data) {
 exception ymlDataToString(const YmlData* yml_data, char** string) {
     // make sure that the data is actually of a string
     if (yml_data->type != STRING_DATA) tekThrow(YML_EXCEPTION, "Data is not of string type.");
-    *string = yml_data->value;
+    const char* yml_string = yml_data->value;
+    uint len_string = strlen(yml_string);
+    *string = (char*)malloc((len_string + 1) * sizeof(char));
+    if (!(*string)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for string.");
+    memcpy(*string, yml_string, len_string);
+    (*string)[len_string] = 0;
     return SUCCESS;
 }
 
@@ -237,7 +242,7 @@ exception ymlListToStringArray(const YmlData* yml_list, char*** array, uint* len
 
         // attempt to convert
         tek_exception = ymlDataToString(yml_data, &value);
-        if (tek_exception) break;
+        tekChainBreak(tek_exception);
 
         // set array at correct index
         (*array)[index] = value;
@@ -275,7 +280,7 @@ exception ymlListToIntegerArray(const YmlData* yml_list, long** array, uint* len
 
         // attempt to convert
         tek_exception = ymlDataToInteger(yml_data, &value);
-        if (tek_exception) break;
+        tekChainBreak(tek_exception);
 
         // set array at correct index
         (*array)[index] = value;
@@ -311,7 +316,7 @@ exception ymlListToFloatArray(const YmlData* yml_list, double** array, uint* len
 
         // attempt to convert
         tek_exception = ymlDataToFloat(yml_data, &value);
-        if (tek_exception) break;
+        tekChainBreak(tek_exception);
 
         // set array at correct index
         (*array)[index] = value;
@@ -377,7 +382,7 @@ exception ymlDelete(YmlFile* yml) {
         if (values[i]->type == YML_DATA) {
             HashTable* hashtable = values[i]->value;
             tek_exception = ymlDelete(hashtable);
-            if (tek_exception) break;
+            tekChainBreak(tek_exception);
             free(values[i]);
         // otherwise, just delete as normal
         } else {
@@ -419,10 +424,11 @@ exception ymlGetList(YmlFile* yml, YmlData** data, const List* keys) {
             tekExcept(tek_exception, "Invalid key - inaccessible type.");
             break;
         }
-        
+
         // get the data stored in the hashtable, and make sure that it is a valid key
         tek_exception = hashtableGet(hashtable, key->data, &loop_data);
         if (tek_exception) {
+            tekLog(tek_exception);
             tekExcept(tek_exception, "Invalid key - key does not exist.");
             break;
         }
@@ -521,8 +527,7 @@ exception ymlSetList(YmlFile* yml, YmlData* data, const List* keys) {
         if (loop_data && !tek_exception) {
             if (loop_data->type == YML_DATA) {
                 tek_exception = ymlDelete(loop_data->value);
-                if (tek_exception) break;
-                //free(loop_data);
+                tekChainBreak(tek_exception);
             } else {
                 ymlDeleteData(loop_data);
             }
@@ -610,14 +615,12 @@ exception ymlRemoveList(YmlFile* yml, const List* keys) {
         key = key->next;
     }
 
-    // write data and throw any exceptions if they occurred
     tekChainThrow(tek_exception);
 
     // delete the old data that was stored here, in the appropriate way
     if (loop_data) {
         if (loop_data->type == YML_DATA) {
             tek_exception = ymlDelete(loop_data->value);
-            // free(loop_data);
             tekChainThrow(tek_exception);
         } else {
             ymlDeleteData(loop_data);
@@ -655,11 +658,11 @@ exception ymlRemoveVA(YmlFile* yml, ...) {
 
 int isWhitespace(const char c) {
     switch (c) {
-        case 0x00:
-        case 0x20:
-        case 0x09:
-        case 0x0D:
-        case 0x0A:
+        case 0x00: // null terminator
+        case 0x20: // space
+        case 0x09: // tab
+        case 0x0D: // carriage return
+        case 0x0A: // line feed
             return 1;
         default:
             return 0;
@@ -667,13 +670,14 @@ int isWhitespace(const char c) {
 }
 
 exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_text) {
-    int start_index = -1;
-    flag trace_indent = 1;
-    flag inside_marks = 0;
-    flag allow_next = 0;
-    uint indent = 0;
-    uint line = 1;
+    int start_index = -1;  // marker of where a word starts
+    flag trace_indent = 1; // whether or not to keep track of the indent
+    flag inside_marks = 0; // whether or not this is "inside speech marks"
+    flag allow_next = 0;   // whether or not this is an escaped character
+    uint indent = 0;       // the number of spaces of indent
+    uint line = 1;         // current line number
     for (int i = 0; i < buffer_size; i++) {
+        // logic to allow for escape characters, if \ skip next, if skipped next dont skip again
         if (buffer[i] == '\\') {
             allow_next = 1;
             continue;
@@ -682,10 +686,14 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
             allow_next = 0;
             continue;
         }
+
+        // if speech mark detected, then flip whether inside marks
         if (buffer[i] == '"') {
             inside_marks = (flag)!inside_marks;
         }
+
         if (isWhitespace(buffer[i]) || buffer[i] == ':') {
+            // if whitespace is detected outside of speech marks, a word has ended
             if ((i > start_index + 1) && !inside_marks) {
                 Word* word = (Word*)malloc(sizeof(Word));
                 if (!word) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for word.");
@@ -698,7 +706,9 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
                 trace_indent = 0;
                 tekChainThrow(listAddItem(split_text, word));
             }
-            if (buffer[i] == ':') {
+
+            // if a colon is detected, then an identifier just ended
+            if (buffer[i] == ':' && !inside_marks) {
                 Word* colon = (Word*)malloc(sizeof(Word));
                 if (!colon) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for word.");
 
@@ -709,6 +719,7 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
                 indent = 0;
                 tekChainThrow(listAddItem(split_text, colon));
             }
+
             if ((buffer[i] == ' ') && (trace_indent)) {
                 indent++;
             }
@@ -716,6 +727,7 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
                 line++;
                 trace_indent = 1;
             }
+            // when whitespace is detected, restart the starting position of current word
             if (!inside_marks) {
                 start_index = i;
             }
@@ -725,23 +737,34 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
 }
 
 exception ymlThrowSyntax(const Word* word) {
+    // utility to create customised error messages
+
     char error_message[E_MESSAGE_SIZE];
     sprintf(error_message, "YML syntax error at line %u, in '", word->line);
     const uint len_message = strlen(error_message);
+
+    // error messages have limited size, make sure that we truncate to this size
     const uint len_copy = E_MESSAGE_SIZE - len_message - 2 > word->length ? word->length : E_MESSAGE_SIZE - len_message - 2;
     memcpy(error_message + len_message, word->start, len_copy);
+
+    // finish the message with '\0, to complete the opened quotation mark, and null terminate the string
     error_message[len_message + len_copy] = '\'';
     error_message[len_message + len_copy + 1] = 0;
+
+    // no need to mallocate because tekThrow should copy for us :D
     tekThrow(YML_EXCEPTION, error_message);
 }
 
 flag ymlDetectType(Word* word) {
+    // if the word starts and ends in '"', it's a string
     if ((word->start[0] == '"') && (word->start[word->length - 1] == '"')) {
         if (word->length <= 1) return STRING_TOKEN;
         word->start += 1;
         word->length -= 2;
         return STRING_TOKEN;
     }
+
+    // count letters, numbers and decimal points
     flag contains_digits = 0;
     uint num_decimals = 0;
     flag contains_letters = 0;
@@ -749,12 +772,22 @@ flag ymlDetectType(Word* word) {
         const char c = word->start[i];
         if (c == '.') num_decimals += 1;
         else if ((c >= '0') && (c <= '9')) contains_digits = 1;
-        else contains_letters = 1;
+        else {
+            contains_letters = 1;
+            break;
+        }
+        if (num_decimals >= 2) break;
     }
+
+    // if the word contains anything other than numbers and a single decimal place, assume string
     if (contains_letters) return STRING_TOKEN;
     if (num_decimals > 1) return STRING_TOKEN;
+
+    // based on number of decimals (0 or 1) decides whether it's an integer or float
     if ((num_decimals == 1) && contains_digits) return FLOAT_TOKEN;
     if ((num_decimals == 0) && contains_digits) return INTEGER_TOKEN;
+
+    // a single dot with no digits is also a string
     return STRING_TOKEN;
 }
 
@@ -762,7 +795,7 @@ exception ymlCreateKeyToken(Word* word, Token** token) {
     *token = (Token*)malloc(sizeof(Token));
     if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for key token.");
     (*token)->word = word;
-    (*token)->type = ID_TOKEN;// | ymlDetectType(word);
+    (*token)->type = ID_TOKEN;
     return SUCCESS;
 }
 
@@ -791,12 +824,15 @@ exception ymlCreateIndentToken(const flag type, Token** token) {
 }
 
 exception ymlUpdateIndent(uint* indent, const Word* word, List* tokens, Stack* indent_stack) {
+    // essentially, if the indent changes, we need to look at the indent stack
     if (word->indent != *indent) {
         Token* indent_token;
+        // if the indent is more, add this as a new indent to the stack
         if (word->indent > *indent) {
             ymlCreateIndentToken(OUT_TOKEN, &indent_token);
             stackPush(indent_stack, (void*)*indent);
             tekChainThrow(listAddItem(tokens, indent_token));
+        // otherwise, keep popping until we either find the indent, or realise its a bad indent
         } else if (word->indent < *indent) {
             uint prev_indent = 0;
             while (!stackPop(indent_stack, &prev_indent)) {
@@ -815,53 +851,78 @@ exception ymlUpdateIndent(uint* indent, const Word* word, List* tokens, Stack* i
     return SUCCESS;
 }
 
-exception ymlCreateTokensWithStack(const List* split_text, List* tokens, Stack* indent_stack) {
-    const ListItem* item = split_text->data;
-    uint indent = 0;
-    tekChainThrow(stackPush(indent_stack, (void*)indent));
-    while (item) {
-        Word* word = (Word*)item->data;
-
-        if (word->start[0] == ':') tekChainThrow(ymlThrowSyntax(word));
-
-        Token* token = 0;
-        if (word->start[0] == '-') {
-            if (!item->next) tekChainThrow(ymlThrowSyntax(word));
-            item = item->next;
-            Word* next_word = (Word*)item->data;
-            tekChainThrow(ymlCreateListToken(next_word, &token));
-        } else {
-            if (!item->next) {
-                tekChainThrow(ymlCreateValueToken(word, &token));
-            } else {
-                const Word* next_word = (Word*)item->next->data;
-                if (next_word->start[0] == ':') {
-                    tekChainThrow(ymlCreateKeyToken(word, &token));
-                    tekChainThrow(ymlUpdateIndent(&indent, word, tokens, indent_stack));
-                    item = item->next;
-                } else {
-                    tekChainThrow(ymlCreateValueToken(word, &token));
-                }
-            }
-        }
-        tekChainThrow(listAddItem(tokens, token));
-        item = item->next;
-    }
-    return SUCCESS;
-}
-
 exception ymlCreateTokens(const List* split_text, List* tokens) {
     Stack indent_stack;
     stackCreate(&indent_stack);
-    const exception yml_exception = ymlCreateTokensWithStack(split_text, tokens, &indent_stack);
+
+    exception tek_exception = SUCCESS;
+    const ListItem* item = split_text->data;
+
+    // start the indent stack at 0 indent
+    uint indent = 0;
+    tekChainThrow(stackPush(&indent_stack, (void*)indent));
+    while (item) {
+        Word* word = (Word*)item->data;
+
+        // if an unpaired : appears, this is a syntax error
+        if (word->start[0] == ':') {
+            tek_exception = ymlThrowSyntax(word);
+            tekChainBreak(tek_exception);
+        }
+
+        Token* token = 0;
+
+        // if there is a -, this signals a list item
+        if (word->start[0] == '-') {
+            // there should be a word after this that is the actual list data
+            if (!item->next) {
+                tek_exception = ymlThrowSyntax(word);
+                tekChainBreak(tek_exception);
+            }
+            item = item->next;
+            Word* next_word = (Word*)item->data;
+            tek_exception = ymlCreateListToken(next_word, &token);
+            tekChainBreak(tek_exception);
+        } else {
+            // last item should always be a value, an identifier cant identify nothing
+            if (!item->next) {
+                tek_exception = ymlCreateValueToken(word, &token);
+                tekChainBreak(tek_exception);
+            } else {
+                const Word* next_word = (Word*)item->next->data;
+                // if next word is ':', this is an identifier
+                if (next_word->start[0] == ':') {
+                    tek_exception = ymlCreateKeyToken(word, &token);
+                    tekChainBreak(tek_exception);
+
+                    tek_exception = ymlUpdateIndent(&indent, word, tokens, &indent_stack);
+                    tekChainBreak(tek_exception);
+
+                    // skip over the ':', not needed data
+                    item = item->next;
+                // otherwise, its a value
+                } else {
+                    tek_exception = ymlCreateValueToken(word, &token);
+                    tekChainBreak(tek_exception);
+                }
+            }
+        }
+
+        tek_exception = listAddItem(tokens, token);
+        tekChainThrow(tek_exception);
+        item = item->next;
+    }
+
     stackDelete(&indent_stack);
-    tekChainThrow(yml_exception);
-    return SUCCESS;
+    return tek_exception;
 }
 
 exception ymlFromTokens(const List* tokens, YmlFile* yml) {
     List keys_list = {};
     listCreate(&keys_list);
+
+    // when an ID is encountered, the last item is swapped with the new id
+    // therefore, this initial null value is needed to allow for this swap
     listAddItem(&keys_list, 0);
     char* key = 0;
     exception tek_exception = SUCCESS;
@@ -869,28 +930,43 @@ exception ymlFromTokens(const List* tokens, YmlFile* yml) {
     const ListItem* item = tokens->data;
     while (item) {
         const Token* token = item->data;
+        // using ymlSetList requires a list of keys, in the order of access, so:
+        // material:
+        //   color: "red"
+        // is accessed with the list ["material", "color"]
+
+        // to begin, we should check for control tokens
+        // if there is an ID, swap out the last item
         if (token->type == ID_TOKEN) {
             listPopItem(&keys_list, &key);
             if (key) free(key);
             ymlWordToString(token->word, &key);
             tek_exception = listAddItem(&keys_list, key);
-            if (tek_exception) break;
+            tekChainBreak(tek_exception);
             item = item->next;
             continue;
         }
+        // if going "out", or extending the depth of the data, add a null to signify another layer of depth
         if (token->type == OUT_TOKEN) {
             listAddItem(&keys_list, 0);
             item = item->next;
             continue;
         }
+        // if going "in", or reducing the depth, pop the item to signify a smaller depth
         if (token->type == IN_TOKEN) {
             listPopItem(&keys_list, &key);
             if (key) free(key);
             item = item->next;
             continue;
         }
+        // for any control token, we should skip to processing the next item
+        // no further processing needs to be done for them
 
+        // now start creating the yml data to write at this location
         YmlData* yml_data;
+
+        // if the token is a list, we could be adding several values under the same key
+        // this could require going through several items in the token list
         if ((token->type & LIST_TOKEN) == LIST_TOKEN) {
             List* yml_list = (List*)malloc(sizeof(List));
             if (!yml_list) {
@@ -899,35 +975,45 @@ exception ymlFromTokens(const List* tokens, YmlFile* yml) {
                 break;
             }
             listCreate(yml_list);
+
+            // store a pointer to prev_item
+            // if we iterate to the next item and it is not part of the list, then the inner loop will end
+            // however, the outer loop will always iterate to the next item, skipping this item
+            // for this reason, we need to try and leave the iterator in a good position for the loop
             const ListItem* prev_item = item;
             while (item) {
                 const Token* list_token = (Token*)item->data;
                 if ((list_token->type & LIST_TOKEN) != LIST_TOKEN) break;
+
                 YmlData* list_data;
                 tek_exception = ymlCreateAutoDataToken(list_token, &list_data);
-                if (tek_exception) break;
+                tekChainBreak(tek_exception);
+
                 tek_exception = listAddItem(yml_list, list_data);
-                if (tek_exception) break;
+                tekChainBreak(tek_exception);
+
                 prev_item = item;
                 item = item->next;
             }
-            if (tek_exception) break;
+            tekChainBreak(tek_exception);
             tek_exception = ymlCreateListData(yml_list, &yml_data);
-            if (tek_exception) break;
+            tekChainBreak(tek_exception);
             item = prev_item;
+        // non list tokens should just be added normally
         } else {
             tek_exception = ymlCreateAutoDataToken(token, &yml_data);
-            if (tek_exception) break;
+            tekChainBreak(tek_exception);
         }
-        
+
+        // either list or not, something should have been written to yml_data that we can add to the structure
         if (!yml_data) {
             tek_exception = FAILURE;
-            tekExcept(tek_exception, "Something fuckd..");
+            tekExcept(tek_exception, "Failed to create yml data.");
             break;
         }
 
         tek_exception = ymlSetList(yml, yml_data, &keys_list);
-        if (tek_exception) break;
+        tekChainBreak(tek_exception);
         item = item->next;
     }
 
@@ -940,6 +1026,7 @@ void ymlPrintData(YmlData* data) {
      if (data->type == STRING_DATA) printf("%s\n", (char*)data->value);
      if (data->type == INTEGER_DATA) printf("%ld\n", (long)data->value);
      if (data->type == FLOAT_DATA) {
+        // cannot cast a void* to double, so need to memcpy
          double number = 0;
          memcpy(&number, &data->value, sizeof(void*));
          printf("%f\n", number);
@@ -950,18 +1037,13 @@ void ymlPrintData(YmlData* data) {
 exception ymlPrintIndent(YmlFile* yml, uint indent) {
     if (!yml) tekThrow(NULL_PTR_EXCEPTION, "Cannot print null pointer.");
 
-    // create pointer to store list of values
-    YmlData** values;
-
-    // get number of values
-    const uint num_items = yml->num_items;
-
-    // get values from hashtable
-    tekChainThrow(hashtableGetValues(yml, &values));
-
     const char** keys;
     tekChainThrow(hashtableGetKeys(yml, &keys));
 
+    YmlData** values;
+    tekChainThrow(hashtableGetValues(yml, &values));
+
+    const uint num_items = yml->num_items;
     exception tek_exception = SUCCESS;
 
     // iterate over the values we got
@@ -976,12 +1058,14 @@ exception ymlPrintIndent(YmlFile* yml, uint indent) {
             if (tek_exception) break;
         // otherwise, just print as normal
         } else {
+            // if a list, print each item separately
             if (values[i]->type == LIST_DATA) {
                 List* yml_list = values[i]->value;
                 ListItem* item = yml_list->data;
                 printf("\n");
                 while (item) {
                     const YmlData* list_data = item->data;
+                    // format so that it sits underneath the key, indented correctly
                     for (uint i = 0; i <= indent; i++) printf("  ");
                     printf("- ");
                     ymlPrintData(list_data);
@@ -1007,63 +1091,27 @@ exception ymlPrint(YmlFile* yml) {
 exception ymlReadFile(const char* filename, YmlFile* yml) {
     tekChainThrow(ymlCreate(yml));
 
-    // get size of file to read
+    // allocate enough memory and read the file into it
     uint file_size;
-    tekChainThrow(getFileSize(filename, &file_size));
-
-    // mallocate memory for file
+    tekChainThrow(getFileSize(filename, &file_size))
     char* buffer = (char*)malloc(file_size * sizeof(char));
     if (!buffer) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory to read yml file into.");
-
-    // read file
     tekChainThrow(readFile(filename, file_size, buffer));
 
     List split_text;
-    List tokens;
     listCreate(&split_text);
+
+    List tokens;
     listCreate(&tokens);
+
+    // split the text into atomic units, the supposed keys and values
     tekChainThrow(ymlSplitText(buffer, file_size, &split_text));
+
+    // check the split text and convert to useable tokens
     tekChainThrow(ymlCreateTokens(&split_text, &tokens));
 
+    // build yml data from tokens
     tekChainThrow(ymlFromTokens(&tokens, yml));
-
-//    const ListItem* item = tokens.data;
-//    while (item) {
-//        const Token* token = (Token*)item->data;
-//        const Word* word = token->word;
-//        switch (token->type) {
-//            case OUT_TOKEN:
-//                printf("out token");
-//                break;
-//            case IN_TOKEN:
-//                printf("in token");
-//                break;
-//            case ID_TOKEN:
-//                printf("id token  : ");
-//                break;
-//            case STRING_TOKEN:
-//                printf("str token : ");
-//                break;
-//            case INTEGER_TOKEN:
-//                printf("int token : ");
-//                break;
-//            case FLOAT_TOKEN:
-//                printf("num token : ");
-//                break;
-//            case LIST_TOKEN:
-//                printf("list token: ");
-//                break;
-//            default:
-//                printf("UD token!");
-//        }
-//        if (word) {
-//            for (uint i = 0; i < word->length; i++) {
-//                printf("%c", word->start[i]);
-//            }
-//        }
-//        printf("\n");
-//        item = item->next;
-//    }
 
     listFreeAllData(&split_text);
     listFreeAllData(&tokens);
