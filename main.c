@@ -75,6 +75,8 @@ int render() {
 }
 
 void testYml() {
+    tekLog(tekInit("TekPhysics", 640, 480));
+
     TekMaterial material = {};
     tekLog(tekCreateMaterial("../res/material.yml", &material));
 }

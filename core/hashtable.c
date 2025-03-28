@@ -5,6 +5,8 @@
 #include <string.h>
 
 void hashtableDelete(const HashTable* hashtable) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot delete hashtable from null ptr.");
+
     // iterate over every possible index in the hash table
     for (int i = 0; i < hashtable->length; i++) {
         HashNode* node_ptr = hashtable->internal[i];
@@ -108,6 +110,8 @@ exception hashtableGetNode(HashTable* hashtable, const char* key, HashNode** nod
 }
 
 exception hashtableGetKeys(const HashTable* hashtable, char*** keys) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get keys from null ptr.");
+
     // mallocate some memory to store a list of keys
     *keys = (char**)malloc(hashtable->num_items * sizeof(char*));
     if (!(*keys)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for list of keys.");
@@ -127,6 +131,8 @@ exception hashtableGetKeys(const HashTable* hashtable, char*** keys) {
 }
 
 exception hashtableGetValues(const HashTable* hashtable, void*** values) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get values from null ptr.");
+
     // allocate some memory to store a list of all values
     *values = (void**)malloc(hashtable->num_items * sizeof(void*));
     if (!(*values)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for list of values.");
@@ -146,6 +152,8 @@ exception hashtableGetValues(const HashTable* hashtable, void*** values) {
 }
 
 exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot rehash from null ptr.");
+
     // make room to copy the keys and values of the hash table
     char** keys = (char**)calloc(hashtable->num_items, sizeof(char*));
     if (!keys) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for copy of keys.");
@@ -207,11 +215,14 @@ exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
 }
 
 flag hashtableTooFull(const HashTable* hashtable) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot check if null ptr is full.");
     // return true if the hashtable is more than 75% full
     return (flag)((4 * hashtable->num_items) >= (3 * hashtable->length));
 }
 
 exception hashtableGet(HashTable* hashtable, const char* key, void** data) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get from null ptr.");
+
     // find the index of the internal array
     unsigned int hash;
     tekChainThrow(hashtableHash(hashtable, key, &hash));
@@ -226,6 +237,8 @@ exception hashtableGet(HashTable* hashtable, const char* key, void** data) {
 }
 
 exception hashtableSet(HashTable* hashtable, const char* key, void* data) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot set null ptr..");
+
     // check if hashtable needs to be rehashed before we add the item
     if (hashtableTooFull(hashtable)) {
         tekChainThrow(hashtableRehash(hashtable, hashtable->length * 2));
@@ -250,6 +263,8 @@ exception hashtableSet(HashTable* hashtable, const char* key, void* data) {
 }
 
 exception hashtableRemove(HashTable* hashtable, const char* key) {
+    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot remove from null ptr.");
+
     // get the hash index
     unsigned int hash;
     tekChainThrow(hashtableHash(hashtable, key, &hash));

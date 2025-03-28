@@ -17,6 +17,9 @@ exception ymlReadFile(const char* filename, YmlFile* yml);
 exception ymlGetVA(YmlFile* yml, YmlData** data, ...);
 #define ymlGet(yml, data, ...) ymlGetVA(yml, data, __VA_ARGS__, 0)
 
+exception ymlGetKeysVA(YmlFile* yml, char*** keys, uint* num_keys, ...);
+#define ymlGetKeys(yml, data, num_keys, ...) ymlGetKeysVA(yml, data, num_keys, __VA_ARGS__, 0);
+
 exception ymlDataToString(const YmlData* yml_data, char** string);
 exception ymlDataToInteger(const YmlData* yml_data, long* integer);
 exception ymlDataToFloat(const YmlData* yml_data, double* number);

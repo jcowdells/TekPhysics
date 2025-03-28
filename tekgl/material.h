@@ -4,9 +4,9 @@
 #include "../core/exception.h"
 
 typedef struct TekMaterialUniform {
-    char* uniform_name;
-    flag uniform_type;
-    void* uniform_data;
+    char* name;
+    flag type;
+    void* data;
 } TekMaterialUniform;
 
 typedef struct TekMaterial {

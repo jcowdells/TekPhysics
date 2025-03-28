@@ -5,6 +5,10 @@
 #include <glad/glad.h>
 #include "../core/file.h"
 
+void tekDeleteShader(const uint shader_id) {
+    if (shader_id) glDeleteShader(shader_id);
+}
+
 exception tekCreateShader(const GLenum shader_type, const char* shader_filename, uint* shader_id) {
     // get the size of the shader file to read
     uint file_size;
@@ -17,8 +21,10 @@ exception tekCreateShader(const GLenum shader_type, const char* shader_filename,
 
     // opengl calls to create shader
     *shader_id = glCreateShader(shader_type);
+
     if (*shader_id == 0) tekThrow(OPENGL_EXCEPTION, "Failed to create shader.");
     if (*shader_id == GL_INVALID_ENUM) tekThrow(OPENGL_EXCEPTION, "Invalid shader type.");
+
     glShaderSource(*shader_id, 1, &file_buffer, NULL);
     glCompileShader(*shader_id);
     free(file_buffer);
@@ -29,7 +35,7 @@ exception tekCreateShader(const GLenum shader_type, const char* shader_filename,
     if (!success) {
         char info_log[E_MESSAGE_SIZE];
         glGetShaderInfoLog(*shader_id, E_MESSAGE_SIZE, NULL, info_log);
-        glDeleteShader(*shader_id);
+        tekDeleteShader(*shader_id);
         tekThrow(OPENGL_EXCEPTION, info_log);
     }
 
@@ -37,6 +43,8 @@ exception tekCreateShader(const GLenum shader_type, const char* shader_filename,
 }
 
 exception tekCreateShaderProgramViFi(const uint vertex_shader_id, const uint fragment_shader_id, uint* shader_program_id) {
+    if (!vertex_shader_id || !fragment_shader_id) tekThrow(NULL_PTR_EXCEPTION, "Cannot create shader program with id 0.")
+
     // create an empty shader program
     *shader_program_id = glCreateProgram();
     if (!*shader_program_id) tekThrow(OPENGL_EXCEPTION, "Failed to create shader program.");
@@ -55,6 +63,7 @@ exception tekCreateShaderProgramVF(const char* vertex_shader_filename, const cha
     // create vertex and fragment shaders
     uint vertex_shader_id;
     tekChainThrow(tekCreateShader(GL_VERTEX_SHADER, vertex_shader_filename, &vertex_shader_id));
+
     uint fragment_shader_id;
     tekChainThrow(tekCreateShader(GL_FRAGMENT_SHADER, fragment_shader_filename, &fragment_shader_id));
 
@@ -62,8 +71,8 @@ exception tekCreateShaderProgramVF(const char* vertex_shader_filename, const cha
     tekChainThrow(tekCreateShaderProgramViFi(vertex_shader_id, fragment_shader_id, shader_program_id));
 
     // clean up shaders as they are not needed now
-    glDeleteShader(vertex_shader_id);
-    glDeleteShader(fragment_shader_id);
+    tekDeleteShader(vertex_shader_id);
+    tekDeleteShader(fragment_shader_id);
 
     return SUCCESS;
 }

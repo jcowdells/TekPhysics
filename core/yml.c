@@ -470,7 +470,44 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
     // get item and throw any exceptions if they occurred
     exception tek_exception = ymlGetList(yml, data, &keys_list);
     listDelete(&keys_list);
-    
+
+    return tek_exception;
+}
+
+exception ymlGetKeysList(YmlFile* yml, char*** yml_keys, uint* num_keys, const List* keys) {
+    YmlData* yml_data;
+    tekChainThrow(ymlGetList(yml, &yml_data, keys));
+    printf("YmlData yml_data = {type=%u, value=%p}\n", yml_data->type, yml_data->value);
+    if (yml_data->type != YML_DATA) tekThrow(YML_EXCEPTION, "Data has no keys.");
+    const HashTable* hashtable = yml_data->value;
+    tekChainThrow(hashtableGetKeys(hashtable, yml_keys));
+    *num_keys = hashtable->num_items;
+    return SUCCESS;
+}
+
+exception ymlGetKeysVA(YmlFile* yml, char*** yml_keys, uint* num_keys, ...) {
+    // separate method. should be called from a macro ymlGet
+    // the macro will force the final argument to be null
+
+    // start variadic arguments
+    va_list keys;
+    va_start(keys, num_keys);
+    const char* key;
+
+    List keys_list = {};
+    listCreate(&keys_list);
+
+    while ((key = va_arg(keys, const char*))) {
+        listAddItem(&keys_list, key);
+    }
+
+    // finish variadic arguments
+    va_end(keys);
+
+    // get item and throw any exceptions if they occurred
+    exception tek_exception = ymlGetKeysList(yml, yml_keys, num_keys, &keys_list);
+    listDelete(&keys_list);
+
     return tek_exception;
 }
 

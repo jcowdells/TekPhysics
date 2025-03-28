@@ -1,4 +1,9 @@
 shaders:
-    vertex_shader: "C://Users/LegendMixer/Desktop/dieassdas"
-    fragment_shader: "/home/legendmixer/boomshakers"
-
+    vertex_shader: "../shader/vertex.glvs"
+    fragment_shader: "../shader/fragment.glfs"
+uniforms:
+    xavier: "../res/xavier.png"
+    color:
+        r: 0
+        g: 1
+        b: 254
