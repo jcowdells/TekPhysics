@@ -2,24 +2,44 @@
 
 #include "shader.h"
 #include "../core/yml.h"
+#include <cglm/vec2.h>
+#include <cglm/vec3.h>
+#include <cglm/vec4.h>
 
-#define INTEGER_DATA 0
-#define FLOAT_DATA   1
-#define TEXTURE_DATA 2
-#define VEC2_DATA    3
-#define VEC3_DATA    4
-#define VEC4_DATA    5
-#define UNKNOWN_DATA 6
+#define UINTEGER_DATA 0
+#define UFLOAT_DATA   1
+#define TEXTURE_DATA  2
+#define VEC2_DATA     3
+#define VEC3_DATA     4
+#define VEC4_DATA     5
+#define UNKNOWN_DATA  6
+#define UYML_DATA     7
 
-exception tekCreateVec2Uniform(const YmlData* data, TekMaterialUniform** uniform) {
-    
+#define RGBA_DATA      0
+#define XYZW_DATA      1
+#define UV_DATA        2
+#define RGBA_WORD_DATA 3
+
+exception tekCreateVecUniform(const HashTable* hashtable, const uint num_items, const char** keys_order, TekMaterialUniform* uniform) {
+    if ((num_items < 2) || (num_items > 4)) tekThrow(OPENGL_EXCEPTION, "Cannot create vector with more than 4 or less than 2 items.");
+    exception tek_exception = SUCCESS;
+    double vector[4];
+    for (uint i = 0; i < num_items; i++) {
+        YmlData* data;
+        tek_exception = hashtableGet(hashtable, keys_order[i], &data); tekChainBreak(tek_exception);
+        double number;
+        tek_exception = ymlDataToFloat(data, &number); tekChainBreak(tek_exception);
+        vector[i] = number;
+    }
+    tekChainThrow(tek_exception);
+    uniform->data = (vec2*)malloc(sizeof(vec2));
+    if (!uniform->data) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vector.");
+    memcpy(uniform->data, vector, num_items * sizeof(double));
+    uniform->type = VEC2_DATA + (num_items - 2);
+    return SUCCESS;
 }
 
-exception tekCreateVec3Uniform() {
-
-}
-
-exception tekCreateUniform(const char* uniform_name, const flag data_type, void* data, TekMaterialUniform** uniform) {
+exception tekCreateUniform(const char* uniform_name, const flag data_type, const void* data, TekMaterialUniform** uniform) {
     *uniform = (TekMaterialUniform*)malloc(sizeof(TekMaterialUniform));
     uint len_uniform_name = strlen(uniform_name) + 1;
     char* uniform_name_copy = (char*)malloc(len_uniform_name * sizeof(char));
@@ -29,13 +49,13 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, void*
     (*uniform)->type = data_type;
     exception tek_exception = SUCCESS;
     switch (data_type) {
-        case INTEGER_DATA:
-        case FLOAT_DATA:
+        case UINTEGER_DATA:
+        case UFLOAT_DATA:
             void** number_data = (void**)malloc(sizeof(void*));
-            if (!float_data) {
+            if (!number_data) {
                 tek_exception = MEMORY_EXCEPTION;
                 tekExcept(tek_exception, "Failed to allocate memory for number.");
-                tekChainBreak(tek_exception);
+                break;
             }
             memcpy(number_data, &data, sizeof(void*));
             (*uniform)->data = number_data;
@@ -46,7 +66,7 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, void*
             if (!texture_id) {
                 tek_exception = MEMORY_EXCEPTION;
                 tekExcept(tek_exception, "Failed to allocate memory for texture id.");
-                tekChainBreak(tek_exception);
+                break;
             }
             tek_exception = tekCreateTexture(filepath, texture_id);
             if (tek_exception) {
@@ -55,10 +75,86 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, void*
             }
             (*uniform)->data = texture_id;
             break;
-        case UNKNOWN_DATA:
-            // assume hashtable/ymldata
-            // count number of keys
-            // match to either uv, xy[zw], or rgb[a]
+        case UYML_DATA:
+            const HashTable* hashtable = data;
+            char** keys = 0;
+            tekChainBreak(hashtableGetKeys(hashtable, &keys));
+            const uint num_items = hashtable->num_items;
+
+            flag vec_mode = UNKNOWN_DATA;
+            for (uint i = 0; i < num_items; i++) {
+                if (!strcmp("r", keys[i])) {
+                    vec_mode = RGBA_DATA;
+                    break;
+                }
+                if (!strcmp("x", keys[i])) {
+                    vec_mode = XYZW_DATA;
+                    break;
+                }
+                if (!strcmp("u", keys[i])) {
+                    vec_mode = UV_DATA;
+                    break;
+                }
+                if (!strcmp("red", keys[i])) {
+                    vec_mode = RGBA_WORD_DATA;
+                    break;
+                }
+            }
+            if (vec_mode == UNKNOWN_DATA) {
+                tek_exception = YML_EXCEPTION;
+                tekExcept(tek_exception, "Bad layout for vector data.");
+                free(keys);
+                break;
+            }
+
+            if ((vec_mode == RGBA_DATA) && (num_items < 3)) {
+                tek_exception = YML_EXCEPTION;
+                tekExcept(tek_exception, "Incorrect number of items for RGBA expression.");
+            }
+            if ((vec_mode == XYZW_DATA) && (num_items < 3)) {
+                tek_exception = YML_EXCEPTION;
+                tekExcept(tek_exception, "Incorrect number of items for XYZW expression.");
+            }
+            if ((vec_mode == UV_DATA) && (num_items < 2)) {
+                tek_exception = YML_EXCEPTION;
+                tekExcept(tek_exception, "Incorrect number of items for UV expression.");
+            }
+            if ((vec_mode == RGBA_WORD_DATA) && (num_items < 3)) {
+                tek_exception = YML_EXCEPTION;
+                tekExcept(tek_exception, "Incorrect number of items for red green blue alpha expression.");
+            }
+            if (tek_exception) {
+                free(keys);
+                break;
+            }
+
+            char* keys_order[4];
+            if (vec_mode == RGBA_DATA) {
+                keys_order[0] = "r";
+                keys_order[1] = "g";
+                keys_order[2] = "b";
+                keys_order[3] = "a";
+            }
+            if (vec_mode == XYZW_DATA) {
+                keys_order[0] = "x";
+                keys_order[1] = "y";
+                keys_order[2] = "z";
+                keys_order[3] = "w";
+            }
+            if (vec_mode == UV_DATA) {
+                keys_order[0] = "u";
+                keys_order[1] = "v";
+            }
+            if (vec_mode == RGBA_WORD_DATA) {
+                keys_order[0] = "red";
+                keys_order[1] = "green";
+                keys_order[2] = "blue";
+                keys_order[3] = "alpha";
+            }
+
+            tek_exception = tekCreateVecUniform(hashtable, num_items, keys_order, *uniform);
+            free(keys);
+            tekChainBreak(tek_exception);
             break;
     }
     if (tek_exception) {
@@ -124,16 +220,83 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
         tekChainThrow(tek_exception);
     }
 
-    TekMaterialUniform* material_uniforms = (TekMaterialUniform*)malloc(num_keys * sizeof(TekMaterialUniform));
-    if (!material_uniforms) {
+    material->num_uniforms = num_keys;
+    material->uniforms = (TekMaterialUniform**)calloc(num_keys, sizeof(TekMaterialUniform*));
+    if (!material->uniforms) {
+        ymlDelete(&material_yml);
+        tekDeleteShaderProgram(shader_program_id);
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for uniforms.");
+    }
+
+    for (uint i = 0; i < num_keys; i++) {
+        YmlData* uniform_yml;
+        tek_exception = ymlGet(&material_yml, &uniform_yml, "uniforms", keys[i]); tekChainBreak(tek_exception);
+        flag uniform_type;
+        switch (uniform_yml->type) {
+            case YML_DATA:
+                uniform_type = UYML_DATA;
+                break;
+            case STRING_DATA:
+                uniform_type = TEXTURE_DATA;
+                break;
+            case INTEGER_DATA:
+                uniform_type = UINTEGER_DATA;
+                break;
+            case FLOAT_DATA:
+                uniform_type = UFLOAT_DATA;
+                break;
+        }
+
+        TekMaterialUniform* uniform;
+        tek_exception = tekCreateUniform(keys[i], uniform_type, uniform_yml->value, &uniform);
+        tekChainBreak(tek_exception);
+
+        material->uniforms[i] = uniform;
+    }
+
+    if (tek_exception) {
+        for (uint i = 0; i < num_keys; i++) {
+            if (!material->uniforms[i]) break;
+            tekDeleteUniform(material->uniforms[i]);
+        }
         ymlDelete(&material_yml);
         tekDeleteShaderProgram(shader_program_id);
         tekChainThrow(tek_exception);
     }
-    for (uint i = 0; i < num_keys; i++) {
-        // create uniform ()
-    }
-    free(keys);
 
     ymlDelete(&material_yml);
+    return SUCCESS;
+}
+
+exception tekBindMaterial(TekMaterial* material) {
+    const uint shader_program_id = material->shader_program_id;
+    tekBindShaderProgram(shader_program_id);
+    for (uint i = 0; i < material->num_uniforms; i++) {
+        const TekMaterialUniform* uniform = material->uniforms[i];
+        switch (uniform->type) {
+            case UINTEGER_DATA:
+                long* uinteger = uniform->data;
+                tekChainThrow(tekShaderUniformInt(shader_program_id, uniform->name, (int)(*uinteger)));
+                break;
+            case UFLOAT_DATA:
+                double* ufloat = uniform->data;
+                tekChainThrow(tekShaderUniformFloat(shader_program_id, uniform->name, (float)(*ufloat)));
+                break;
+            case TEXTURE_DATA:
+                uint* texture_id = uniform->data;
+                tekChainThrow(tekShaderUniformInt(shader_program_id, uniform->name, (int)(*texture_id)));
+                break;
+            case VEC2_DATA:
+                tekChainThrow(tekShaderUniformVec2(shader_program_id, uniform->name, uniform->data));
+                break;
+            case VEC3_DATA:
+                tekChainThrow(tekShaderUniformVec3(shader_program_id, uniform->name, uniform->data));
+                break;
+            case VEC4_DATA:
+                tekChainThrow(tekShaderUniformVec4(shader_program_id, uniform->name, uniform->data));
+                break;
+            default:
+                break;
+        }
+    }
 }

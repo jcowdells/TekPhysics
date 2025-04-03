@@ -4,6 +4,6 @@ shaders:
 uniforms:
     xavier: "../res/xavier.png"
     color:
-        r: 0
-        g: 1
-        b: 254
+        r: 0.0
+        g: 1.0
+        b: 254.0

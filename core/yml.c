@@ -24,12 +24,6 @@
 #define BOOL_TOKEN    0b01000000
 #define TYPE_MASK     0b01111000
 
-#define YML_DATA     0
-#define STRING_DATA  1
-#define INTEGER_DATA 2
-#define FLOAT_DATA   3
-#define LIST_DATA    4
-
 typedef struct Word {
     const char* start;
     uint length;
@@ -190,7 +184,7 @@ exception ymlDataToInteger(const YmlData* yml_data, long* integer) {
 }
 
 exception ymlDataToFloat(const YmlData* yml_data, double* number) {
-    // make sure that the data is actually of an integer
+    // make sure that the data is actually of a float
     if (yml_data->type != FLOAT_DATA) tekThrow(YML_EXCEPTION, "Data is not of floating point type.");
     memcpy(number, &yml_data->value, sizeof(void*));
     return SUCCESS;
@@ -477,7 +471,6 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
 exception ymlGetKeysList(YmlFile* yml, char*** yml_keys, uint* num_keys, const List* keys) {
     YmlData* yml_data;
     tekChainThrow(ymlGetList(yml, &yml_data, keys));
-    printf("YmlData yml_data = {type=%u, value=%p}\n", yml_data->type, yml_data->value);
     if (yml_data->type != YML_DATA) tekThrow(YML_EXCEPTION, "Data has no keys.");
     const HashTable* hashtable = yml_data->value;
     tekChainThrow(hashtableGetKeys(hashtable, yml_keys));

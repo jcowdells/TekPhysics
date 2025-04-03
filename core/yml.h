@@ -1,5 +1,11 @@
 #pragma once
 
+#define YML_DATA     0
+#define STRING_DATA  1
+#define INTEGER_DATA 2
+#define FLOAT_DATA   3
+#define LIST_DATA    4
+
 #include "../tekgl.h"
 #include "../core/exception.h"
 #include "../core/hashtable.h"

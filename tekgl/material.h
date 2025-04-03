@@ -12,8 +12,9 @@ typedef struct TekMaterialUniform {
 typedef struct TekMaterial {
     uint shader_program_id;
     uint num_uniforms;
-    TekMaterialUniform* uniforms;
+    TekMaterialUniform** uniforms;
 } TekMaterial;
 
 exception tekCreateMaterial(const char* filename, TekMaterial* material);
+exception tekBindMaterial(TekMaterial* material);
 exception tekDeleteMaterial(TekMaterial* material);

@@ -11,5 +11,6 @@ exception tekCreateShaderProgramVF(const char* vertex_shader_filename, const cha
 exception tekShaderUniformInt(uint shader_program_id, const char* uniform_name, int uniform_value);
 exception tekShaderUniformFloat(uint shader_program_id, const char* uniform_name, float uniform_value);
 exception tekShaderUniformVec2(uint shader_program_id, const char* uniform_name, const vec2 uniform_value);
+exception tekShaderUniformVec3(uint shader_program_id, const char* uniform_name, const vec3 uniform_value);
 exception tekShaderUniformVec4(uint shader_program_id, const char* uniform_name, const vec4 uniform_value);
 exception tekShaderUniformMat4(uint shader_program_id, const char* uniform_name, const mat4 uniform_value);

@@ -104,6 +104,13 @@ exception tekShaderUniformVec2(const uint shader_program_id, const char* uniform
     return SUCCESS;
 }
 
+exception tekShaderUniformVec3(const uint shader_program_id, const char* uniform_name, const vec3 uniform_value) {
+    int uniform_location;
+    tekChainThrow(tekGetShaderUniformLocation(shader_program_id, uniform_name, &uniform_location));
+    glUniform3fv(uniform_location, 1, uniform_value);
+    return SUCCESS;
+}
+
 exception tekShaderUniformVec4(const uint shader_program_id, const char* uniform_name, const vec4 uniform_value) {
     int uniform_location;
     tekChainThrow(tekGetShaderUniformLocation(shader_program_id, uniform_name, &uniform_location));

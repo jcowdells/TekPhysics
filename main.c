@@ -77,8 +77,26 @@ int render() {
 void testYml() {
     tekLog(tekInit("TekPhysics", 640, 480));
 
+    float vertices = {
+        -0.5f, -0.5f,
+         0.5f, -0.5f,
+         0.5f,  0.5f,
+        -0.5f,  0.5f
+    }
+
+    uint indices = {
+        0, 1, 2,
+        0, 2, 3
+    }
+
+    uint layout = {
+        2
+    }
+
     TekMaterial material = {};
     tekLog(tekCreateMaterial("../res/material.yml", &material));
+    printf("material: %d\n", material.uniforms[1]->type);
+    tekLog(tekBindMaterial(&material));
 }
 
 int main(void) {

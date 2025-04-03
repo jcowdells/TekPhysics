@@ -44,7 +44,6 @@ add_executable(
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})
-include_directories(glad/include)
 target_link_libraries(TekPhysics ${OPENGL_LIBRARIES})
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)     # Remove unnecessary includes
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)    #
