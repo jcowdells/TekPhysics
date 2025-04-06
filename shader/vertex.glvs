@@ -1,11 +1,17 @@
 #version 330 core
 
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec2 tex_coord_v;
+layout (location = 0) in vec3 v_position;
+layout (location = 1) in vec3 v_normal;
 
-out vec2 tex_coord_f;
+out vec3 f_position;
+out vec3 f_normal;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
 
 void main() {
-    gl_Position = vec4(position.x, position.y, position.z, 1.0f);
-    tex_coord_f = tex_coord_v;
+    f_position = vec3(model * vec4(v_position, 1.0f));
+    f_normal = mat3(transpose(inverse(model))) * v_normal;
+    gl_Position = projection * view * vec4(f_position, 1.0f);
 }
