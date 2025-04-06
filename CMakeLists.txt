@@ -35,6 +35,8 @@ add_executable(
         tekgui/primitives.h
         tekgl/material.c
         tekgl/material.h
+        tekgl/camera.h
+        tekgl/camera.c
         core/list.c
         core/list.h
         core/stack.c
