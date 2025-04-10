@@ -186,8 +186,13 @@ int render() {
     return SUCCESS;
 }
 
+exception yeah() {
+    tekChainThrow(tekCreateMeshFile("../res/mesh.tglo"));
+    return SUCCESS;
+}
+
 int main(void) {
     tekInitExceptions();
-    tekLog(render());
+    tekLog(yeah());
     tekCloseExceptions();
 }

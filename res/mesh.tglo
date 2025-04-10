@@ -1,0 +1,11 @@
+VERTICES
+1.0000 1.0000 1.0000 1.0000 1.0000 1.0000
+
+
+#this is a comment :D
+INDICES
+0 1 2
+1 2 3
+
+LAYOUT
+3 100boguusex

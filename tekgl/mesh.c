@@ -1,6 +1,16 @@
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include "mesh.h"
+#include "../core/list.h"
 
 #include "glad/glad.h"
+
+#define READ_VERTICES 0
+#define READ_INDICES  1
+#define READ_LAYOUT   2
 
 exception tekCreateBuffer(const GLenum buffer_type, const void* buffer_data, const long buffer_size, const GLenum buffer_usage, uint* buffer_id) {
     if (!buffer_data) tekThrow(NULL_PTR_EXCEPTION, "Buffer data cannot be null.");
@@ -67,6 +77,131 @@ exception tekCreateMesh(const float* vertices, const long len_vertices, const ui
     mesh_ptr->num_elements = (int)len_indices;
 
     return SUCCESS;
+}
+
+exception tekCreateMeshFile(const char* filename, TekMesh* mesh_ptr) {
+    uint file_size;
+    tekChainThrow(getFileSize(filename, &file_size));
+    char* buffer = (char*)malloc(file_size);
+    exception tek_exception = readFile(filename, file_size, buffer);
+    if (tek_exception) {
+        free(buffer);
+        tekChainThrow(tek_exception);
+    }
+    char* prev_c = buffer;
+    uint line = 1;
+    flag in_word = 0;
+
+    List vertices = {};
+    listCreate(&vertices);
+    List indices = {};
+    listCreate(&indices);
+    List layout = {};
+    listCreate(&layout);
+
+    List* write_list = 0;
+    char* c;
+    for (c = buffer; *c; c++) {
+        if ((*c == '\n') || (*c == '\r')) line++;
+        if (*c == '#') {
+            while ((*c != '\n') && (*c != '\r')) c++;
+            in_word = 0;
+            line++;
+            continue;
+        }
+        if ((*c == ' ') || (*c == 0x09) || (*c == '\n') || (*c == '\r')) {
+            if (in_word) {
+                *c = 0;
+                if (!strcmp(prev_c, "VERTICES")) write_list = &vertices;
+                else if (!strcmp(prev_c, "INDICES")) write_list = &indices;
+                else if (!strcmp(prev_c, "LAYOUT")) write_list = &layout;
+                else listInsertItem(write_list, 0, prev_c); // inserting at 0, faster for linked list
+            }
+            in_word = 0;
+            continue;
+        }
+        if (!in_word) prev_c = c;
+        in_word = 1;
+    }
+    if (in_word) {
+        if (!strcmp(c, "VERTICES")) write_list = &vertices;
+        else if (!strcmp(c, "INDICES")) write_list = &indices;
+        else if (!strcmp(c, "LAYOUT")) write_list = &layout;
+        else listInsertItem(write_list, 0, c); // inserting at 0, faster for linked list
+    }
+
+    float* vertices_array = (float*)malloc(vertices.length * sizeof(float));
+    uint* indices_array = (uint*)malloc(indices.length * sizeof(uint));
+    uint* layout_array = (uint*)malloc(layout.length * sizeof(uint));
+
+    tek_exception = SUCCESS;
+    uint index = vertices.length - 1;
+    ListItem* vertex_item = vertices.data;
+    while (vertex_item) {
+        const char* string = vertex_item->data;
+        printf("string = %s\n", string);
+        char* check = 0;
+        const double vertex_val = strtod(string, &check);
+        printf("vertex val = %f\n", vertex_val);
+        printf("check = %p vs %p\n", string, check);
+        const int error = errno;
+        if ((string == check) || (errno == ERANGE)) {
+            tek_exception = FAILURE;
+            tekExcept(tek_exception, "Failed to interpret floating point number.");
+            break;
+        }
+        vertices_array[index--] = (float)vertex_val;
+        vertex_item = vertex_item->next;
+    }
+
+    if (!tek_exception) {
+        index = indices.length - 1;
+        ListItem* index_item = indices.data;
+        while (index_item) {
+            const char* string = index_item->data;
+            char* check = 0;
+            const uint index_val = (uint)strtoul(string, &check, 10);
+            const int error = errno;
+            if ((string == check) || (errno == ERANGE)) {
+                tek_exception = FAILURE;
+                tekExcept(tek_exception, "Failed to interpret unsigned integer.");
+                break;
+            }
+            indices_array[index--] = index_val;
+            index_item = index_item->next;
+        }
+    }
+
+    if (!tek_exception) {
+        index = layout.length - 1;
+        ListItem* layout_item = layout.data;
+        while (layout_item) {
+            const char* string = layout_item->data;
+            char* check = 0;
+            const uint layout_val = (uint)strtoul(string, &check, 10);
+            const int error = errno;
+            if ((string == check) || (errno == ERANGE)) {
+                tek_exception = FAILURE;
+                tekExcept(tek_exception, "Failed to interpret unsigned integer.");
+                break;
+            }
+            layout_array[index--] = layout_val;
+            layout_item = layout_item->next;
+        }
+    }
+
+    if (!tek_exception) {
+        for (uint i = 0; i < layout.length; i++) {
+            printf("%u ", layout_array[i]);
+        }
+    }
+
+    listDelete(&vertices);
+    listDelete(&indices);
+    listDelete(&layout);
+
+    free(buffer);
+    return tek_exception;
 }
 
 void tekDrawMesh(const TekMesh* mesh_ptr) {

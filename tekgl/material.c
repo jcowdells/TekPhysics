@@ -14,7 +14,6 @@
 #define VEC4_DATA     5
 #define UNKNOWN_DATA  6
 #define UYML_DATA     7
-#define MATRIX_DATA   8
 
 #define RGBA_DATA      0
 #define XYZW_DATA      1
@@ -61,19 +60,6 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
             memcpy(number_data, &data, sizeof(void*));
             (*uniform)->data = number_data;
             break;
-        case MATRIX_DATA:
-            const char* matrix = data;
-            if (!strcmp(matrix, "$tek_transformation_matrix")) {
-                
-            } else if (!strcmp(matrix, "$tek_view_matrix")) {
-                
-            } else if (!strcmp(matrix, "$tek_projection_matrix")) {
-                
-            } else {
-                tek_exception = YML_EXCEPTION;
-                tekExcept(tek_exception, "Unknown matrix name.");
-                break;
-            }
         case TEXTURE_DATA:
             const char* filepath = data;
             uint* texture_id = (uint*)malloc(sizeof(uint));
@@ -252,11 +238,7 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
                 break;
             case STRING_DATA:
                 const char* string = uniform_yml->value;
-                if (string[0] == '$') {
-                    uniform_type = MATRIX_DATA;
-                } else {
-                    uniform_type = TEXTURE_DATA;
-                }
+                uniform_type = TEXTURE_DATA;
                 break;
             case INTEGER_DATA:
                 uniform_type = UINTEGER_DATA;
