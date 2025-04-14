@@ -21,9 +21,11 @@ exception ymlCreate(YmlFile* yml);
 exception ymlReadFile(const char* filename, YmlFile* yml);
 
 exception ymlGetVA(YmlFile* yml, YmlData** data, ...);
+/// @copydoc ymlGetVA
 #define ymlGet(yml, data, ...) ymlGetVA(yml, data, __VA_ARGS__, 0)
 
-exception ymlGetKeysVA(YmlFile* yml, char*** keys, uint* num_keys, ...);
+exception ymlGetKeysVA(YmlFile* yml, char*** yml_keys, uint* num_keys, ...);
+/// @copydoc ymlGetKeysVA
 #define ymlGetKeys(yml, data, num_keys, ...) ymlGetKeysVA(yml, data, num_keys, __VA_ARGS__, 0);
 
 exception ymlDataToString(const YmlData* yml_data, char** string);

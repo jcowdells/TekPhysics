@@ -29,6 +29,9 @@ typedef int exception;
 #define tekChainThrow(exception_code) { const exception __tek_exception = exception_code; if (__tek_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); return __tek_exception; } }
 #define tekLog(exception_code) { const exception __tek_exception = exception_code; if (__tek_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); tekPrintException(); } }
 
+#define tekThrowThen(exception_code, exception_message, then) { const exception __tek_exception = exception_code; if (__tek_exception) { tekSetException(__tek_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); then; return __tek_exception; } }
+#define tekChainThrowThen(exception_code, then) { const exception __tek_exception = exception_code; if (__tek_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); then; return __tek_exception; } }
+
 void tekInitExceptions();
 void tekCloseExceptions();
 const char* tekGetException();
