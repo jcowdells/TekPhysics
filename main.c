@@ -57,62 +57,10 @@ int render() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     TekMesh walls = {};
-
-    const float wall_vertices[] = {
-        0.0f, 6.0f, -3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 6.0f,  3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f,  3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, -3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, -3.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f,  3.0f, 0.0f, 1.0f, 0.0f,
-        12.0f, 0.0f,  3.0f, 0.0f, 1.0f, 0.0f,
-        12.0f, 0.0f, -3.0f, 0.0f, 1.0f, 0.0f
-    };
-
-    const uint wall_indices[] = {
-        0, 1, 2,
-        0, 2, 3,
-        4, 5, 6,
-        4, 6, 7
-    };
-
-    const uint wall_layout[] = {
-        3, 3
-    };
-
-    tekChainThrow(tekCreateMesh(wall_vertices, 48, wall_indices, 12, wall_layout, 2, &walls));
+    tekChainThrow(tekReadMesh("../res/wall.tglo", &walls));
 
     TekMesh cube = {};
-
-    const float cube_vertices[] = {
-        -1.0f,  1.0f, -1.0f,  0.0f, 1.0f, 0.0f,
-        -1.0f,  1.0f,  1.0f,  0.0f, 1.0f, 0.0f,
-         1.0f,  1.0f,  1.0f,  0.0f, 1.0f, 0.0f,
-         1.0f,  1.0f, -1.0f,  0.0f, 1.0f, 0.0f,
-         1.0f,  1.0f,  1.0f,  1.0f, 0.0f, 0.0f,
-         1.0f,  1.0f, -1.0f,  1.0f, 0.0f, 0.0f,
-         1.0f, -1.0f, -1.0f,  1.0f, 0.0f, 0.0f,
-         1.0f, -1.0f,  1.0f,  1.0f, 0.0f, 0.0f,
-        -1.0f,  1.0f,  1.0f,  0.0f, 0.0f, 1.0f,
-         1.0f,  1.0f,  1.0f,  0.0f, 0.0f, 1.0f,
-         1.0f, -1.0f,  1.0f,  0.0f, 0.0f, 1.0f,
-        -1.0f, -1.0f,  1.0f,  0.0f, 0.0f, 1.0f
-    };
-
-    const uint cube_indices[] = {
-        0, 1, 2,
-        0, 2, 3,
-        4, 5, 6,
-        4, 6, 7,
-        8, 9, 10,
-        8, 10, 11
-    };
-
-    const uint cube_layout[] = {
-        3, 3
-    };
-
-    tekCreateMesh(cube_vertices, 72, cube_indices, 36, cube_layout, 2, &cube);
+    tekChainThrow(tekReadMesh("../res/cube.tglo", &cube));
 
     vec3 camera_position = {5.0f, 3.0f, 5.0f};
     vec3 light_color = {0.4f, 0.4f, 0.4f};
@@ -159,9 +107,9 @@ int render() {
 
 
         tekBindShaderProgram(shader_program);
-        tekShaderUniformMat4(shader_program, "projection", perp_projection);
+        tekChainThrow(tekShaderUniformMat4(shader_program, "projection", perp_projection));
 
-        tekShaderUniformMat4(shader_program, "model", wall_model);
+        tekChainThrow(tekShaderUniformMat4(shader_program, "model", wall_model));
         tekDrawMesh(&walls);
 
         cube_position[0] += delta * multiplier;
@@ -171,11 +119,11 @@ int render() {
         }
 
         glm_translate_make(cube_model, cube_position);
-        tekShaderUniformMat4(shader_program, "model", cube_model);
+        tekChainThrow(tekShaderUniformMat4(shader_program, "model", cube_model));
         tekDrawMesh(&cube);
 
         printException(tekDrawText(&text, width - 185.0f, 5.0f));
-        tekUpdate();
+        tekChainThrow(tekUpdate());
     }
 
     tekDeleteShaderProgram(shader_program);
@@ -187,12 +135,20 @@ int render() {
 }
 
 exception yeah() {
-    tekChainThrow(tekCreateMeshFile("../res/mesh.tglo"));
+    TekMesh mesh = {};
+    tekChainThrow(tekReadMesh("../res/mesh.tglo", &mesh));
+    return SUCCESS;
+}
+
+exception ymlTest() {
+    YmlFile yml_file = {};
+    tekChainThrow(ymlReadFile("../res/test.yml", &yml_file));
+    tekChainThrow(ymlPrint(&yml_file));
     return SUCCESS;
 }
 
 int main(void) {
     tekInitExceptions();
-    tekLog(yeah());
+    tekLog(render());
     tekCloseExceptions();
 }

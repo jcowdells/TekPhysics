@@ -5,6 +5,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <math.h>
+#include <unistd.h>
 
 #include "file.h"
 #include "list.h"
@@ -799,6 +801,7 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
     flag allow_next = 0;   // whether this is an escaped character
     uint indent = 0;       // the number of spaces of indent
     uint line = 1;         // current line number
+    uint last_id_line = 0; // previous line number where id was found
     for (int i = 0; i < buffer_size; i++) {
         // logic to allow for escape characters, if \ skip next, if skipped next dont skip again
         if (buffer[i] == '\\') {
@@ -832,6 +835,8 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
 
             // if a colon is detected, then an identifier just ended
             if (buffer[i] == ':' && !inside_marks) {
+                if (line == last_id_line) tekThrow(YML_EXCEPTION, "Cannot have two keys on the same line.")
+
                 Word* colon = (Word*)malloc(sizeof(Word));
                 if (!colon) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for word.");
 
@@ -841,6 +846,7 @@ exception ymlSplitText(const char* buffer, const uint buffer_size, List* split_t
                 colon->line = line;
                 indent = 0;
                 tekChainThrow(listAddItem(split_text, colon));
+                last_id_line = line;
             }
 
             if ((buffer[i] == ' ') && (trace_indent)) {
@@ -1039,6 +1045,7 @@ exception ymlCreateTokensStack(const List* split_text, List* tokens, Stack* inde
 
     // start the indent stack at 0 indent
     uint indent = 0;
+    flag expect_value = 0;
     tekChainThrow(stackPush(indent_stack, (void*)indent));
     while (item) {
         Word* word = (Word*)item->data;
@@ -1052,7 +1059,7 @@ exception ymlCreateTokensStack(const List* split_text, List* tokens, Stack* inde
         // if there is a -, this signals a list item
         if ((word->start[0] == '-') && (word->length == 1)) {
             // there should be a word after this that is the actual list data
-            if (!item->next)
+            if ((!item->next) || (!expect_value))
                tekChainThrow(ymlThrowSyntax(word));
             item = item->next;
             Word* next_word = (Word*)item->data;
@@ -1066,13 +1073,26 @@ exception ymlCreateTokensStack(const List* split_text, List* tokens, Stack* inde
                 // if next word is ':', this is an identifier
                 if ((next_word->start[0] == ':') && (next_word->length == 1)) {
                     tekChainThrow(ymlCreateKeyToken(word, &token));
+                    const uint prev_indent = indent;
                     tekChainThrow(ymlUpdateIndent(&indent, word, tokens, indent_stack));
+
+                    if ((indent > prev_indent) && !expect_value) {
+                        tekChainThrow(ymlThrowSyntax(word));
+                    }
+
+                    // signal that we expect to find data after this
+                    expect_value = 1;
 
                     // skip over the ':', not needed data
                     item = item->next;
                 // otherwise, its a value
                 } else {
+                    if (!expect_value)
+                        tekChainThrow(ymlThrowSyntax(word));
                     tekChainThrow(ymlCreateValueToken(word, &token));
+
+                    // we do not expect to find multiple values in a row, unless a list
+                    expect_value = 0;
                 }
             }
         }
@@ -1287,7 +1307,7 @@ exception ymlPrintIndent(YmlFile* yml, uint indent) {
 
     // iterate over the values we got
     for (uint i = 0; i < num_items; i++) {
-        for (uint i = 0; i < indent; i++) printf("  ");
+        for (uint j = 0; j < indent; j++) printf("  ");
         printf("%s: ", keys[i]);
         // if this is a pointer to another hashtable, we need to recursively print it
         if (values[i]->type == YML_DATA) {

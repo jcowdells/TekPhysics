@@ -10,6 +10,7 @@ typedef struct TekMesh {
     int num_elements;
 } TekMesh;
 
+exception tekReadMesh(const char* filename, TekMesh* mesh_ptr);
 exception tekCreateMesh(const float* vertices, long len_vertices, const uint* indices, long len_indices, const int* layout, uint len_layout, TekMesh* mesh_ptr);
 void tekDrawMesh(const TekMesh* mesh_ptr);
 void tekDeleteMesh(const TekMesh* mesh_ptr);

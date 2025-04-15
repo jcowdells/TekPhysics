@@ -1,39 +1,26 @@
-hello:
-  ip_address: 127.0.0.1
-  bogus_number: "234098723598"
-  whats_up: "haoijsaoijsa"
-  dfsgsd:
-    lets_go_deeper:
-      something: "here"
-      something_else: 100.45
-      and_so_on:
-        pit_stop: "hi"
-        until:
-          this: "happens \"with \n\n\n\n\n\n\n\n lots of spaces\""
-      and: "then"
-
-      "thi\n\n\n\"\"ng": ?
-
-
-      have: "some"
-      more: "stuff"
-  list:
-    - afssdfg
-    - trguyg
-    - sdfsdf1e
-    - sdfsdf2
-    - sdfsdf3
-  single_letter:
-    0
-  boolean: true
-  float: 124.234235
-  integer: 129023409
-  string: "adsfsdfsdfg"
-another:
-  thing:
-    is:
-      if:
-         i:
-           do: "this"
-         stupid: "hi"
-then__this: "hi"
+name: "John Doe"
+age: 27
+hobbies:
+  - reading
+  - swimming
+  - "coding"
+address:
+  street: "123 Fake St,"
+  city: Faketown,
+  state: CA
+is_student: "yes"
+fix:
+          skills:
+            programming: "[Python, Java, C++"
+            writing: true
+            "design": false
+            extra_key:
+                    another_key: value
+            employment:
+                company: "Tech Co"
+                role: Developer
+                years: 3
+                company: "Web Inc"
+          role: "Designer"
+          years: two
+          notes: >

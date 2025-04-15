@@ -4,8 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief Delete a hashtable, freeing all the memory that the hashtable functions allocated.
+ * @note This does not free any user allocated memory, for example pointers that are stored in the hashtable.
+ * @param[in] hashtable A pointer to the hashtable to delete.
+ */
 void hashtableDelete(const HashTable* hashtable) {
-    if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot delete hashtable from null ptr.");
+    if (!hashtable) return;
 
     // iterate over every possible index in the hash table
     for (int i = 0; i < hashtable->length; i++) {
@@ -24,6 +29,12 @@ void hashtableDelete(const HashTable* hashtable) {
     free(hashtable->internal);
 }
 
+/**
+ * @brief Create a hashtable. The length is relatively unimportant, setting it too small just means more rehashes.
+ * @param hashtable[out] A pointer to an empty hashtable struct.
+ * @param length[in] The starting size of the hashtable. If this size is filled by 75%, the hashtable will double its size.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception hashtableCreate(HashTable* hashtable, const unsigned int length) {
     // check for random scenarios such as no hashtable or already allocated hashtable
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot create hashtable from null ptr.");
@@ -37,6 +48,13 @@ exception hashtableCreate(HashTable* hashtable, const unsigned int length) {
     return SUCCESS;
 }
 
+/**
+ * @brief Create a hash index for a hashtable given a string. Essentially works by summing ASCII values of each character, modulo length of internal array.
+ * @param[in] hashtable A pointer to the hashtable.
+ * @param[in] key The string key to hash with.
+ * @param[out] hash The returned hash value.
+ * @throws HASHTABLE_EXCEPTION if the hashtable is empty.
+ */
 exception hashtableHash(HashTable* hashtable, const char* key, unsigned int* hash) {
     // make sure we dont have bogus data
     if (!hashtable || !key || !hash) tekThrow(NULL_PTR_EXCEPTION, "Cannot hash key from null ptr.");
@@ -51,6 +69,14 @@ exception hashtableHash(HashTable* hashtable, const char* key, unsigned int* has
     return SUCCESS;
 }
 
+/**
+ * @brief Create a node for a hashtable, and insert it into the hashtable correctly.
+ * @param[in] hashtable A pointer to the hashtable.
+ * @param[in] key The key which names the node.
+ * @param[in] hash The hash index at which to store the node.
+ * @param[out] out_ptr A pointer to store a reference to the created node for further use.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception hashtableCreateNode(const HashTable* hashtable, const char* key, const unsigned int hash, HashNode** out_ptr) {
     // ensure there isn't a null ptr
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot create node from null ptr.");
@@ -84,6 +110,15 @@ exception hashtableCreateNode(const HashTable* hashtable, const char* key, const
     return SUCCESS;
 }
 
+/**
+ * @brief Check if a node exists in the hashtable, and if so return a pointer to this node.
+ * @note The retrieved node is not a copy, and will be freed once the hashtable is freed.
+ * @param[in] hashtable A pointer to the hashtable.
+ * @param[in] key The string key at which the node is stored.
+ * @param[out] node_ptr A pointer to store a pointer to the node if found.
+ * @throws NULL_PTR_EXCEPTION if hashtable is NULL
+ * @returns SUCCESS if the node was found, FAILURE if it was not.
+ */
 exception hashtableGetNode(HashTable* hashtable, const char* key, HashNode** node_ptr) {
     // ensure not a null ptr
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get node from null ptr.");
@@ -109,6 +144,13 @@ exception hashtableGetNode(HashTable* hashtable, const char* key, HashNode** nod
     return (found) ? SUCCESS : FAILURE;
 }
 
+/**
+ * @brief Return a list of keys that make up the hashtable.
+ * @note The function will allocate an array at the pointer specified that needs to be freed. The length of this array will be hashtable.num_items. (hashtable.length specifies the length of the internal array).
+ * @param hashtable A pointer to the hashtable.
+ * @param keys A pointer to an array of char arrays that will be allocated and filled with keys.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception hashtableGetKeys(const HashTable* hashtable, char*** keys) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get keys from null ptr.");
 
@@ -130,6 +172,13 @@ exception hashtableGetKeys(const HashTable* hashtable, char*** keys) {
     return SUCCESS;
 }
 
+/**
+ * @brief Return a list of values stored in the hashtable.
+ * @note The function will allocate memory to store the values in, which needs to be freed. The order of the values will match the order of keys retrieved by hashtableGetKeys.
+ * @param hashtable A pointer to the hashtable.
+ * @param values A pointer to an array of void pointers that will be filled with the values contained in the hashtable.
+ * @return
+ */
 exception hashtableGetValues(const HashTable* hashtable, void*** values) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get values from null ptr.");
 
@@ -151,6 +200,13 @@ exception hashtableGetValues(const HashTable* hashtable, void*** values) {
     return SUCCESS;
 }
 
+/**
+ * @brief Resize the hashtable to be a new size, copying the items into new locations.
+ * @note By the nature of how hashtables work, the order of items from hashtableGetKeys/Values will change after rehashing.
+ * @param hashtable A pointer to the hashtable.
+ * @param new_length The new length required by the hashtable.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot rehash from null ptr.");
 
@@ -214,12 +270,24 @@ exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
     return SUCCESS;
 }
 
+/**
+ * @brief Returns whether a hashtable is more than 75% full, at which point the number of collisions makes the hashtable slower, requiring the linked lists to be traversed more often.
+ * @param hashtable A pointer to the hashtable.
+ * @return
+ */
 flag hashtableTooFull(const HashTable* hashtable) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot check if null ptr is full.");
     // return true if the hashtable is more than 75% full
     return (flag)((4 * hashtable->num_items) >= (3 * hashtable->length));
 }
 
+/**
+ *
+ * @param hashtable A pointer to the hashtable.
+ * @param key The key to the wanted data.
+ * @param data A pointer that will be filled with the stored data.
+ * @throws HASHTABLE_EXCEPTION if the hashtable is empty.
+ */
 exception hashtableGet(HashTable* hashtable, const char* key, void** data) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get from null ptr.");
 
@@ -236,6 +304,13 @@ exception hashtableGet(HashTable* hashtable, const char* key, void** data) {
     return SUCCESS;
 }
 
+/**
+ * @brief Set the value of the hashtable at a certain key.
+ * @param hashtable A pointer to the hashtable.
+ * @param key The key to set the data at.
+ * @param data The actual data to set.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception hashtableSet(HashTable* hashtable, const char* key, void* data) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot set null ptr..");
 
@@ -254,14 +329,21 @@ exception hashtableSet(HashTable* hashtable, const char* key, void* data) {
     // if there is no node, then create one
     if (hashtableGetNode(hashtable, key, &node_ptr)) {
         tekChainThrow(hashtableCreateNode(hashtable, key, hash, &node_ptr));
+        hashtable->num_items += 1;
     }
 
     // set the data and update num of items
     node_ptr->data = data;
-    hashtable->num_items += 1;
     return SUCCESS;
 }
 
+/**
+ * @brief Remove the data stored at a certain key in the hashtable.
+ * @note This does not free the pointer stored at this key, data stored here should be freed first.
+ * @param hashtable A pointer to the hashtable.
+ * @param key The key to remove.
+ * @throws HASHTABLE_EXCEPTION if the hashtable is empty.
+ */
 exception hashtableRemove(HashTable* hashtable, const char* key) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot remove from null ptr.");
 
@@ -302,24 +384,56 @@ exception hashtableRemove(HashTable* hashtable, const char* key) {
     return found;
 }
 
+/**
+ * @brief Check whether an item exists in a hashtable.
+ * @param hashtable A pointer to the hashtable.
+ * @param key A key to an item to check
+ * @return 1 if the item exists, 0 if it does not or an error occurred while looking for it
+ */
+flag hashtableHasKey(HashTable* hashtable, const char* key) {
+    HashNode* hash_node = 0;
+    const exception hashtable_result =  hashtableGetNode(hashtable, key, &hash_node);
+    if (hashtable_result == SUCCESS) return 1;
+    return 0;
+}
+
+/**
+ * @brief Print the data about a hashtable, which will print something like
+ * @code
+ * HashNode* internal  = 0x123456789
+ * unsigned int length = 100
+ * @endcode
+ * @param hashtable A pointer to a hashtable
+ */
 void hashtablePrint(const HashTable* hashtable) {
     printf("HashNode* internal  = %p\n", hashtable->internal);
     printf("unsigned int length = %u\n", hashtable->length);
 }
 
+/**
+ * @brief Print a hashtable in a nice format, something like
+ * @code
+ * {
+ *     "key_1": 0x12987123
+ *     "key_2": 0x12312344
+ *     "key_3": 0x11245453
+ * }
+ * @endcode
+ * @param hashtable A pointer to a hashtable.
+ */
 void hashtablePrintItems(const HashTable* hashtable) {
     printf("%p\n", hashtable);
     if (!hashtable) {
-        printf("shit pointer");
+        printf("hashtable = NULL !");
         return;
     }
     if (!hashtable->internal) {
-        printf("internal shit pointer");
+        printf("hashtable->internal = NULL !");
         return;
     }
     printf("{\n");
     for (unsigned int i = 0; i < hashtable->length; i++) {
-        HashNode* node_ptr = hashtable->internal[i];
+        const HashNode* node_ptr = hashtable->internal[i];
         while (node_ptr) {
             printf("    \"%s\" = %ld (hash=%d)\n", node_ptr->key, (long)node_ptr->data, i);
             node_ptr = node_ptr->next;
@@ -328,6 +442,11 @@ void hashtablePrintItems(const HashTable* hashtable) {
     printf("}\n");
 }
 
+/**
+ * @brief Print out the internal array of the hashtable, which will be a mix of 0s and pointers to linked lists.
+ * @note This is completely useless! (Except for when I was debugging this)
+ * @param hashtable A pointer to a hashtable.
+ */
 void hashtablePrintInternal(const HashTable* hashtable) {
     printf("{\n");
     for (unsigned int i = 0; i < hashtable->length; i++) {

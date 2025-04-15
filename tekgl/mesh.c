@@ -5,6 +5,7 @@
 
 #include "mesh.h"
 #include "../core/list.h"
+#include "../core/file.h"
 
 #include "glad/glad.h"
 
@@ -68,6 +69,8 @@ exception tekCreateMesh(const float* vertices, const long len_vertices, const ui
     // create attrib pointer for each section of the layout
     int prev_layout = 0;
     for (uint i = 0; i < len_layout; i++) {
+        if (layout[i] == 0)
+            tekThrow(OPENGL_EXCEPTION, "Cannot have layout of size 0.");
         glVertexAttribPointer(i, layout[i], GL_FLOAT, GL_FALSE, layout_size, (void*)(prev_layout * sizeof(float)));
         glEnableVertexAttribArray(i);
         prev_layout = layout[i];
@@ -79,25 +82,50 @@ exception tekCreateMesh(const float* vertices, const long len_vertices, const ui
     return SUCCESS;
 }
 
-exception tekCreateMeshFile(const char* filename, TekMesh* mesh_ptr) {
-    uint file_size;
-    tekChainThrow(getFileSize(filename, &file_size));
-    char* buffer = (char*)malloc(file_size);
-    exception tek_exception = readFile(filename, file_size, buffer);
-    if (tek_exception) {
-        free(buffer);
-        tekChainThrow(tek_exception);
-    }
+#define STRING_CONV_FUNC(func_name, func_type, conv_func, conv_type) \
+exception func_name(const char* string, func_type* output) { \
+    char* check = 0; \
+    const conv_type converted = conv_func(string, &check); \
+    int error = errno; \
+    if ((string + strlen(string) != check) || (error == ERANGE)) \
+        tekThrow(FAILURE, "Failed to convert string data while processing mesh."); \
+    *output = (func_type)converted; \
+    return SUCCESS; \
+} \
+
+STRING_CONV_FUNC(stringToFloat, float, strtod, double);
+STRING_CONV_FUNC(stringToUint, uint, strtold, long);
+STRING_CONV_FUNC(stringToInt, int, strtold, long);
+
+#define ARRAY_BUILD_FUNC(func_name, array_type, conv_func) \
+exception func_name(const List* list, array_type* array) { \
+    uint index = list->length - 1; \
+    const ListItem* item = list->data; \
+    while (item) { \
+        const char* string = item->data; \
+        array_type data; \
+        tekChainThrow(conv_func(string, &data)); \
+        array[index--] = (array_type)data; \
+        item = item->next; \
+    } \
+    return SUCCESS; \
+} \
+
+ARRAY_BUILD_FUNC(tekCreateMeshVertices, float, stringToFloat);
+ARRAY_BUILD_FUNC(tekCreateMeshIndices, uint, stringToUint);
+ARRAY_BUILD_FUNC(tekCreateMeshLayout, int, stringToInt);
+
+exception tekCreateMeshArrays(const List* vertices, const List* indices, const List* layout, float* vertex_array, uint* index_array, int* layout_array) {
+    tekChainThrow(tekCreateMeshVertices(vertices, vertex_array));
+    tekChainThrow(tekCreateMeshIndices(indices, index_array));
+    tekChainThrow(tekCreateMeshLayout(layout, layout_array));
+    return SUCCESS;
+}
+
+exception tekReadMeshLists(char* buffer, List* vertices, List* indices, List* layout) {
     char* prev_c = buffer;
     uint line = 1;
     flag in_word = 0;
-
-    List vertices = {};
-    listCreate(&vertices);
-    List indices = {};
-    listCreate(&indices);
-    List layout = {};
-    listCreate(&layout);
 
     List* write_list = 0;
     char* c;
@@ -112,10 +140,10 @@ exception tekCreateMeshFile(const char* filename, TekMesh* mesh_ptr) {
         if ((*c == ' ') || (*c == 0x09) || (*c == '\n') || (*c == '\r')) {
             if (in_word) {
                 *c = 0;
-                if (!strcmp(prev_c, "VERTICES")) write_list = &vertices;
-                else if (!strcmp(prev_c, "INDICES")) write_list = &indices;
-                else if (!strcmp(prev_c, "LAYOUT")) write_list = &layout;
-                else listInsertItem(write_list, 0, prev_c); // inserting at 0, faster for linked list
+                if (!strcmp(prev_c, "VERTICES")) write_list = vertices;
+                else if (!strcmp(prev_c, "INDICES")) write_list = indices;
+                else if (!strcmp(prev_c, "LAYOUT")) write_list = layout;
+                else tekChainThrow(listInsertItem(write_list, 0, prev_c)); // inserting at 0, faster for linked list
             }
             in_word = 0;
             continue;
@@ -123,77 +151,57 @@ exception tekCreateMeshFile(const char* filename, TekMesh* mesh_ptr) {
         if (!in_word) prev_c = c;
         in_word = 1;
     }
-    if (in_word) {
-        if (!strcmp(c, "VERTICES")) write_list = &vertices;
-        else if (!strcmp(c, "INDICES")) write_list = &indices;
-        else if (!strcmp(c, "LAYOUT")) write_list = &layout;
-        else listInsertItem(write_list, 0, c); // inserting at 0, faster for linked list
-    }
+    if (in_word)
+        // if the last item is a section header, then there would be no items below it, which is pointless and should be an error anyway
+        // so dont bother with checking at this stage.
+        tekChainThrow(listInsertItem(write_list, 0, prev_c));
+    return SUCCESS;
+}
 
-    float* vertices_array = (float*)malloc(vertices.length * sizeof(float));
-    uint* indices_array = (uint*)malloc(indices.length * sizeof(uint));
-    uint* layout_array = (uint*)malloc(layout.length * sizeof(uint));
+exception tekReadMesh(const char* filename, TekMesh* mesh_ptr) {
+    uint file_size;
+    tekChainThrow(getFileSize(filename, &file_size));
+    char* buffer = (char*)malloc(file_size);
+    tekChainThrowThen(readFile(filename, file_size, buffer), {
+        free(buffer);
+    });
 
-    tek_exception = SUCCESS;
-    uint index = vertices.length - 1;
-    ListItem* vertex_item = vertices.data;
-    while (vertex_item) {
-        const char* string = vertex_item->data;
-        printf("string = %s\n", string);
-        char* check = 0;
-        const double vertex_val = strtod(string, &check);
-        printf("vertex val = %f\n", vertex_val);
-        printf("check = %p vs %p\n", string, check);
-        const int error = errno;
-        if ((string == check) || (errno == ERANGE)) {
-            tek_exception = FAILURE;
-            tekExcept(tek_exception, "Failed to interpret floating point number.");
-            break;
-        }
-        vertices_array[index--] = (float)vertex_val;
-        vertex_item = vertex_item->next;
-    }
+    List vertices = {};
+    listCreate(&vertices);
+    List indices = {};
+    listCreate(&indices);
+    List layout = {};
+    listCreate(&layout);
 
-    if (!tek_exception) {
-        index = indices.length - 1;
-        ListItem* index_item = indices.data;
-        while (index_item) {
-            const char* string = index_item->data;
-            char* check = 0;
-            const uint index_val = (uint)strtoul(string, &check, 10);
-            const int error = errno;
-            if ((string == check) || (errno == ERANGE)) {
-                tek_exception = FAILURE;
-                tekExcept(tek_exception, "Failed to interpret unsigned integer.");
-                break;
-            }
-            indices_array[index--] = index_val;
-            index_item = index_item->next;
-        }
-    }
+    tekChainThrowThen(tekReadMeshLists(buffer, &vertices, &indices, &layout), {
+        listDelete(&vertices);
+        listDelete(&indices);
+        listDelete(&layout);
+    });
 
-    if (!tek_exception) {
-        index = layout.length - 1;
-        ListItem* layout_item = layout.data;
-        while (layout_item) {
-            const char* string = layout_item->data;
-            char* check = 0;
-            const uint layout_val = (uint)strtoul(string, &check, 10);
-            const int error = errno;
-            if ((string == check) || (errno == ERANGE)) {
-                tek_exception = FAILURE;
-                tekExcept(tek_exception, "Failed to interpret unsigned integer.");
-                break;
-            }
-            layout_array[index--] = layout_val;
-            layout_item = layout_item->next;
-        }
-    }
+    float* vertex_array = (float*)malloc(vertices.length * sizeof(float));
+    if (!vertex_array) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vertices.");
+    const uint len_vertex_array = vertices.length;
 
-    if (!tek_exception) {
-        for (uint i = 0; i < layout.length; i++) {
-            printf("%u ", layout_array[i]);
-        }
+    uint* index_array = (uint*)malloc(indices.length * sizeof(uint));
+    if (!index_array) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory for indices.", {
+        free(vertex_array);
+    });
+    const uint len_index_array = indices.length;
+
+    int* layout_array = (int*)malloc(layout.length * sizeof(int));
+    if (!layout_array) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory for layout.", {
+        free(vertex_array);
+        free(index_array);
+    });
+    const uint len_layout_array = layout.length;
+
+    exception tek_exception = tekCreateMeshArrays(&vertices, &indices, &layout, vertex_array, index_array, layout_array);
+
+    if (tek_exception) {
+        //free(vertex_array);
+        //free(index_array);
+        //free(layout_array);
     }
 
     listDelete(&vertices);
@@ -201,7 +209,39 @@ exception tekCreateMeshFile(const char* filename, TekMesh* mesh_ptr) {
     listDelete(&layout);
 
     free(buffer);
-    return tek_exception;
+
+    tekChainThrow(tek_exception);
+
+    const float wall_vertices[] = {
+        0.0f, 6.0f, -3.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 6.0f,  3.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f,  3.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -3.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, -3.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f,  3.0f, 0.0f, 1.0f, 0.0f,
+        12.0f, 0.0f,  3.0f, 0.0f, 1.0f, 0.0f,
+        12.0f, 0.0f, -3.0f, 0.0f, 1.0f, 0.0f
+    };
+
+    const uint wall_indices[] = {
+        0, 1, 2,
+        0, 2, 3,
+        4, 5, 6,
+        4, 6, 7
+    };
+
+    const int wall_layout[] = {
+        3, 3
+    };
+
+    tek_exception = tekCreateMesh(vertex_array, (long)len_vertex_array, index_array, (long)len_index_array, layout_array, len_layout_array, mesh_ptr);
+
+    free(vertex_array);
+    free(index_array);
+    free(layout_array);
+
+    tekChainThrow(tek_exception);
+    return SUCCESS;
 }
 
 void tekDrawMesh(const TekMesh* mesh_ptr) {

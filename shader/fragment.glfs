@@ -1,12 +1,19 @@
 #version 330 core
 
+in vec3 f_position;
+in vec3 f_normal;
+
 out vec4 color;
 
-in vec2 tex_coord_f;
-
-uniform sampler2D tex_sampler;
+uniform vec3 light_color;
+uniform vec3 camera_pos;
+uniform vec3 light_position;
 
 void main() {
-    color = texture(tex_sampler, tex_coord_f);
-    //color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    vec3 ambient = light_color * 0.2f;
+
+    vec3 light_direction = normalize(light_position - f_position);
+    vec3 diffuse = light_color * max(dot(f_normal, light_direction), 0.0f);
+
+    color = vec4(ambient + diffuse, 1.0f);
 }
