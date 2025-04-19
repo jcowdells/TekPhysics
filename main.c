@@ -22,6 +22,8 @@
 #include <time.h>
 #include <math.h>
 
+#include "core/queue.h"
+
 #define printException(x) tekLog(x)
 
 float width, height;
@@ -60,7 +62,7 @@ int render() {
     tekChainThrow(tekReadMesh("../res/wall.tglo", &walls));
 
     TekMesh cube = {};
-    tekChainThrow(tekReadMesh("../res/cube.tglo", &cube));
+    tekChainThrow(tekReadMesh("../res/cube.tmsh", &cube));
 
     vec3 camera_position = {5.0f, 3.0f, 5.0f};
     vec3 light_color = {0.4f, 0.4f, 0.4f};
@@ -136,7 +138,7 @@ int render() {
 
 exception yeah() {
     TekMesh mesh = {};
-    tekChainThrow(tekReadMesh("../res/mesh.tglo", &mesh));
+    tekChainThrow(tekReadMesh("../res/mesh.tmsh", &mesh));
     return SUCCESS;
 }
 
@@ -147,8 +149,47 @@ exception ymlTest() {
     return SUCCESS;
 }
 
+exception queueTest() {
+    Queue q = {};
+    queueCreate(&q);
+
+    tekChainThrow(queueEnqueue(&q, (void*)0x100));
+    tekChainThrow(queueEnqueue(&q, (void*)0x200));
+    tekChainThrow(queueEnqueue(&q, (void*)0x300));
+
+    void* test = 0;
+    tekChainThrow(queueDequeue(&q, &test));
+    printf("first dequeue: %p\n", test);
+
+    tekChainThrow(queueEnqueue(&q, (void*)0x400));
+    tekChainThrow(queueEnqueue(&q, (void*)0x500));
+
+    while (!queueIsEmpty(&q)) {
+        tekChainThrow(queueDequeue(&q, &test));
+        printf("loop dequeue: %p\n", test);
+    }
+
+    tekChainThrow(queueEnqueue(&q, (void*)0x100));
+    tekChainThrow(queueEnqueue(&q, (void*)0x200));
+    tekChainThrow(queueEnqueue(&q, (void*)0x300));
+
+    QueueItem* item = q.rear;
+    while (item) {
+        printf("%p\n", item->data);
+        item = item->prev;
+    }
+
+    while (!queueIsEmpty(&q)) {
+        tekChainThrow(queueDequeue(&q, &test));
+        printf("aglp dequeue: %p\n", test);
+    }
+
+    queueDelete(&q);
+    return SUCCESS;
+}
+
 int main(void) {
     tekInitExceptions();
-    tekLog(render());
+    tekLog(queueTest());
     tekCloseExceptions();
 }

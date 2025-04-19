@@ -164,7 +164,7 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
     return tek_exception;
 }
 
-exception tekDeleteUniform(TekMaterialUniform* uniform) {
+void tekDeleteUniform(TekMaterialUniform* uniform) {
     if (uniform->name) free(uniform->name);
     if (uniform->data) free(uniform->data);
     free(uniform);
@@ -300,4 +300,10 @@ exception tekBindMaterial(TekMaterial* material) {
                 break;
         }
     }
+}
+
+void tekDeleteMaterial(const TekMaterial* material) {
+    for (uint i = 0; i < material->num_uniforms; i++)
+        tekDeleteUniform(material->uniforms[i]);
+    tekDeleteShaderProgram(material->shader_program_id);
 }

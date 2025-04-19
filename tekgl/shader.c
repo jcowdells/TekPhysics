@@ -42,6 +42,14 @@ exception tekCreateShader(const GLenum shader_type, const char* shader_filename,
     return SUCCESS;
 }
 
+void tekBindShaderProgram(const uint shader_program_id) {
+    glUseProgram(shader_program_id);
+}
+
+void tekDeleteShaderProgram(const uint shader_program_id) {
+    glDeleteProgram(shader_program_id);
+}
+
 exception tekCreateShaderProgramViFi(const uint vertex_shader_id, const uint fragment_shader_id, uint* shader_program_id) {
     if (!vertex_shader_id || !fragment_shader_id) tekThrow(NULL_PTR_EXCEPTION, "Cannot create shader program with id 0.")
 

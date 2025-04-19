@@ -18,7 +18,8 @@
 #define YML_EXCEPTION       11
 #define STACK_EXCEPTION     12
 #define HASHTABLE_EXCEPTION 13
-#define NUM_EXCEPTIONS      13
+#define QUEUE_EXCEPTION     14
+#define NUM_EXCEPTIONS      14
 
 typedef int exception;
 

@@ -35,6 +35,7 @@ void tekInitExceptions() {
     tekAddException(YML_EXCEPTION, "YML Exception");
     tekAddException(STACK_EXCEPTION, "Stack Exception");
     tekAddException(HASHTABLE_EXCEPTION, "Hash Table Exception");
+    tekAddException(QUEUE_EXCEPTION, "Queue Exception");
 }
 
 void tekCloseExceptions() {

@@ -158,7 +158,7 @@ exception tekReadMeshLists(char* buffer, List* vertices, List* indices, List* la
     return SUCCESS;
 }
 
-exception tekReadMesh(const char* filename, TekMesh* mesh_ptr) {
+exception tekReadMeshArrays(const char* filename, float** vertex_array, uint* len_vertex_array, uint** index_array, uint* len_index_array, int** layout_array, uint* len_layout_array) {
     uint file_size;
     tekChainThrow(getFileSize(filename, &file_size));
     char* buffer = (char*)malloc(file_size);
@@ -179,29 +179,29 @@ exception tekReadMesh(const char* filename, TekMesh* mesh_ptr) {
         listDelete(&layout);
     });
 
-    float* vertex_array = (float*)malloc(vertices.length * sizeof(float));
-    if (!vertex_array) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vertices.");
-    const uint len_vertex_array = vertices.length;
+    *vertex_array = (float*)malloc(vertices.length * sizeof(float));
+    if (!*vertex_array) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vertices.");
+    *len_vertex_array = vertices.length;
 
-    uint* index_array = (uint*)malloc(indices.length * sizeof(uint));
-    if (!index_array) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory for indices.", {
-        free(vertex_array);
+    *index_array = (uint*)malloc(indices.length * sizeof(uint));
+    if (!*index_array) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory for indices.", {
+        free(*vertex_array);
     });
-    const uint len_index_array = indices.length;
+    *len_index_array = indices.length;
 
-    int* layout_array = (int*)malloc(layout.length * sizeof(int));
-    if (!layout_array) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory for layout.", {
-        free(vertex_array);
-        free(index_array);
+    *layout_array = (int*)malloc(layout.length * sizeof(int));
+    if (!*layout_array) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory for layout.", {
+        free(*vertex_array);
+        free(*index_array);
     });
-    const uint len_layout_array = layout.length;
+    *len_layout_array = layout.length;
 
-    exception tek_exception = tekCreateMeshArrays(&vertices, &indices, &layout, vertex_array, index_array, layout_array);
+    const exception tek_exception = tekCreateMeshArrays(&vertices, &indices, &layout, *vertex_array, *index_array, *layout_array);
 
     if (tek_exception) {
-        //free(vertex_array);
-        //free(index_array);
-        //free(layout_array);
+        free(*vertex_array);
+        free(*index_array);
+        free(*layout_array);
     }
 
     listDelete(&vertices);
@@ -211,30 +211,18 @@ exception tekReadMesh(const char* filename, TekMesh* mesh_ptr) {
     free(buffer);
 
     tekChainThrow(tek_exception);
+    return SUCCESS;
+}
 
-    const float wall_vertices[] = {
-        0.0f, 6.0f, -3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 6.0f,  3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f,  3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, -3.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, -3.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f,  3.0f, 0.0f, 1.0f, 0.0f,
-        12.0f, 0.0f,  3.0f, 0.0f, 1.0f, 0.0f,
-        12.0f, 0.0f, -3.0f, 0.0f, 1.0f, 0.0f
-    };
+exception tekReadMesh(const char* filename, TekMesh* mesh_ptr) {
+    float* vertex_array = 0;
+    uint* index_array = 0;
+    int* layout_array = 0;
+    uint len_vertex_array = 0, len_index_array = 0, len_layout_array = 0;
 
-    const uint wall_indices[] = {
-        0, 1, 2,
-        0, 2, 3,
-        4, 5, 6,
-        4, 6, 7
-    };
+    tekChainThrow(tekReadMeshArrays(filename, &vertex_array, &len_vertex_array, &index_array, &len_index_array, &layout_array, &len_layout_array));
 
-    const int wall_layout[] = {
-        3, 3
-    };
-
-    tek_exception = tekCreateMesh(vertex_array, (long)len_vertex_array, index_array, (long)len_index_array, layout_array, len_layout_array, mesh_ptr);
+    const exception tek_exception = tekCreateMesh(vertex_array, (long)len_vertex_array, index_array, (long)len_index_array, layout_array, len_layout_array, mesh_ptr);
 
     free(vertex_array);
     free(index_array);

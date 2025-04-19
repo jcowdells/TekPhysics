@@ -17,4 +17,4 @@ typedef struct TekMaterial {
 
 exception tekCreateMaterial(const char* filename, TekMaterial* material);
 exception tekBindMaterial(TekMaterial* material);
-exception tekDeleteMaterial(TekMaterial* material);
+void tekDeleteMaterial(const TekMaterial* material);

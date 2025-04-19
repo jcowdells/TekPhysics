@@ -1,4 +1,4 @@
-# ormat is (x  y  z)  (normal_x  normal_y  normal_z)
+# format is (x  y  z)  (normal_x  normal_y  normal_z)
 VERTICES
 -1.0   1.0  -1.0   0.0  1.0  0.0
 -1.0   1.0   1.0   0.0  1.0  0.0
