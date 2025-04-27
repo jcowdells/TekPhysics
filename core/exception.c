@@ -36,6 +36,7 @@ void tekInitExceptions() {
     tekAddException(STACK_EXCEPTION, "Stack Exception");
     tekAddException(HASHTABLE_EXCEPTION, "Hash Table Exception");
     tekAddException(QUEUE_EXCEPTION, "Queue Exception");
+    tekAddException(THREAD_EXCEPTION, "Thread Exception");
 }
 
 void tekCloseExceptions() {

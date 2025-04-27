@@ -21,8 +21,11 @@
 
 #include <time.h>
 #include <math.h>
+#include <unistd.h>
 
 #include "core/queue.h"
+#include "core/threadqueue.h"
+#include "tekphys/engine.h"
 
 #define printException(x) tekLog(x)
 
@@ -149,47 +152,72 @@ exception ymlTest() {
     return SUCCESS;
 }
 
+#define THREAD_FUNC(func_name, start_val, print_format) \
+void func_name(void* args) { \
+    ThreadQueue* q = (ThreadQueue*)args; \
+    uint sv = start_val; \
+    while (1) { \
+        if (sv) { \
+            for (uint i = 10; i < 20; i++) { \
+                tekLog(threadQueueEnqueue(q, i)); \
+            } \
+        } \
+        while (!threadQueueIsEmpty(q)) { \
+            void* data = 0; \
+            tekLog(threadQueueDequeue(q, &data)); \
+            printf(print_format, (uint)data); \
+        } \
+        sv = 1; \
+    } \
+} \
+
+THREAD_FUNC(threadA, 0, "thread a: %u\n");
+THREAD_FUNC(threadB, 1, "thread b: %u\n");
+
 exception queueTest() {
-    Queue q = {};
-    queueCreate(&q);
+    ThreadQueue q = {};
+    threadQueueCreate(&q);
 
-    tekChainThrow(queueEnqueue(&q, (void*)0x100));
-    tekChainThrow(queueEnqueue(&q, (void*)0x200));
-    tekChainThrow(queueEnqueue(&q, (void*)0x300));
+    pthread_t thread_a, thread_b;
+    pthread_create(&thread_a, NULL, threadA, &q);
+    pthread_create(&thread_b, NULL, threadB, &q);
 
-    void* test = 0;
-    tekChainThrow(queueDequeue(&q, &test));
-    printf("first dequeue: %p\n", test);
+    sleep(10);
 
-    tekChainThrow(queueEnqueue(&q, (void*)0x400));
-    tekChainThrow(queueEnqueue(&q, (void*)0x500));
+    threadQueueDelete(&q);
+    return SUCCESS;
+}
 
-    while (!queueIsEmpty(&q)) {
-        tekChainThrow(queueDequeue(&q, &test));
-        printf("loop dequeue: %p\n", test);
+exception run() {
+    ThreadQueue event_queue = {}, state_queue = {};
+    tekChainThrow(threadQueueCreate(&event_queue));
+    tekChainThrowThen(threadQueueCreate(&state_queue), {
+        threadQueueDelete(&event_queue);
+    });
+    tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
+    TekState state = {};
+    while (1) {
+        while (recvState(&state_queue, &state) == SUCCESS) {
+            switch (state.type) {
+            case MESSAGE_STATE:
+                if (state.data.message) {
+                    printf("%s\n", state.data.message);
+                    free(state.data.message);
+                }
+                break;
+            case EXCEPTION_STATE:
+                tekChainThrow(state.data.exception);
+                break;
+            default:
+                break;
+            }
+        }
     }
-
-    tekChainThrow(queueEnqueue(&q, (void*)0x100));
-    tekChainThrow(queueEnqueue(&q, (void*)0x200));
-    tekChainThrow(queueEnqueue(&q, (void*)0x300));
-
-    QueueItem* item = q.rear;
-    while (item) {
-        printf("%p\n", item->data);
-        item = item->prev;
-    }
-
-    while (!queueIsEmpty(&q)) {
-        tekChainThrow(queueDequeue(&q, &test));
-        printf("aglp dequeue: %p\n", test);
-    }
-
-    queueDelete(&q);
     return SUCCESS;
 }
 
 int main(void) {
     tekInitExceptions();
-    tekLog(queueTest());
+    tekLog(run());
     tekCloseExceptions();
 }

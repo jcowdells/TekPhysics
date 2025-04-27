@@ -47,6 +47,12 @@ add_executable(
         tekphys/object.h
         core/queue.c
         core/queue.h
+        core/threadqueue.c
+        core/threadqueue.h
+        tekphys/engine.c
+        tekphys/engine.h
+        core/vector.c
+        core/vector.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})

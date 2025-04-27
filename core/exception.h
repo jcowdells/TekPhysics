@@ -19,7 +19,8 @@
 #define STACK_EXCEPTION     12
 #define HASHTABLE_EXCEPTION 13
 #define QUEUE_EXCEPTION     14
-#define NUM_EXCEPTIONS      14
+#define THREAD_EXCEPTION    15
+#define NUM_EXCEPTIONS      15
 
 typedef int exception;
 
