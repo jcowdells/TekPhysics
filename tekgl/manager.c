@@ -6,6 +6,7 @@
 #include "../tekgui/primitives.h"
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
+#include "../core/list.h"
 
 typedef struct TekFbCallbackNode {
     TekFramebufferCallback callback;
@@ -16,6 +17,9 @@ GLFWwindow* tek_window = 0;
 int tek_window_width   = 0;
 int tek_window_height  = 0;
 TekFbCallbackNode* tek_framebuffer_callbacks = 0;
+
+flag tek_delete_funcs_initialised = 0;
+List tek_delete_funcs = {};
 
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
     // allocate memory for a new callback item in list
@@ -115,6 +119,14 @@ exception tekDelete() {
     // clean up TekGL things we initialised
     tekDeleteTextEngine();
 
+    // run all cleanup functions
+    ListItem* item;
+    foreach(item, (&tek_delete_funcs), {
+        const TekDeleteFunc delete_func = (TekDeleteFunc)item;
+        delete_func();
+    });
+    listDelete(&tek_delete_funcs);
+
     // destroy the glfw window and context
     glfwDestroyWindow(tek_window);
     glfwTerminate();
@@ -124,4 +136,12 @@ exception tekDelete() {
 void tekGetWindowSize(int* window_width, int* window_height) {
     *window_width = tek_window_width;
     *window_height = tek_window_height;
+}
+
+exception tekRegisterDeleteFunc(const TekDeleteFunc delete_func) {
+    if (!tek_delete_funcs_initialised) listCreate(&tek_delete_funcs);
+
+    // add delete func to a list that we can iterate over on cleanup
+    tekChainThrow(listAddItem(&tek_delete_funcs, delete_func));
+    return SUCCESS;
 }

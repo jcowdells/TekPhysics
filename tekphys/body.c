@@ -1,4 +1,4 @@
-#include "object.h"
+#include "body.h"
 
 exception tekCreateObject(const char* mesh_filename, const char* material_filename, TekObject* object) {
     float* vertex_array = 0;

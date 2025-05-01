@@ -3,6 +3,13 @@
 #include "exception.h"
 #include "../tekgl.h"
 
+#define foreach(item, list, run) \
+item = list->data; \
+while (item) { \
+    run; \
+    item = item->next; \
+} \
+
 typedef struct ListItem {
     void* data;
     struct ListItem* next;

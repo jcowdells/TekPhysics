@@ -43,8 +43,8 @@ add_executable(
         core/stack.h
         core/hashtable.h
         core/hashtable.c
-        tekphys/object.c
-        tekphys/object.h
+        tekphys/body.c
+        tekphys/body.h
         core/queue.c
         core/queue.h
         core/threadqueue.c
@@ -53,6 +53,8 @@ add_executable(
         tekphys/engine.h
         core/vector.c
         core/vector.h
+        tekgl/entity.c
+        tekgl/entity.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})
