@@ -2,67 +2,62 @@
 
 #include <stdlib.h>
 
+#include "entity.h"
 #include "text.h"
 #include "../tekgui/primitives.h"
 #include "glad/glad.h"
 #include "GLFW/glfw3.h"
 #include "../core/list.h"
 
-typedef struct TekFbCallbackNode {
-    TekFramebufferCallback callback;
-    struct TekFbCallbackNode* next;
-} TekFbCallbackNode;
-
 GLFWwindow* tek_window = 0;
 int tek_window_width   = 0;
 int tek_window_height  = 0;
-TekFbCallbackNode* tek_framebuffer_callbacks = 0;
 
-flag tek_delete_funcs_initialised = 0;
-List tek_delete_funcs = {};
+List tek_fb_funcs = {0, 0};
+List tek_delete_funcs = {0, 0};
+List tek_key_funcs = {0, 0};
 
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
-    // allocate memory for a new callback item in list
-    TekFbCallbackNode* node = (TekFbCallbackNode*)malloc(sizeof(TekFbCallbackNode));
-    if (!node) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for framebuffer node.")
-
-    // set callback and clear pointer to next item (there is no next item)
-    node->callback = callback;
-    node->next = 0;
-
-    // if callbacks list doesn't exist, make this the first item
-    // else, search the list to find the last item, and place it there
-    if (!tek_framebuffer_callbacks) {
-        tek_framebuffer_callbacks = node;
-    } else {
-        TekFbCallbackNode* search_node = tek_framebuffer_callbacks;
-        while (search_node->next) search_node = search_node->next;
-        search_node->next = node;
-    }
+    if (tek_fb_funcs.length == 0) listCreate(&tek_fb_funcs);
+    tekChainThrow(listAddItem(&tek_fb_funcs, callback));
     return SUCCESS;
 }
 
-void tekFreeFramebufferCallbacks() {
-    // loop through each node of the list, freeing as we go
-    TekFbCallbackNode* node = tek_framebuffer_callbacks;
-    while (node) {
-        // must make a copy of node, as once freed the data stored at that pointer may have changed
-        TekFbCallbackNode* free_node = node;
-        node = node->next;
-        free(free_node);
-    }
-}
+void tekManagerFramebufferCallback(const GLFWwindow* window, const int width, const int height) {
+    if (window != tek_window) return;
 
-void tekManagerFramebufferCallback(GLFWwindow* window, const int width, const int height) {
     // update the size of the viewport
     glViewport(0, 0, width, height);
 
-    // push the callback to all the nodes of the list
-    TekFbCallbackNode* node = tek_framebuffer_callbacks;
-    while (node) {
-        node->callback(width, height);
-        node = node->next;
-    }
+    const ListItem* item = 0;
+    foreach(item, (&tek_fb_funcs), {
+        const TekFramebufferCallback callback = (TekFramebufferCallback)item->data;
+        callback(width, height);
+    });
+}
+
+exception tekAddDeleteFunc(const TekDeleteFunc delete_func) {
+    if (tek_delete_funcs.length == 0) listCreate(&tek_delete_funcs);
+
+    // add delete func to a list that we can iterate over on cleanup
+    tekChainThrow(listAddItem(&tek_delete_funcs, delete_func));
+    return SUCCESS;
+}
+
+void tekManagerKeyCallback(const GLFWwindow* window, const int key, const int scancode, const int action, const int mods) {
+    if (window != tek_window) return;
+    const ListItem* item = 0;
+    foreach(item, (&tek_key_funcs), {
+        const TekKeyCallback callback = (TekKeyCallback)item->data;
+        callback(key, scancode, action, mods);
+    });
+}
+
+exception tekAddKeyCallback(const TekKeyCallback callback) {
+    if (tek_key_funcs.length == 0) listCreate(&tek_key_funcs);
+
+    tekChainThrow(listAddItem(&tek_key_funcs, callback));
+    return SUCCESS;
 }
 
 exception tekInit(const char* window_name, const int window_width, const int window_height) {
@@ -85,6 +80,7 @@ exception tekInit(const char* window_name, const int window_width, const int win
     // update framebuffer size and callbacks
     glfwGetFramebufferSize(tek_window, &tek_window_width, &tek_window_height);
     glfwSetFramebufferSizeCallback(tek_window, tekManagerFramebufferCallback);
+    glfwSetKeyCallback(tek_window, tekManagerKeyCallback);
 
     // init different areas of tekgl
     tekChainThrow(tekInitTextEngine());
@@ -114,18 +110,20 @@ exception tekUpdate() {
 
 exception tekDelete() {
     // clean up memory allocate by callback functions
-    tekFreeFramebufferCallbacks();
+    listDelete(&tek_fb_funcs);
 
     // clean up TekGL things we initialised
     tekDeleteTextEngine();
 
     // run all cleanup functions
-    ListItem* item;
+    const ListItem* item = 0;
     foreach(item, (&tek_delete_funcs), {
-        const TekDeleteFunc delete_func = (TekDeleteFunc)item;
+        const TekDeleteFunc delete_func = (TekDeleteFunc)item->data;
         delete_func();
     });
     listDelete(&tek_delete_funcs);
+
+    listDelete(&tek_key_funcs);
 
     // destroy the glfw window and context
     glfwDestroyWindow(tek_window);
@@ -136,12 +134,4 @@ exception tekDelete() {
 void tekGetWindowSize(int* window_width, int* window_height) {
     *window_width = tek_window_width;
     *window_height = tek_window_height;
-}
-
-exception tekRegisterDeleteFunc(const TekDeleteFunc delete_func) {
-    if (!tek_delete_funcs_initialised) listCreate(&tek_delete_funcs);
-
-    // add delete func to a list that we can iterate over on cleanup
-    tekChainThrow(listAddItem(&tek_delete_funcs, delete_func));
-    return SUCCESS;
 }

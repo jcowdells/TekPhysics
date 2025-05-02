@@ -8,15 +8,12 @@
 #include <cglm/vec4.h>
 #include <cglm/quat.h>
 
-typedef struct TekObject {
-    TekMesh mesh;
-    TekMaterial material;
+typedef struct TekBody {
     float* vertices;
     uint num_vertices;
     vec3 position;
     vec4 rotation;
-} TekObject;
+} TekBody;
 
-exception tekCreateObject(const char* mesh_filename, const char* material_filename, TekObject* object);
-exception tekDrawObject(TekObject* object);
-void tekDeleteObject(const TekObject* object);
+exception tekCreateBody(const char* mesh_filename, TekBody* body);
+void tekDeleteBody(const TekBody* body);

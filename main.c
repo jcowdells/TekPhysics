@@ -31,11 +31,22 @@
 
 float width, height;
 mat4 perp_projection;
+ThreadQueue event_queue = {};
 
 void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
     width = (float)fb_width;
     height = (float)fb_height;
     glm_perspective(1.2f, width / height, 0.1f, 100.0f, perp_projection);
+}
+
+void keyCallback(const int key, const int scancode, const int action, const int mods) {
+    TekEvent event = {};
+    event.type = KEY_EVENT;
+    event.data.key_input.key = key;
+    event.data.key_input.scancode = scancode;
+    event.data.key_input.action = action;
+    event.data.key_input.mods = mods;
+    pushEvent(&event_queue, event);
 }
 
 int render() {
@@ -189,19 +200,21 @@ exception queueTest() {
 }
 
 exception run() {
-    ThreadQueue event_queue = {}, state_queue = {};
+    tekChainThrow(tekInit("TekPhysics", 640, 480));
+    tekChainThrow(tekAddKeyCallback(keyCallback));
+    ThreadQueue state_queue = {};
     tekChainThrow(threadQueueCreate(&event_queue));
     tekChainThrowThen(threadQueueCreate(&state_queue), {
         threadQueueDelete(&event_queue);
     });
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
-    while (1) {
+    while (tekRunning()) {
         while (recvState(&state_queue, &state) == SUCCESS) {
             switch (state.type) {
             case MESSAGE_STATE:
                 if (state.data.message) {
-                    printf("%s\n", state.data.message);
+                    printf("%s", state.data.message);
                     free(state.data.message);
                 }
                 break;
@@ -212,7 +225,13 @@ exception run() {
                 break;
             }
         }
+        tekChainThrow(tekUpdate());
     }
+    TekEvent quit_event;
+    quit_event.type = QUIT_EVENT;
+    quit_event.data.message = 0;
+    pushEvent(&event_queue, quit_event);
+    tekChainThrow(tekDelete());
     return SUCCESS;
 }
 

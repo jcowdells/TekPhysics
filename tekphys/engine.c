@@ -8,6 +8,8 @@
 #include <time.h>
 #include <sys/stat.h>
 
+#include "body.h"
+
 #define BILLION 1000000000
 
 #define RECV_FUNC(func_name, func_type, param_name) \
@@ -69,6 +71,34 @@ void thread_except(ThreadQueue* state_queue, const uint exception) {
 #define threadThrow(exception_code, exception_message) { const exception __thread_exception = exception_code; if (__thread_exception) { tekSetException(__thread_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); thread_except(state_queue, __thread_exception); return; } }
 #define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); thread_except(state_queue, __thread_exception); return; } }
 
+exception tekEngineCreateBody(ThreadQueue* state_queue, const char* mesh_filename, const char* material_filename, TekBody* body) {
+    tekChainThrow(tekCreateBody(mesh_filename, body));
+
+    const uint len_mesh = strlen(mesh_filename) + 1;
+    const uint len_material = strlen(material_filename) + 1;
+    char* mesh_copy = (char*)malloc(len_mesh);
+    if (!mesh_copy) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory to copy mesh filename.", {
+        tekDeleteBody(body);
+    });
+    char* material_copy = (char*)malloc(len_material);
+    if (!material_copy) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate memory to copy material filename.", {
+        tekDeleteBody(body);
+        free(mesh_copy);
+    });
+    memcpy(mesh_copy, mesh_filename, len_mesh);
+    memcpy(material_copy, material_filename, len_material);
+
+    TekState state = {};
+    state.data.entity.mesh_filename = mesh_filename;
+    state.data.entity.material_filename = material_filename;
+    tekChainThrowThen(pushState(state_queue, state), {
+        tekDeleteBody(body);
+        free(mesh_copy);
+        free(material_copy);
+    });
+    return SUCCESS;
+}
+
 struct TekEngineArgs {
     ThreadQueue* event_queue;
     ThreadQueue* state_queue;
@@ -90,35 +120,27 @@ void tekEngine(void* args) {
     flag running = 1;
     uint counter = 0;
     while (running) {
-        printf("counter: %u\n", counter);
         TekEvent event = {};
         while (recvEvent(event_queue, &event) == SUCCESS) {
             switch (event.type) {
             case QUIT_EVENT:
                 running = 0;
                 break;
+            case KEY_EVENT:
+                tprint("Key pressed: %d\n", event.data.key_input.key);
+                break;
             default:
                 break;
             }
         }
 
-        printf("step = %ld seconds, %ld nanoseconds\n", step_time.tv_sec, step_time.tv_nsec);
-
-        printf("tprinting\n");
-        tprint("Test #%u\n", counter++);
-
-        printf("current time is: %lds %ldns\n", engine_time.tv_sec, engine_time.tv_nsec);
-
         engine_time.tv_sec += step_time.tv_sec;
         engine_time.tv_nsec += step_time.tv_nsec;
 
         while (engine_time.tv_nsec >= BILLION) {
-            printf("updating time!!!\n");
             engine_time.tv_nsec -= BILLION;
             engine_time.tv_sec += 1;
         }
-
-        printf("waiting until: %lds %ldns\n", engine_time.tv_sec, engine_time.tv_nsec);
 
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &engine_time, NULL);
     }

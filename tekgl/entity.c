@@ -30,6 +30,7 @@ void tekEntityDelete() {
 tek_init tekEntityInit(void) {
     if (hashtableCreate(&mesh_cache, 4) == SUCCESS) mesh_cache_init = 1;
     if (hashtableCreate(&material_cache, 4) == SUCCESS) material_cache_init = 1;
+    tekAddDeleteFunc(tekEntityDelete);
 }
 
 #define REQUEST_FUNC(func_name, func_type, param_name, create_func, delete_func) \
