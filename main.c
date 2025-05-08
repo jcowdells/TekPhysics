@@ -25,6 +25,7 @@
 
 #include "core/queue.h"
 #include "core/threadqueue.h"
+#include "core/vector.h"
 #include "tekphys/engine.h"
 
 #define printException(x) tekLog(x)
@@ -235,8 +236,34 @@ exception run() {
     return SUCCESS;
 }
 
+exception vectorTest() {
+    Vector vector = {};
+    tekChainThrow(vectorCreate(0, sizeof(long), &vector));
+
+    long test = 100;
+    for (uint i = 0; i < 100; i++) {
+        test += 1;
+        printf("adding `%ld`\n", test);
+        tekChainThrow(vectorAddItem(&vector, &test));
+    }
+
+    long output = 0;
+    for (uint i = 0; i < vector.length; i++) {
+        tekChainThrow(vectorGetItem(&vector, i, &output));
+        printf("vector@%d = %ld\n", i, output);
+    }
+
+    while (vector.length) {
+        tekChainThrow(vectorRemoveItem(&vector, 50, &output));
+        printf("removed %ld\n", output);
+    }
+
+    vectorDelete(&vector);
+    return SUCCESS;
+}
+
 int main(void) {
     tekInitExceptions();
-    tekLog(run());
+    tekLog(vectorTest());
     tekCloseExceptions();
 }

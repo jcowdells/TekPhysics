@@ -20,7 +20,8 @@
 #define HASHTABLE_EXCEPTION 13
 #define QUEUE_EXCEPTION     14
 #define THREAD_EXCEPTION    15
-#define NUM_EXCEPTIONS      15
+#define VECTOR_EXCEPTION    16
+#define NUM_EXCEPTIONS      16
 
 typedef int exception;
 
