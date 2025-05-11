@@ -1,14 +1,21 @@
+#pragma once
+
 #include "../tekgl.h"
+#include "../core/exception.h"
 
 #include <cglm/vec3.h>
 #include <cglm/mat4.h>
 
 typedef struct TekCamera {
-    mat4 translation;
-    mat4 rotation;
-    mat4 transformation;
+    vec3 position;
+    vec3 rotation;
+    mat4 view;
+    mat4 projection;
+    float fov;
+    float near;
+    float far;
 } TekCamera;
 
-void tekCreateCamera(TekCamera* camera, vec3 position, vec3 rotation);
+exception tekCreateCamera(TekCamera* camera, vec3 position, vec3 rotation, float fov, float near, float far);
 void tekSetCameraPosition(TekCamera* camera, vec3 position);
 void tekSetCameraRotation(TekCamera* camera, vec3 rotation); 

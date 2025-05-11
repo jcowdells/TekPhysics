@@ -64,8 +64,3 @@ exception tekCreateEntity(const char* mesh_filename, const char* material_filena
 
     return SUCCESS;
 }
-
-exception tekDeleteEntity(TekEntity* entity) {
-
-    return SUCCESS;
-}

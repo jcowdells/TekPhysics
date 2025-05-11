@@ -14,5 +14,6 @@ exception vectorCreate(uint start_capacity, uint element_size, Vector* vector);
 exception vectorAddItem(Vector* vector, const void* item);
 exception vectorSetItem(const Vector* vector, uint index, const void* item);
 exception vectorGetItem(const Vector* vector, uint index, void* item);
+exception vectorGetItemPtr(const Vector* vector, uint index, void** item);
 exception vectorRemoveItem(Vector* vector, uint index, void* item);
 void vectorDelete(Vector* vector);

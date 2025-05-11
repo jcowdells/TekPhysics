@@ -40,13 +40,21 @@ void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
     glm_perspective(1.2f, width / height, 0.1f, 100.0f, perp_projection);
 }
 
-void keyCallback(const int key, const int scancode, const int action, const int mods) {
+void tekMainKeyCallback(const int key, const int scancode, const int action, const int mods) {
     TekEvent event = {};
     event.type = KEY_EVENT;
     event.data.key_input.key = key;
     event.data.key_input.scancode = scancode;
     event.data.key_input.action = action;
     event.data.key_input.mods = mods;
+    pushEvent(&event_queue, event);
+}
+
+void tekMainMousePosCallback(const double x, const double y) {
+    TekEvent event = {};
+    event.type = MOUSE_POS_EVENT;
+    event.data.mouse_move_input.x = x;
+    event.data.mouse_move_input.y = y;
     pushEvent(&event_queue, event);
 }
 
@@ -151,63 +159,45 @@ int render() {
     return SUCCESS;
 }
 
-exception yeah() {
-    TekMesh mesh = {};
-    tekChainThrow(tekReadMesh("../res/mesh.tmsh", &mesh));
-    return SUCCESS;
-}
-
-exception ymlTest() {
-    YmlFile yml_file = {};
-    tekChainThrow(ymlReadFile("../res/test.yml", &yml_file));
-    tekChainThrow(ymlPrint(&yml_file));
-    return SUCCESS;
-}
-
-#define THREAD_FUNC(func_name, start_val, print_format) \
-void func_name(void* args) { \
-    ThreadQueue* q = (ThreadQueue*)args; \
-    uint sv = start_val; \
-    while (1) { \
-        if (sv) { \
-            for (uint i = 10; i < 20; i++) { \
-                tekLog(threadQueueEnqueue(q, i)); \
-            } \
-        } \
-        while (!threadQueueIsEmpty(q)) { \
-            void* data = 0; \
-            tekLog(threadQueueDequeue(q, &data)); \
-            printf(print_format, (uint)data); \
-        } \
-        sv = 1; \
-    } \
-} \
-
-THREAD_FUNC(threadA, 0, "thread a: %u\n");
-THREAD_FUNC(threadB, 1, "thread b: %u\n");
-
-exception queueTest() {
-    ThreadQueue q = {};
-    threadQueueCreate(&q);
-
-    pthread_t thread_a, thread_b;
-    pthread_create(&thread_a, NULL, threadA, &q);
-    pthread_create(&thread_b, NULL, threadB, &q);
-
-    sleep(10);
-
-    threadQueueDelete(&q);
-    return SUCCESS;
-}
-
 exception run() {
     tekChainThrow(tekInit("TekPhysics", 640, 480));
-    tekChainThrow(tekAddKeyCallback(keyCallback));
+    tekChainThrow(tekAddKeyCallback(tekMainKeyCallback));
+    tekChainThrow(tekAddMousePosCallback(tekMainMousePosCallback))
     ThreadQueue state_queue = {};
     tekChainThrow(threadQueueCreate(&event_queue));
     tekChainThrowThen(threadQueueCreate(&state_queue), {
         threadQueueDelete(&event_queue);
     });
+
+    Vector entities = {};
+    tekChainThrow(vectorCreate(0, sizeof(TekEntity), &entities));
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    vec3 camera_position = {0.0f, 0.0f, 0.0f};
+    vec3 camera_rotation = {0.0f, 0.0f, 0.0f};
+    const vec3 light_color = {0.4f, 0.4f, 0.4f};
+    const vec3 light_position = {4.0f, 12.0f, 0.0f};
+
+    TekCamera camera = {};
+    tekCreateCamera(&camera, camera_position, camera_rotation, 1.2f, 0.1f, 100.0f);
+
+    TekMesh cube_mesh = {};
+    tekChainThrow(tekReadMesh("../res/cube.tmsh", &cube_mesh))
+
+    uint shader_program;
+    tekChainThrow(tekCreateShaderProgramVF("../shader/vertex.glvs", "../shader/fragment.glfs", &shader_program));
+
+    tekBindShaderProgram(shader_program);
+
+    tekShaderUniformVec3(shader_program, "light_color", light_color);
+    tekShaderUniformVec3(shader_program, "light_position", light_position);
+    tekShaderUniformVec3(shader_program, "camera_pos", camera_position);
+
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
     while (tekRunning()) {
@@ -222,10 +212,36 @@ exception run() {
             case EXCEPTION_STATE:
                 tekChainThrow(state.data.exception);
                 break;
+            case ENTITY_CREATE_STATE:
+                TekEntity dummy_entity = {};
+                if (state.object_id == entities.length) {
+                    tekChainThrow(vectorAddItem(&entities, &dummy_entity));
+                } else {
+                    tekChainThrow(vectorSetItem(&entities, state.object_id, &dummy_entity));
+                }
+                TekEntity* create_entity;
+                tekChainThrow(vectorGetItemPtr(&entities, state.object_id, &create_entity));
+                tekChainThrow(tekCreateEntity(state.data.entity.mesh_filename, state.data.entity.material_filename, create_entity));
+                break;
+            case ENTITY_DELETE_STATE:
+                TekEntity* delete_entity;
+                tekChainThrow(vectorGetItemPtr(&entities, state.object_id, &delete_entity));
+                memset(delete_entity, 0, sizeof(TekEntity));
+                break;
+            case CAMERA_MOVE_STATE:
+                memcpy(camera_position, state.data.cam_position, sizeof(vec3));
+                tekShaderUniformVec3(shader_program, "camera_pos", camera_position);
+                tekSetCameraPosition(&camera, camera_position);
+                break;
+            case CAMERA_ROTATE_STATE:
+                memcpy(camera_rotation, state.data.cam_rotation, sizeof(vec3));
+                tekSetCameraRotation(&camera, camera_rotation);
             default:
                 break;
             }
         }
+        printf("Camera position: %f %f %f, rotation: %f %f\n", camera.position[0], camera.position[1], camera.position[2],
+            camera.rotation[0], camera.rotation[1]);
         tekChainThrow(tekUpdate());
     }
     TekEvent quit_event;
@@ -236,34 +252,8 @@ exception run() {
     return SUCCESS;
 }
 
-exception vectorTest() {
-    Vector vector = {};
-    tekChainThrow(vectorCreate(0, sizeof(long), &vector));
-
-    long test = 100;
-    for (uint i = 0; i < 100; i++) {
-        test += 1;
-        printf("adding `%ld`\n", test);
-        tekChainThrow(vectorAddItem(&vector, &test));
-    }
-
-    long output = 0;
-    for (uint i = 0; i < vector.length; i++) {
-        tekChainThrow(vectorGetItem(&vector, i, &output));
-        printf("vector@%d = %ld\n", i, output);
-    }
-
-    while (vector.length) {
-        tekChainThrow(vectorRemoveItem(&vector, 50, &output));
-        printf("removed %ld\n", output);
-    }
-
-    vectorDelete(&vector);
-    return SUCCESS;
-}
-
 int main(void) {
     tekInitExceptions();
-    tekLog(vectorTest());
+    tekLog(run());
     tekCloseExceptions();
 }

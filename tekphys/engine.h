@@ -4,12 +4,18 @@
 #include "../core/threadqueue.h"
 
 #include "../tekgl/entity.h"
+#include "cglm/ivec3.h"
 
-#define QUIT_EVENT 0
-#define KEY_EVENT  1
+#define QUIT_EVENT      0
+#define KEY_EVENT       1
+#define MOUSE_POS_EVENT 2
 
-#define MESSAGE_STATE   0
-#define EXCEPTION_STATE 1
+#define MESSAGE_STATE       0
+#define EXCEPTION_STATE     1
+#define ENTITY_CREATE_STATE 2
+#define ENTITY_DELETE_STATE 3
+#define CAMERA_MOVE_STATE   4
+#define CAMERA_ROTATE_STATE 5
 
 typedef struct TekEvent {
     flag type;
@@ -21,6 +27,10 @@ typedef struct TekEvent {
             int action;
             int mods;
         } key_input;
+        struct {
+            double x;
+            double y;
+        } mouse_move_input;
     } data;
 } TekEvent;
 
@@ -34,6 +44,8 @@ typedef struct TekState {
             const char* mesh_filename;
             const char* material_filename;
         } entity;
+        vec3 cam_position;
+        vec3 cam_rotation;
     } data;
 } TekState;
 

@@ -52,6 +52,12 @@ exception vectorGetItem(const Vector* vector, const uint index, void* item) {
     return SUCCESS;
 }
 
+exception vectorGetItemPtr(const Vector* vector, const uint index, void** item) {
+    if (index >= vector->length) tekThrow(VECTOR_EXCEPTION, "Attempted to get index out of bounds.");
+    *item = vector->internal + index * vector->element_size;
+    return SUCCESS;
+}
+
 exception vectorRemoveItem(Vector* vector, const uint index, void* item) {
     tekChainThrow(vectorGetItem(vector, index, item));
     void* dest = vector->internal + index * vector->element_size;

@@ -21,7 +21,8 @@
 #define QUEUE_EXCEPTION     14
 #define THREAD_EXCEPTION    15
 #define VECTOR_EXCEPTION    16
-#define NUM_EXCEPTIONS      16
+#define ENGINE_EXCEPTION    17
+#define NUM_EXCEPTIONS      17
 
 typedef int exception;
 

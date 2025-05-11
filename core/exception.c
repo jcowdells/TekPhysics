@@ -38,6 +38,7 @@ void tekInitExceptions() {
     tekAddException(QUEUE_EXCEPTION, "Queue Exception");
     tekAddException(THREAD_EXCEPTION, "Thread Exception");
     tekAddException(VECTOR_EXCEPTION, "Vector Exception");
+    tekAddException(ENGINE_EXCEPTION, "Engine Exception");
 }
 
 void tekCloseExceptions() {

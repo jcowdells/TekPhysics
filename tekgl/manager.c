@@ -9,16 +9,16 @@
 #include "GLFW/glfw3.h"
 #include "../core/list.h"
 
-GLFWwindow* tek_window = 0;
-int tek_window_width   = 0;
-int tek_window_height  = 0;
+static GLFWwindow* tek_window = 0;
+static int tek_window_width   = 0;
+static int tek_window_height  = 0;
 
-List tek_fb_funcs = {0, 0};
-List tek_delete_funcs = {0, 0};
-List tek_key_funcs = {0, 0};
+static List tek_fb_funcs = {0, 0};
+static List tek_delete_funcs = {0, 0};
+static List tek_key_funcs = {0, 0};
+static List tek_mmove_funcs = {0, 0};
 
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
-    if (tek_fb_funcs.length == 0) listCreate(&tek_fb_funcs);
     tekChainThrow(listAddItem(&tek_fb_funcs, callback));
     return SUCCESS;
 }
@@ -37,8 +37,6 @@ void tekManagerFramebufferCallback(const GLFWwindow* window, const int width, co
 }
 
 exception tekAddDeleteFunc(const TekDeleteFunc delete_func) {
-    if (tek_delete_funcs.length == 0) listCreate(&tek_delete_funcs);
-
     // add delete func to a list that we can iterate over on cleanup
     tekChainThrow(listAddItem(&tek_delete_funcs, delete_func));
     return SUCCESS;
@@ -53,10 +51,22 @@ void tekManagerKeyCallback(const GLFWwindow* window, const int key, const int sc
     });
 }
 
-exception tekAddKeyCallback(const TekKeyCallback callback) {
-    if (tek_key_funcs.length == 0) listCreate(&tek_key_funcs);
+static void tekManagerMouseMoveCallback(const GLFWwindow* window, const double x, const double y) {
+    if (window != tek_window) return;
+    const ListItem* item = 0;
+    foreach(item, (&tek_mmove_funcs), {
+        const TekMousePosCallback callback = (TekMousePosCallback)item->data;
+        callback(x, y);
+    });
+}
 
+exception tekAddKeyCallback(const TekKeyCallback callback) {
     tekChainThrow(listAddItem(&tek_key_funcs, callback));
+    return SUCCESS;
+}
+
+exception tekAddMousePosCallback(const TekMousePosCallback callback) {
+    tekChainThrow(listAddItem(&tek_mmove_funcs, callback));
     return SUCCESS;
 }
 
@@ -77,10 +87,16 @@ exception tekInit(const char* window_name, const int window_width, const int win
     // load glad, allows us to use opengl functions
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) tekThrow(GLAD_EXCEPTION, "GLAD failed to load loader.");
 
+    listCreate(&tek_fb_funcs);
+    listCreate(&tek_delete_funcs);
+    listCreate(&tek_key_funcs);
+    listCreate(&tek_mmove_funcs);
+
     // update framebuffer size and callbacks
     glfwGetFramebufferSize(tek_window, &tek_window_width, &tek_window_height);
     glfwSetFramebufferSizeCallback(tek_window, tekManagerFramebufferCallback);
     glfwSetKeyCallback(tek_window, tekManagerKeyCallback);
+    glfwSetCursorPosCallback(tek_window, tekManagerMouseMoveCallback);
 
     // init different areas of tekgl
     tekChainThrow(tekInitTextEngine());
@@ -109,9 +125,6 @@ exception tekUpdate() {
 }
 
 exception tekDelete() {
-    // clean up memory allocate by callback functions
-    listDelete(&tek_fb_funcs);
-
     // clean up TekGL things we initialised
     tekDeleteTextEngine();
 
@@ -121,9 +134,12 @@ exception tekDelete() {
         const TekDeleteFunc delete_func = (TekDeleteFunc)item->data;
         delete_func();
     });
-    listDelete(&tek_delete_funcs);
 
+    // clean up memory allocated by callback functions
+    listDelete(&tek_fb_funcs);
+    listDelete(&tek_delete_funcs);
     listDelete(&tek_key_funcs);
+    listDelete(&tek_mmove_funcs);
 
     // destroy the glfw window and context
     glfwDestroyWindow(tek_window);
@@ -134,4 +150,18 @@ exception tekDelete() {
 void tekGetWindowSize(int* window_width, int* window_height) {
     *window_width = tek_window_width;
     *window_height = tek_window_height;
+}
+
+void tekSetMouseMode(const flag mouse_mode) {
+    switch (mouse_mode) {
+    case MOUSE_MODE_CAMERA:
+        if (glfwRawMouseMotionSupported())
+            glfwSetInputMode(tek_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+        glfwSetInputMode(tek_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        break;
+    case MOUSE_MODE_NORMAL:
+    default:
+        glfwSetInputMode(tek_window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+        glfwSetInputMode(tek_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
 }
