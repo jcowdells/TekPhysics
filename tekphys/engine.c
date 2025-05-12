@@ -16,8 +16,8 @@
 
 #define BILLION 1000000000
 
-#define MOUSE_SENSITIVITY 0.001f
-#define MOVE_SPEED        0.01f
+#define MOUSE_SENSITIVITY 0.005f
+#define MOVE_SPEED        0.1f
 
 #define RECV_FUNC(func_name, func_type, param_name) \
 exception func_name(ThreadQueue* queue, func_type* param_name) { \
@@ -193,9 +193,9 @@ void tekEngine(void* args) {
     Queue unused_ids = {};
     queueCreate(&unused_ids);
 
-    flag mouse_moved = 0;
+    flag mouse_moved = 0, mouse_moving = 0;
     flag w = 0, a = 0, s = 0, d = 0;
-    double prev_mx = 0.0, prev_my = 0.0, delta_mx = 0.0, delta_my = 0.0;
+    double prev_mx = 0.0, prev_my = 0.0, cur_mx = 0.0, cur_my = 0.0, delta_mx = 0.0, delta_my = 0.0;
     flag cam_pos_changed = 0;
     vec3 rotation = { 0.0f, 0.0f, 0.0f };
     vec3 position = { 0.0f, 0.0f, 0.0f };
@@ -215,9 +215,6 @@ void tekEngine(void* args) {
                 running = 0;
                 break;
             case KEY_EVENT:
-                const double effective_pitch = rotation[1];
-                double effective_yaw = rotation[0];
-                float direction_multiplier = 0.0f;
                 if (event.data.key_input.key == GLFW_KEY_W) {
                     if (event.data.key_input.action == GLFW_RELEASE) w = 0;
                     else w = 1;
@@ -234,27 +231,9 @@ void tekEngine(void* args) {
                     if (event.data.key_input.action == GLFW_RELEASE) d = 0;
                     else d = 1;
                 }
-
-                if (w) {
-                    direction_multiplier = MOVE_SPEED;
+                if ((event.data.key_input.key == GLFW_KEY_E) && (event.data.key_input.action == GLFW_RELEASE)) {
+                    tprint("Spawn object!\n", "");
                 }
-                if (a) {
-                    direction_multiplier = MOVE_SPEED;
-                    effective_yaw += M_PI;
-                }
-                if (s) {
-                    direction_multiplier = -MOVE_SPEED;
-                }
-                if (d) {
-                    direction_multiplier = -MOVE_SPEED;
-                    effective_yaw = M_PI;
-                }
-
-                position[0] += (float)(cos(effective_yaw) * cos(effective_pitch) * direction_multiplier);
-                position[1] += (float)(sin(effective_pitch) * direction_multiplier);
-                position[2] += (float)(sin(effective_yaw) * cos(effective_pitch) * direction_multiplier);
-
-                cam_pos_changed = 1;
                 break;
             case MOUSE_POS_EVENT:
                 if (!mouse_moved) {
@@ -262,27 +241,56 @@ void tekEngine(void* args) {
                     prev_my = event.data.mouse_move_input.y;
                     mouse_moved = 1;
                 }
+                cur_mx = event.data.mouse_move_input.x;
+                cur_my = event.data.mouse_move_input.y;
                 delta_mx = event.data.mouse_move_input.x - prev_mx;
                 delta_my = event.data.mouse_move_input.y - prev_my;
+
+                mouse_moving = 1;
                 break;
             default:
                 break;
             }
         }
 
-        prev_mx = event.data.mouse_move_input.x;
-        prev_my = event.data.mouse_move_input.y;
+        if (mouse_moving) {
+            rotation[0] = (float)(fmod(rotation[0] + delta_mx * MOUSE_SENSITIVITY + M_PI, 2.0 * M_PI) - M_PI);
+            rotation[1] = (float)fmin(fmax(rotation[1] - delta_my * MOUSE_SENSITIVITY, -M_PI_2), M_PI_2);
+            prev_mx = cur_mx;
+            prev_my = cur_my;
+            threadChainThrow(tekUpdateCamRot(state_queue, rotation));
+            delta_mx = 0.0;
+            delta_my = 0.0;
+            mouse_moving = 0;
+        }
 
-        rotation[0] = (float)(fmod(rotation[0] + delta_mx * MOUSE_SENSITIVITY + M_PI, 2.0 * M_PI) - M_PI);
-        rotation[1] = (float)fmin(fmax(rotation[1] + delta_my * MOUSE_SENSITIVITY, -M_PI_2), M_PI_2);
+        const double pitch = rotation[1], yaw = rotation[0];
+        if (w) {
+            position[0] += (float)(cos(yaw) * cos(pitch) * MOVE_SPEED);
+            position[1] += (float)(sin(pitch) * MOVE_SPEED);
+            position[2] += (float)(sin(yaw) * cos(pitch) * MOVE_SPEED);
+            cam_pos_changed = 1;
+        }
+        if (a) {
+            position[0] += (float)(cos(yaw + M_PI_2) * -MOVE_SPEED);
+            position[2] += (float)(sin(yaw + M_PI_2) * -MOVE_SPEED);
+            cam_pos_changed = 1;
+        }
+        if (s) {
+            position[0] += (float)(cos(yaw) * cos(pitch) * -MOVE_SPEED);
+            position[1] += (float)(sin(pitch) * -MOVE_SPEED);
+            position[2] += (float)(sin(yaw) * cos(pitch) * -MOVE_SPEED);
+            cam_pos_changed = 1;
+        }
+        if (d) {
+            position[0] += (float)(cos(yaw + M_PI_2) * MOVE_SPEED);
+            position[2] += (float)(sin(yaw + M_PI_2) * MOVE_SPEED);
+            cam_pos_changed = 1;
+        }
 
         if (cam_pos_changed) {
             threadChainThrow(tekUpdateCamPos(state_queue, position));
             cam_pos_changed = 0;
-        }
-
-        if ((delta_mx != 0.0) || (delta_my != 0.0)) {
-            threadChainThrow(tekUpdateCamRot(state_queue, rotation));
         }
 
         engine_time.tv_sec += step_time.tv_sec;
@@ -294,6 +302,7 @@ void tekEngine(void* args) {
         }
 
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &engine_time, NULL);
+        counter++;
     }
     printf("thread ended :(\n");
 }

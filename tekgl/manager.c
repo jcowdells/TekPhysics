@@ -19,6 +19,10 @@ static List tek_key_funcs = {0, 0};
 static List tek_mmove_funcs = {0, 0};
 
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
+    if (!tek_fb_funcs.length) {
+        listCreate(&tek_fb_funcs);
+    }
+
     tekChainThrow(listAddItem(&tek_fb_funcs, callback));
     return SUCCESS;
 }
@@ -37,6 +41,9 @@ void tekManagerFramebufferCallback(const GLFWwindow* window, const int width, co
 }
 
 exception tekAddDeleteFunc(const TekDeleteFunc delete_func) {
+    if (!tek_delete_funcs.length)
+        listCreate(&tek_delete_funcs);
+
     // add delete func to a list that we can iterate over on cleanup
     tekChainThrow(listAddItem(&tek_delete_funcs, delete_func));
     return SUCCESS;
@@ -61,11 +68,17 @@ static void tekManagerMouseMoveCallback(const GLFWwindow* window, const double x
 }
 
 exception tekAddKeyCallback(const TekKeyCallback callback) {
+    if (!tek_key_funcs.length)
+        listCreate(&tek_key_funcs);
+
     tekChainThrow(listAddItem(&tek_key_funcs, callback));
     return SUCCESS;
 }
 
 exception tekAddMousePosCallback(const TekMousePosCallback callback) {
+    if (!tek_mmove_funcs.length)
+        listCreate(&tek_mmove_funcs);
+
     tekChainThrow(listAddItem(&tek_mmove_funcs, callback));
     return SUCCESS;
 }
@@ -87,11 +100,6 @@ exception tekInit(const char* window_name, const int window_width, const int win
     // load glad, allows us to use opengl functions
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) tekThrow(GLAD_EXCEPTION, "GLAD failed to load loader.");
 
-    listCreate(&tek_fb_funcs);
-    listCreate(&tek_delete_funcs);
-    listCreate(&tek_key_funcs);
-    listCreate(&tek_mmove_funcs);
-
     // update framebuffer size and callbacks
     glfwGetFramebufferSize(tek_window, &tek_window_width, &tek_window_height);
     glfwSetFramebufferSizeCallback(tek_window, tekManagerFramebufferCallback);
@@ -102,6 +110,8 @@ exception tekInit(const char* window_name, const int window_width, const int win
     tekChainThrow(tekInitTextEngine());
     //tekGuiInitSizeManager();
     tekChainThrow(tekInitPrimitives());
+
+    tekManagerFramebufferCallback(tek_window, window_width, window_height);
 
     return SUCCESS;
 }
@@ -153,6 +163,7 @@ void tekGetWindowSize(int* window_width, int* window_height) {
 }
 
 void tekSetMouseMode(const flag mouse_mode) {
+    glfwFocusWindow(tek_window);
     switch (mouse_mode) {
     case MOUSE_MODE_CAMERA:
         if (glfwRawMouseMotionSupported())

@@ -1,19 +1,35 @@
 #include "camera.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <cglm/affine.h>
 #include "manager.h"
 #include "../core/list.h"
 #include <cglm/cam.h>
 
-static List cameras;
+static List cameras = {0, 0};
+static float aspect_ratio = 1.0f;
+
+static void tekUpdateCameraProjection(TekCamera* camera) {
+    glm_perspective(camera->fov, aspect_ratio, camera->near, camera->far, camera->projection);
+}
+
+static void tekUpdateCameraView(TekCamera* camera) {
+    const double pitch = (double)camera->rotation[1], yaw = (double)camera->rotation[0];
+    vec3 look_at = {};
+    vec3 up = { 0.0f, 1.0f, 0.0f };
+    look_at[0] = (float)(cos(yaw) * cos(pitch)) + camera->position[0];
+    look_at[1] = (float)sin(pitch) + camera->position[1];
+    look_at[2] = (float)(sin(yaw) * cos(pitch)) + camera->position[2];
+    glm_lookat(camera->position, look_at, up, camera->view);
+}
 
 static void tekCameraFramebufferCallback(const int framebuffer_width, const int framebuffer_height) {
-    const float aspect_ratio = (float)framebuffer_width / (float)framebuffer_height;
+    aspect_ratio = (float)framebuffer_width / (float)framebuffer_height;
     const ListItem* item;
     foreach(item, (&cameras), {
         TekCamera* camera = (TekCamera*)item->data;
-        glm_perspective(camera->fov, aspect_ratio, camera->near, camera->far, camera->projection);
+        tekUpdateCameraProjection(camera);
     });
 }
 
@@ -25,16 +41,6 @@ tek_init tekCameraInit() {
     tekAddFramebufferCallback(tekCameraFramebufferCallback);
     tekAddDeleteFunc(tekCameraDeleteFunc);
     listCreate(&cameras);
-}
-
-void tekUpdateCameraView(TekCamera* camera) {
-    const double pitch = (double)camera->rotation[1], yaw = (double)camera->rotation[0];
-    vec3 look_at = {};
-    vec3 up = { 0.0f, 1.0f, 0.0f };
-    look_at[0] = (float)(cos(yaw) * cos(pitch)) + camera->position[0];
-    look_at[1] = (float)sin(pitch) + camera->position[1];
-    look_at[2] = (float)(sin(yaw) * cos(pitch)) + camera->position[2];
-    glm_lookat(camera->position, look_at, up, camera->view);
 }
 
 void tekSetCameraPosition(TekCamera* camera, vec3 position) {
@@ -55,5 +61,6 @@ exception tekCreateCamera(TekCamera* camera, vec3 position, vec3 rotation, const
     camera->near = near;
     camera->far = far;
     tekUpdateCameraView(camera);
+    tekUpdateCameraProjection(camera);
     return SUCCESS;
 }

@@ -58,106 +58,108 @@ void tekMainMousePosCallback(const double x, const double y) {
     pushEvent(&event_queue, event);
 }
 
-int render() {
-    tekChainThrow(tekInit("TekPhysics", 640, 480));
-    width = 640.0f;
-    height = 480.0f;
-
-    tekAddFramebufferCallback(tekMainFramebufferCallback);
-
-    TekBitmapFont verdana;
-    printException(tekCreateFreeType());
-
-    tekChainThrow(tekCreateBitmapFont("../res/verdana.ttf", 0, 64, &verdana));
-
-    TekText text;
-    tekChainThrow(tekCreateText("TekPhysics Alpha v1.0", 20, &verdana, &text));
-
-    tekDeleteFreeType();
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    TekMesh walls = {};
-    tekChainThrow(tekReadMesh("../res/wall.tglo", &walls));
-
-    TekMesh cube = {};
-    tekChainThrow(tekReadMesh("../res/cube.tmsh", &cube));
-
-    vec3 camera_position = {5.0f, 3.0f, 5.0f};
-    vec3 light_color = {0.4f, 0.4f, 0.4f};
-    vec3 light_position = {4.0f, 12.0f, 0.0f};
-
-    uint shader_program;
-    tekChainThrow(tekCreateShaderProgramVF("../shader/vertex.glvs", "../shader/fragment.glfs", &shader_program));
-
-    tekBindShaderProgram(shader_program);
-
-    tekShaderUniformVec3(shader_program, "light_color", light_color);
-    tekShaderUniformVec3(shader_program, "light_position", light_position);
-    tekShaderUniformVec3(shader_program, "camera_pos", camera_position);
-
-    mat4 wall_model;
-    mat4 view;
-
-    glm_mat4_identity(wall_model);
-
-    vec3 center = {0.0f, 0.0f, 0.0f};
-    vec3 up = {0.0f, 1.0f, 0.0f};
-    glm_lookat(camera_position, center, up, view);
-
-    glm_perspective(1.2f, width / height, 0.1f, 100.0f, perp_projection);
-
-    tekShaderUniformMat4(shader_program, "view", view);
-
-    vec3 cube_position = {3.0f, 1.0f, 0.0f};
-    mat4 cube_model;
-
-    struct timespec t;
-    clock_gettime(CLOCK_REALTIME, &t);
-    long time_ns = t.tv_sec * 1000000000 + t.tv_nsec;
-    double delta = 0.0;
-    double multiplier = -1.0;
-
-    while (tekRunning()) {
-        clock_gettime(CLOCK_REALTIME, &t);
-        long delta_ns = (t.tv_sec * 1000000000 + t.tv_nsec) - time_ns;
-        delta = ((double)delta_ns) / 1000000000.0;
-        time_ns = t.tv_sec * 1000000000 + t.tv_nsec;
-
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-
-
-        tekBindShaderProgram(shader_program);
-        tekChainThrow(tekShaderUniformMat4(shader_program, "projection", perp_projection));
-
-        tekChainThrow(tekShaderUniformMat4(shader_program, "model", wall_model));
-        tekDrawMesh(&walls);
-
-        cube_position[0] += delta * multiplier;
-        if (cube_position[0] < 1.0f) {
-            cube_position[0] = 1.0f;
-            multiplier = 1.0;
-        }
-
-        glm_translate_make(cube_model, cube_position);
-        tekChainThrow(tekShaderUniformMat4(shader_program, "model", cube_model));
-        tekDrawMesh(&cube);
-
-        printException(tekDrawText(&text, width - 185.0f, 5.0f));
-        tekChainThrow(tekUpdate());
-    }
-
-    tekDeleteShaderProgram(shader_program);
-    tekDeleteMesh(&walls);
-    tekDeleteTextEngine();
-    tekDeleteText(&text);
-    tekDelete();
-    return SUCCESS;
-}
+// int render() {
+//     tekChainThrow(tekInit("TekPhysics", 640, 480));
+//     width = 640.0f;
+//     height = 480.0f;
+//
+//     tekAddFramebufferCallback(tekMainFramebufferCallback);
+//
+//     TekBitmapFont verdana;
+//     printException(tekCreateFreeType());
+//
+//     tekChainThrow(tekCreateBitmapFont("../res/verdana.ttf", 0, 64, &verdana));
+//
+//     TekText text;
+//     tekChainThrow(tekCreateText("TekPhysics Alpha v1.0", 20, &verdana, &text));
+//
+//     tekDeleteFreeType();
+//
+//     glEnable(GL_DEPTH_TEST);
+//     glDepthFunc(GL_LESS);
+//
+//     glEnable(GL_BLEND);
+//     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+//
+//     TekMesh walls = {};
+//     tekChainThrow(tekReadMesh("../res/wall.tglo", &walls));
+//
+//     TekMesh cube = {};
+//     tekChainThrow(tekReadMesh("../res/cube.tmsh", &cube));
+//
+//     vec3 camera_position = {5.0f, 3.0f, 5.0f};
+//     vec3 light_color = {0.4f, 0.4f, 0.4f};
+//     vec3 light_position = {4.0f, 12.0f, 0.0f};
+//
+//     uint shader_program;
+//     tekChainThrow(tekCreateShaderProgramVF("../shader/vertex.glvs", "../shader/fragment.glfs", &shader_program));
+//
+//     tekBindShaderProgram(shader_program);
+//
+//     tekShaderUniformVec3(shader_program, "light_color", light_color);
+//     tekShaderUniformVec3(shader_program, "light_position", light_position);
+//     tekShaderUniformVec3(shader_program, "camera_pos", camera_position);
+//
+//     mat4 wall_model;
+//     mat4 view;
+//
+//     glm_mat4_identity(wall_model);
+//
+//     vec3 center = {0.0f, 0.0f, 0.0f};
+//     vec3 up = {0.0f, 1.0f, 0.0f};
+//     glm_lookat(camera_position, center, up, view);
+//
+//     glm_perspective(1.2f, width / height, 0.1f, 100.0f, perp_projection);
+//
+//     tekShaderUniformMat4(shader_program, "view", view);
+//
+//     vec3 cube_position = {3.0f, 1.0f, 0.0f};
+//     mat4 cube_model;
+//
+//     struct timespec t;
+//     clock_gettime(CLOCK_REALTIME, &t);
+//     long time_ns = t.tv_sec * 1000000000 + t.tv_nsec;
+//     double delta = 0.0;
+//     double multiplier = -1.0;
+//
+//     while (tekRunning()) {
+//         tekSetMouseMode(MOUSE_MODE_CAMERA);
+//
+//         clock_gettime(CLOCK_REALTIME, &t);
+//         long delta_ns = (t.tv_sec * 1000000000 + t.tv_nsec) - time_ns;
+//         delta = ((double)delta_ns) / 1000000000.0;
+//         time_ns = t.tv_sec * 1000000000 + t.tv_nsec;
+//
+//         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+//
+//
+//         tekBindShaderProgram(shader_program);
+//         tekChainThrow(tekShaderUniformMat4(shader_program, "projection", perp_projection));
+//
+//         tekChainThrow(tekShaderUniformMat4(shader_program, "model", wall_model));
+//         tekDrawMesh(&walls);
+//
+//         cube_position[0] += delta * multiplier;
+//         if (cube_position[0] < 1.0f) {
+//             cube_position[0] = 1.0f;
+//             multiplier = 1.0;
+//         }
+//
+//         glm_translate_make(cube_model, cube_position);
+//         tekChainThrow(tekShaderUniformMat4(shader_program, "model", cube_model));
+//         tekDrawMesh(&cube);
+//
+//         printException(tekDrawText(&text, width - 185.0f, 5.0f));
+//         tekChainThrow(tekUpdate());
+//     }
+//
+//     tekDeleteShaderProgram(shader_program);
+//     tekDeleteMesh(&walls);
+//     tekDeleteTextEngine();
+//     tekDeleteText(&text);
+//     tekDelete();
+//     return SUCCESS;
+// }
 
 exception run() {
     tekChainThrow(tekInit("TekPhysics", 640, 480));
@@ -184,7 +186,7 @@ exception run() {
     const vec3 light_position = {4.0f, 12.0f, 0.0f};
 
     TekCamera camera = {};
-    tekCreateCamera(&camera, camera_position, camera_rotation, 1.2f, 0.1f, 100.0f);
+    tekChainThrow(tekCreateCamera(&camera, camera_position, camera_rotation, 1.2f, 0.1f, 100.0f));
 
     TekMesh cube_mesh = {};
     tekChainThrow(tekReadMesh("../res/cube.tmsh", &cube_mesh))
@@ -194,9 +196,14 @@ exception run() {
 
     tekBindShaderProgram(shader_program);
 
-    tekShaderUniformVec3(shader_program, "light_color", light_color);
-    tekShaderUniformVec3(shader_program, "light_position", light_position);
-    tekShaderUniformVec3(shader_program, "camera_pos", camera_position);
+    tekChainThrow(tekShaderUniformVec3(shader_program, "light_color", light_color));
+    tekChainThrow(tekShaderUniformVec3(shader_program, "light_position", light_position));
+    tekChainThrow(tekShaderUniformVec3(shader_program, "camera_pos", camera_position));
+
+    mat4 model;
+    glm_mat4_identity(model);
+
+    tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
@@ -230,18 +237,23 @@ exception run() {
                 break;
             case CAMERA_MOVE_STATE:
                 memcpy(camera_position, state.data.cam_position, sizeof(vec3));
-                tekShaderUniformVec3(shader_program, "camera_pos", camera_position);
                 tekSetCameraPosition(&camera, camera_position);
                 break;
             case CAMERA_ROTATE_STATE:
                 memcpy(camera_rotation, state.data.cam_rotation, sizeof(vec3));
                 tekSetCameraRotation(&camera, camera_rotation);
+                break;
             default:
                 break;
             }
         }
-        printf("Camera position: %f %f %f, rotation: %f %f\n", camera.position[0], camera.position[1], camera.position[2],
-            camera.rotation[0], camera.rotation[1]);
+        tekChainThrow(tekShaderUniformVec3(shader_program, "camera_pos", camera_position));
+        tekChainThrow(tekShaderUniformMat4(shader_program, "projection", camera.projection));
+        tekChainThrow(tekShaderUniformMat4(shader_program, "view", camera.view));
+        tekChainThrow(tekShaderUniformMat4(shader_program, "model", model));
+        tekDrawMesh(&cube_mesh);
+        // printf("Camera position: %f %f %f, rotation: %f %f\n", camera.position[0], camera.position[1], camera.position[2],
+        //     camera.rotation[0], camera.rotation[1]);
         tekChainThrow(tekUpdate());
     }
     TekEvent quit_event;

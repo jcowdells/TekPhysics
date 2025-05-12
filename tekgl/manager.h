@@ -3,7 +3,7 @@
 #include "../tekgl.h"
 #include "../core/exception.h"
 
-#define tek_init __attribute__((constructor)) void
+#define tek_init __attribute__((constructor)) static void
 
 #define MOUSE_MODE_NORMAL 0
 #define MOUSE_MODE_CAMERA 1

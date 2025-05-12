@@ -15,5 +15,10 @@ void main() {
     vec3 light_direction = normalize(light_position - f_position);
     vec3 diffuse = light_color * max(dot(f_normal, light_direction), 0.0f);
 
-    color = vec4(ambient + diffuse, 1.0f);
+    vec3 view_direction = normalize(camera_pos - f_position);
+    vec3 reflect_direction = reflect(-light_direction, f_normal);
+    float spec_modifier = pow(max(dot(view_direction, reflect_direction), 0.0), 32);
+    vec3 specular = 0.5 * spec_modifier * light_color;
+
+    color = vec4(ambient + diffuse + specular, 1.0f);
 }
