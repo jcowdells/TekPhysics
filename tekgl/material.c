@@ -14,11 +14,16 @@
 #define VEC4_DATA     5
 #define UNKNOWN_DATA  6
 #define UYML_DATA     7
+#define WILDCARD_DATA 8
 
 #define RGBA_DATA      0
 #define XYZW_DATA      1
 #define UV_DATA        2
 #define RGBA_WORD_DATA 3
+
+#define MODEL_MATRIX_WILDCARD      "$tek_model_matrix"
+#define VIEW_MATRIX_WILDCARD       "$tek_view_matrix"
+#define PROJECTION_MATRIX_WILDCARD "$tek_projection_matrix"
 
 exception tekCreateVecUniform(const HashTable* hashtable, const uint num_items, const char** keys_order, TekMaterialUniform* uniform) {
     if ((num_items < 2) || (num_items > 4)) tekThrow(OPENGL_EXCEPTION, "Cannot create vector with more than 4 or less than 2 items.");
@@ -74,6 +79,20 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
                 tekChainBreak(tek_exception);
             }
             (*uniform)->data = texture_id;
+            break;
+        case WILDCARD_DATA:
+            (*uniform)->data = 0;
+            const char* wildcard = data;
+            if (!strcmp(wildcard, MODEL_MATRIX_WILDCARD))
+                (*uniform)->type = MODEL_MATRIX_DATA;
+            else if (!strcmp(wildcard, VIEW_MATRIX_WILDCARD))
+                (*uniform)->type = VIEW_MATRIX_DATA;
+            else if (!strcmp(wildcard, PROJECTION_MATRIX_WILDCARD))
+                (*uniform)->type = PROJECTION_MATRIX_DATA;
+            else {
+                tek_exception = YML_EXCEPTION;
+                tekExcept(tek_exception, "Unrecognised wilcard used.");
+            }
             break;
         case UYML_DATA:
             const HashTable* hashtable = data;
@@ -238,7 +257,11 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
                 break;
             case STRING_DATA:
                 const char* string = uniform_yml->value;
-                uniform_type = TEXTURE_DATA;
+                if (string[0] == '$') {
+                    uniform_type = WILDCARD_DATA;
+                } else {
+                    uniform_type = TEXTURE_DATA;
+                }
                 break;
             case INTEGER_DATA:
                 uniform_type = UINTEGER_DATA;
@@ -300,6 +323,23 @@ exception tekBindMaterial(TekMaterial* material) {
                 break;
         }
     }
+}
+
+exception tekBindMaterialMatrix(const TekMaterial* material, mat4 matrix, flag matrix_type) {
+    if ((matrix_type != MODEL_MATRIX_DATA) && (matrix_type != VIEW_MATRIX_DATA) && (matrix_type != PROJECTION_MATRIX_DATA))
+        tekThrow(FAILURE, "Invalid matrix type.");
+    const TekMaterialUniform* uniform = 0;
+    for (uint i = 0; i < material->num_uniforms; i++) {
+        const TekMaterialUniform* loop_uniform = material->uniforms[i];
+        if (loop_uniform->type == matrix_type) {
+            uniform = loop_uniform;
+            break;
+        }
+    }
+    if (!uniform)
+        tekThrow(FAILURE, "Material does not have such a matrix uniform."));
+    tekChainThrow(tekShaderUniformMat4(material->shader_program_id, uniform->name, matrix));
+    return SUCCESS;
 }
 
 void tekDeleteMaterial(const TekMaterial* material) {

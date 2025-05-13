@@ -16,6 +16,7 @@
 #define ENTITY_DELETE_STATE 3
 #define CAMERA_MOVE_STATE   4
 #define CAMERA_ROTATE_STATE 5
+#define ENTITY_UPDATE_STATE 6
 
 typedef struct TekEvent {
     flag type;
@@ -43,9 +44,16 @@ typedef struct TekState {
         struct {
             const char* mesh_filename;
             const char* material_filename;
+            vec3 position;
+            vec4 rotation;
+            vec3 scale;
         } entity;
         vec3 cam_position;
         vec3 cam_rotation;
+        struct {
+            vec3 position;
+            vec4 rotation;
+        } entity_update;
     } data;
 } TekState;
 

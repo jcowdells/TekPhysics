@@ -96,7 +96,8 @@ void thread_except(ThreadQueue* state_queue, const uint exception) {
     if (mesh_copy) free(mesh_copy); \
     if (material_copy) free(material_copy) \
 
-exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename) {
+exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename
+                              vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
     TekBody* body = (TekBody*)malloc(sizeof(TekBody));
     if (!body) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for body.");
 
@@ -137,18 +138,40 @@ exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* u
         state.object_id = bodies->length - 1;
     }
 
+    state.type = ENTITY_CREATE_STATE;
     state.data.entity.mesh_filename = mesh_filename;
     state.data.entity.material_filename = material_filename;
+    memcpy(state.data.entity.position, position, sizeof(vec3));
+    memcpy(state.data.entity.rotation, rotation, sizeof(vec4));
+    memcpy(state.data.entity.scale, scale, sizeof(vec3));
     tekChainThrowThen(pushState(state_queue, state), {
         if (create_id_via_queue) {
-            // if this also fails, then you're beyond screwed xD
+            // if this enqueue also fails, then you're beyond screwed xD
             // plus we are gonna clean up anyway
             queueEnqueue(unused_ids, (void*)state.object_id);
         }
         tekEngineCreateBodyCleanup;
     });
+    if (object_id)
+        *object_id = state.object_id;
+    return SUCCESS;
+}
 
-    state.type = ENTITY_CREATE_STATE;
+exception tekEngineUpdateBody(ThreadQueue* state_queue, const uint object_id, vec3 position, vec4 rotation) {
+    TekBody* body;
+    tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
+    if (body->num_vertices == 0) {
+        // if the number of vertices == 0, then body is not valid
+        // most likely, the whole thing is just zeroes
+        tekThrow(ENGINE_EXCEPTION, "Body ID is not valid.");
+    }
+
+    TekState state = {};
+    state.type = ENTITY_UPDATE_STATE;
+    state.object_id = object_id;
+    memcpy(state.data.entity_update.position, position, sizeof(vec3));
+    memcpy(state.data.entity_update.rotation, rotation, sizeof(vec4));
+    tekChainThrow(pushState(state_queue, state));
     return SUCCESS;
 }
 

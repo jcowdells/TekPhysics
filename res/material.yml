@@ -7,7 +7,7 @@ uniforms:
         r: 0.0
         g: 1.0
         b: 254.0
-    transformation: $tek_transformation_matrix
+    model: $tek_model_matrix
     view: $tek_view_matrix
     projection: $tek_projection_matrix
 

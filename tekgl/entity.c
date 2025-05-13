@@ -5,10 +5,11 @@
 
 #include "../core/hashtable.h"
 
-flag mesh_cache_init = 0, material_cache_init = 0;
-HashTable mesh_cache = {}, material_cache = {};
+static flag mesh_cache_init = 0, material_cache_init = 0;
+static HashTable mesh_cache = {}, material_cache = {};
+static TekMaterial* using_material = 0;
 
-void tekEntityDelete() {
+static void tekEntityDelete() {
     TekMesh** meshes;
     if (hashtableGetValues(&mesh_cache, &meshes) == SUCCESS) {
         for (uint i = 0; i < mesh_cache.num_items; i++) {
@@ -34,7 +35,7 @@ tek_init tekEntityInit(void) {
 }
 
 #define REQUEST_FUNC(func_name, func_type, param_name, create_func, delete_func) \
-exception func_name(const char* filename, func_type** param_name) { \
+static exception func_name(const char* filename, func_type** param_name) { \
     if (!param_name##_cache_init) tekThrow(NULL_PTR_EXCEPTION, "Cache does not exist."); \
     if (hashtableHasKey(&param_name##_cache, filename)) { \
         tekChainThrow(hashtableGet(&param_name##_cache, filename, param_name)); \
@@ -64,3 +65,14 @@ exception tekCreateEntity(const char* mesh_filename, const char* material_filena
 
     return SUCCESS;
 }
+
+void tekDrawEntity(TekEntity* entity, TekCamera* camera) {
+    if (using_material != entity->material) {
+        tekBindMaterial(entity->material);
+        using_material = entity->material;
+    }
+    // TODO: bind camera matrices here
+    // TODO: bind model matrices here
+    tekDrawMesh(entity->mesh);
+}
+
