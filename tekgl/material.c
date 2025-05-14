@@ -195,7 +195,7 @@ void tekDeleteUniform(TekMaterialUniform* uniform) {
 exception tekCreateMaterial(const char* filename, TekMaterial* material) {
     YmlFile material_yml = {};
     ymlCreate(&material_yml);
-    ymlReadFile(filename, &material_yml);
+    tekChainThrow(ymlReadFile(filename, &material_yml));
 
     YmlData* vs_data = 0;
     YmlData* fs_data = 0;

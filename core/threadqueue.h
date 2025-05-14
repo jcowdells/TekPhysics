@@ -1,22 +1,21 @@
 #pragma once
 
-#include <pthread.h>
+#include <stdatomic.h>
 #include <semaphore.h>
-#include "queue.h"
+
+#include "../tekgl.h"
+#include "exception.h"
 
 typedef struct ThreadQueue {
-    Queue queue;
-    pthread_mutex_t mutex;
-    sem_t semaphore;
+    void** buffer;
+    uint buffer_size;
+    atomic_uint front;
+    atomic_uint rear;
 } ThreadQueue;
 
-exception threadQueueCreate(ThreadQueue* thread_queue);
+exception threadQueueCreate(ThreadQueue* thread_queue, uint capacity);
 void threadQueueDelete(ThreadQueue* thread_queue);
 exception threadQueueEnqueue(ThreadQueue* thread_queue, void* data);
-exception threadQueueDequeueX(ThreadQueue* thread_queue, void** data);
+exception threadQueueDequeue(ThreadQueue* thread_queue, void** data);
 exception threadQueuePeek(ThreadQueue* thread_queue, void** data);
 flag threadQueueIsEmpty(ThreadQueue* thread_queue);
-
-exception threadQueueDequeueY(ThreadQueue* thread_queue, void** data, int line, const char* function, const char* file);
-
-#define threadQueueDequeue(thread_queue, data) threadQueueDequeueY(thread_queue, data, __LINE__, __FUNCTION__, __FILE__)
