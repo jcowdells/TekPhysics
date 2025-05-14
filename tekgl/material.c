@@ -24,6 +24,7 @@
 #define MODEL_MATRIX_WILDCARD      "$tek_model_matrix"
 #define VIEW_MATRIX_WILDCARD       "$tek_view_matrix"
 #define PROJECTION_MATRIX_WILDCARD "$tek_projection_matrix"
+#define CAMERA_POSITION_WILDCARD   "$tek_camera_position"
 
 exception tekCreateVecUniform(const HashTable* hashtable, const uint num_items, const char** keys_order, TekMaterialUniform* uniform) {
     if ((num_items < 2) || (num_items > 4)) tekThrow(OPENGL_EXCEPTION, "Cannot create vector with more than 4 or less than 2 items.");
@@ -89,6 +90,8 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
                 (*uniform)->type = VIEW_MATRIX_DATA;
             else if (!strcmp(wildcard, PROJECTION_MATRIX_WILDCARD))
                 (*uniform)->type = PROJECTION_MATRIX_DATA;
+            else if (!strcmp(wildcard, CAMERA_POSITION_WILDCARD))
+                (*uniform)->type = CAMERA_POSITION_DATA;
             else {
                 tek_exception = YML_EXCEPTION;
                 tekExcept(tek_exception, "Unrecognised wilcard used.");
@@ -292,7 +295,7 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
     return SUCCESS;
 }
 
-exception tekBindMaterial(TekMaterial* material) {
+exception tekBindMaterial(const TekMaterial* material) {
     const uint shader_program_id = material->shader_program_id;
     tekBindShaderProgram(shader_program_id);
     for (uint i = 0; i < material->num_uniforms; i++) {
@@ -325,6 +328,25 @@ exception tekBindMaterial(TekMaterial* material) {
     }
 }
 
+//TODO: make a macro for these
+
+exception tekBindMaterialVec3(const TekMaterial* material, vec3 vector, flag vec3_type) {
+    if (vec3_type != CAMERA_POSITION_DATA)
+        tekThrow(FAILURE, "Invalid vec3 type.");
+    const TekMaterialUniform* uniform = 0;
+    for (uint i = 0; i < material->num_uniforms; i++) {
+        const TekMaterialUniform* loop_uniform = material->uniforms[i];
+        if (loop_uniform->type == vec3_type) {
+            uniform = loop_uniform;
+            break;
+        }
+    }
+    if (!uniform)
+        tekThrow(FAILURE, "Material does not have such a vec3 uniform.");
+    tekChainThrow(tekShaderUniformMat4(material->shader_program_id, uniform->name, vector));
+    return SUCCESS;
+}
+
 exception tekBindMaterialMatrix(const TekMaterial* material, mat4 matrix, flag matrix_type) {
     if ((matrix_type != MODEL_MATRIX_DATA) && (matrix_type != VIEW_MATRIX_DATA) && (matrix_type != PROJECTION_MATRIX_DATA))
         tekThrow(FAILURE, "Invalid matrix type.");
@@ -337,7 +359,7 @@ exception tekBindMaterialMatrix(const TekMaterial* material, mat4 matrix, flag m
         }
     }
     if (!uniform)
-        tekThrow(FAILURE, "Material does not have such a matrix uniform."));
+        tekThrow(FAILURE, "Material does not have such a matrix uniform.");
     tekChainThrow(tekShaderUniformMat4(material->shader_program_id, uniform->name, matrix));
     return SUCCESS;
 }

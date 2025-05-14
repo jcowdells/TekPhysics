@@ -66,13 +66,31 @@ exception tekCreateEntity(const char* mesh_filename, const char* material_filena
     return SUCCESS;
 }
 
-void tekDrawEntity(TekEntity* entity, TekCamera* camera) {
+exception tekDrawEntity(TekEntity* entity, TekCamera* camera) {
     if (using_material != entity->material) {
-        tekBindMaterial(entity->material);
+        tekChainThrow(tekBindMaterial(entity->material));
         using_material = entity->material;
     }
-    // TODO: bind camera matrices here
-    // TODO: bind model matrices here
+
+    mat4 translation;
+    glm_translate_make(translation, entity->position);
+    mat4 rotation;
+    glm_quat_mat4(rotation, entity->rotation);
+    mat4 scale;
+    glm_scale_make(scale, entity->scale);
+    mat4 model;
+    glm_mat4_mul(rotation, scale, model);
+    glm_mat4_mul(translation, model, model);
+
+    //TODO: needs to check if it even wants these uniforms before forcing it
+
+    tekChainThrow(tekBindMaterialMatrix(entity->material, model, MODEL_MATRIX_DATA));
+    tekChainThrow(tekBindMaterialMatrix(entity->material, camera->view, VIEW_MATRIX_DATA));
+    tekChainThrow(tekBindMaterialMatrix(entity->material, camera->projection, PROJECTION_MATRIX_DATA));
+    tekChainThrow(tekBindMaterialVec3(entity->material, camera->position, CAMERA_POSITION_DATA));
+
     tekDrawMesh(entity->mesh);
+
+    return SUCCESS;
 }
 

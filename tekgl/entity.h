@@ -6,6 +6,7 @@
 #include "manager.h"
 #include "mesh.h"
 #include "material.h"
+#include "camera.h"
 
 typedef struct TekEntity {
     TekMesh* mesh;
@@ -16,3 +17,4 @@ typedef struct TekEntity {
 } TekEntity;
 
 exception tekCreateEntity(const char* mesh_filename, const char* material_filename, TekEntity* entity);
+exception tekDrawEntity(TekEntity* entity, TekCamera* camera);

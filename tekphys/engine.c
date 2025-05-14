@@ -96,7 +96,7 @@ void thread_except(ThreadQueue* state_queue, const uint exception) {
     if (mesh_copy) free(mesh_copy); \
     if (material_copy) free(material_copy) \
 
-exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename
+exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename,
                               vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
     TekBody* body = (TekBody*)malloc(sizeof(TekBody));
     if (!body) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for body.");
@@ -157,7 +157,7 @@ exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* u
     return SUCCESS;
 }
 
-exception tekEngineUpdateBody(ThreadQueue* state_queue, const uint object_id, vec3 position, vec4 rotation) {
+exception tekEngineUpdateBody(ThreadQueue* state_queue, Vector* bodies, const uint object_id, vec3 position, vec4 rotation) {
     TekBody* body;
     tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
     if (body->num_vertices == 0) {
@@ -255,6 +255,10 @@ void tekEngine(void* args) {
                     else d = 1;
                 }
                 if ((event.data.key_input.key == GLFW_KEY_E) && (event.data.key_input.action == GLFW_RELEASE)) {
+                    vec4 cube_rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+                    vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
+                    threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/cube.tmsh", "../res/material.tmat",
+                                                       position, cube_rotation, cube_scale, 0));
                     tprint("Spawn object!\n", "");
                 }
                 break;

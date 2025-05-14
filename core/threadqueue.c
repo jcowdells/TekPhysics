@@ -1,10 +1,33 @@
 #include "threadqueue.h"
 
+#include <errno.h>
+
 #define threadQueueMutexLock(thread_queue) if (pthread_mutex_lock(&thread_queue->mutex)) tekThrow(THREAD_EXCEPTION, "Error while waiting for mutex to lock.")
 #define threadQueueMutexUnlock(thread_queue) if (pthread_mutex_unlock(&thread_queue->mutex)) tekThrow(THREAD_EXCEPTION, "Failed to unlock mutex.")
 
 #define threadQueueSemPost(thread_queue) if (sem_post(&thread_queue->semaphore)) tekThrow(THREAD_EXCEPTION, "Failed to post semaphore.")
-#define threadQueueSemTryWait(thread_queue) if (sem_trywait(&thread_queue->semaphore)) tekThrow(THREAD_EXCEPTION, "Failed to try to wait for semaphore.")
+#define threadQueueSemTryWait(thread_queue) if (sem_trywait(&thread_queue->semaphore) == -1) { \
+    int __error_code = errno; \
+    switch (__error_code) { \
+    case EAGAIN: \
+        printf("EAGAIN\n"); \
+        break; \
+    case EDEADLK: \
+        printf("EDEADLK\n"); \
+        break; \
+    case EINTR: \
+        printf("EINTR\n"); \
+        break; \
+    case EINVAL: \
+        printf("EINVAL\n"); \
+        break; \
+    default: \
+        printf("Other Error: %d\n", __error_code); \
+        break; \
+    } \
+    tekThrow(THREAD_EXCEPTION, "Failed to try to wait for semaphore."); \
+} \
+
 #define threadQueueSemWait(thread_queue) if (sem_wait(&thread_queue->semaphore)) tekThrow(THREAD_EXCEPTION, "Failed to wait for semaphore.")
 
 #define threadQueueMutexWrap(thread_queue, method) \
@@ -35,12 +58,17 @@ exception threadQueueEnqueue(ThreadQueue* thread_queue, void* data) {
     return SUCCESS;
 }
 
-exception threadQueueDequeue(ThreadQueue* thread_queue, void** data) {
+exception threadQueueDequeueX(ThreadQueue* thread_queue, void** data) {
     threadQueueSemTryWait(thread_queue);
     threadQueueMutexWrap(thread_queue, {
         tekChainThrow(queueDequeue(&thread_queue->queue, data));
     });
     return SUCCESS;
+}
+
+exception threadQueueDequeueY(ThreadQueue* thread_queue, void** data, int line, const char* function, const char* file) {
+    printf("%d %s %s\n", line, function, file);
+    return threadQueueDequeueX(thread_queue, data);
 }
 
 exception threadQueuePeek(ThreadQueue* thread_queue, void** data) {

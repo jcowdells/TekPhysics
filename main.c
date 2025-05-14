@@ -215,6 +215,7 @@ exception run() {
                     printf("%s", state.data.message);
                     free(state.data.message);
                 }
+                sleep(1);
                 break;
             case EXCEPTION_STATE:
                 tekChainThrow(state.data.exception);
@@ -247,10 +248,14 @@ exception run() {
                 break;
             }
         }
-        tekChainThrow(tekShaderUniformVec3(shader_program, "camera_pos", camera_position));
-        tekChainThrow(tekShaderUniformMat4(shader_program, "projection", camera.projection));
-        tekChainThrow(tekShaderUniformMat4(shader_program, "view", camera.view));
-        tekChainThrow(tekShaderUniformMat4(shader_program, "model", model));
+
+        for (uint i = 0; i < entities.length; i++) {
+            TekEntity* entity;
+            vectorGetItemPtr(&entities, i, &entity);
+            if (entity->mesh == 0) continue;
+            tekChainThrow(tekDrawEntity(entity, &camera));
+        }
+
         tekDrawMesh(&cube_mesh);
         // printf("Camera position: %f %f %f, rotation: %f %f\n", camera.position[0], camera.position[1], camera.position[2],
         //     camera.rotation[0], camera.rotation[1]);
