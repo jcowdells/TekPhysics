@@ -22,7 +22,7 @@
 #define RECV_FUNC(func_name, func_type, param_name) \
 exception func_name(ThreadQueue* queue, func_type* param_name) { \
     func_type* copy; \
-    tekChainThrow(threadQueueDequeue(queue, &copy)); \
+    if (!threadQueueDequeue(queue, &copy)) return FAILURE; \
     memcpy(param_name, copy, sizeof(func_type)); \
     free(copy); \
     return SUCCESS; \
@@ -36,7 +36,7 @@ exception func_name(ThreadQueue* queue, const func_type param_name) { \
     func_type* copy = (func_type*)malloc(sizeof(func_type)); \
     if (!copy) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for thread queue"); \
     memcpy(copy, &param_name, sizeof(func_type)); \
-    tekChainThrow(threadQueueEnqueue(queue, copy)); \
+    if (!threadQueueEnqueue(queue, copy)) return FAILURE; \
     return SUCCESS; \
 } \
 
