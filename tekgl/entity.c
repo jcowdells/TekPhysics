@@ -75,7 +75,7 @@ exception tekDrawEntity(TekEntity* entity, TekCamera* camera) {
     mat4 translation;
     glm_translate_make(translation, entity->position);
     mat4 rotation;
-    glm_quat_mat4(rotation, entity->rotation);
+    glm_quat_mat4(entity->rotation, rotation);
     mat4 scale;
     glm_scale_make(scale, entity->scale);
     mat4 model;

@@ -33,6 +33,7 @@
 float width, height;
 mat4 perp_projection;
 ThreadQueue event_queue = {};
+TekEntity* last_entity = 0;
 
 void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
     width = (float)fb_width;
@@ -203,7 +204,7 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    tekSetMouseMode(MOUSE_MODE_CAMERA);
+    //tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
@@ -213,7 +214,7 @@ exception run() {
             case MESSAGE_STATE:
                 if (state.data.message) {
                     printf("%s", state.data.message);
-                    //free(state.data.message);
+                    free(state.data.message);
                 }
                 sleep(1);
                 break;
@@ -227,9 +228,10 @@ exception run() {
                 } else {
                     tekChainThrow(vectorSetItem(&entities, state.object_id, &dummy_entity));
                 }
-                TekEntity* create_entity;
+                TekEntity* create_entity = 0;
                 tekChainThrow(vectorGetItemPtr(&entities, state.object_id, &create_entity));
                 tekChainThrow(tekCreateEntity(state.data.entity.mesh_filename, state.data.entity.material_filename, create_entity));
+                last_entity = create_entity;
                 break;
             case ENTITY_DELETE_STATE:
                 TekEntity* delete_entity;
@@ -251,7 +253,7 @@ exception run() {
 
         for (uint i = 0; i < entities.length; i++) {
             TekEntity* entity;
-            vectorGetItemPtr(&entities, i, &entity);
+            tekChainThrow(vectorGetItemPtr(&entities, i, &entity));
             if (entity->mesh == 0) continue;
             tekChainThrow(tekDrawEntity(entity, &camera));
         }

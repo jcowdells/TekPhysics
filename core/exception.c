@@ -59,7 +59,10 @@ const char* tekGetException() {
 }
 
 void tekPrintException() {
-    printf("%s", exception_buffer);
+    if (exception_buffer[0])
+        printf("%s", exception_buffer);
+    else
+        printf("Unknown exception!\n");
     for (uint i = 0; i < stack_trace_index; i++) {
         printf("%s", stack_trace_buffer[i]);
     }

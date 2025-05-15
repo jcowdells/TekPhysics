@@ -326,6 +326,7 @@ exception tekBindMaterial(const TekMaterial* material) {
                 break;
         }
     }
+    return SUCCESS;
 }
 
 //TODO: make a macro for these

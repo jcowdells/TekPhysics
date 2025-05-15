@@ -4,8 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-exception vectorCreate(const uint start_capacity, const uint element_size, Vector* vector) {
+exception vectorCreate(uint start_capacity, const uint element_size, Vector* vector) {
     if (element_size == 0) tekThrow(VECTOR_EXCEPTION, "Vector elements cannot have a size of 0.");
+    if (start_capacity == 0) start_capacity = 1;
     void* internal = (void*)malloc(start_capacity * element_size);
     if (!internal) tekThrow(MEMORY_EXCEPTION, "Failed to allocate initial memory for vector.");
     vector->internal = internal;
@@ -21,11 +22,11 @@ void vectorWriteItem(const Vector* vector, const uint index, const void* item) {
 }
 
 exception vectorDoubleCapacity(Vector* vector) {
-    const uint new_size = vector->internal_size == 0 ? 1 : vector->internal_size * 2;
+    const uint new_size = vector->internal_size * 2;
     void* internal = vector->internal;
-    internal = (void*)realloc(internal, new_size * vector->element_size);
-    if (!internal) tekThrow(MEMORY_EXCEPTION, "Failed to allocate more memory to grow vector.")
-    vector->internal = internal;
+    void* temp = (void*)realloc(internal, new_size * vector->element_size);
+    if (!temp) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate more memory to grow vector.", free(internal));
+    vector->internal = temp;
     vector->internal_size = new_size;
     printf("grew in size, len=%u\n", vector->length);
     return SUCCESS;
