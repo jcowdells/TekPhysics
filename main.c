@@ -166,8 +166,8 @@ exception run() {
     tekChainThrow(tekAddKeyCallback(tekMainKeyCallback));
     tekChainThrow(tekAddMousePosCallback(tekMainMousePosCallback))
     ThreadQueue state_queue = {};
-    tekChainThrow(threadQueueCreate(&event_queue));
-    tekChainThrowThen(threadQueueCreate(&state_queue), {
+    tekChainThrow(threadQueueCreate(&event_queue, 4096));
+    tekChainThrowThen(threadQueueCreate(&state_queue, 4096), {
         threadQueueDelete(&event_queue);
     });
 
@@ -213,7 +213,7 @@ exception run() {
             case MESSAGE_STATE:
                 if (state.data.message) {
                     printf("%s", state.data.message);
-                    free(state.data.message);
+                    //free(state.data.message);
                 }
                 sleep(1);
                 break;
