@@ -1,10 +1,15 @@
 #include "material.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "shader.h"
 #include "../core/yml.h"
 #include <cglm/vec2.h>
 #include <cglm/vec3.h>
 #include <cglm/vec4.h>
+
+#include "texture.h"
 
 #define UINTEGER_DATA 0
 #define UFLOAT_DATA   1
@@ -29,18 +34,21 @@
 exception tekCreateVecUniform(const HashTable* hashtable, const uint num_items, const char** keys_order, TekMaterialUniform* uniform) {
     if ((num_items < 2) || (num_items > 4)) tekThrow(OPENGL_EXCEPTION, "Cannot create vector with more than 4 or less than 2 items.");
     exception tek_exception = SUCCESS;
-    double vector[4];
+    float vector[4];
     for (uint i = 0; i < num_items; i++) {
         YmlData* data;
         tek_exception = hashtableGet(hashtable, keys_order[i], &data); tekChainBreak(tek_exception);
         double number;
         tek_exception = ymlDataToFloat(data, &number); tekChainBreak(tek_exception);
-        vector[i] = number;
+        vector[i] = (float)number;
     }
     tekChainThrow(tek_exception);
-    uniform->data = (vec2*)malloc(sizeof(vec2));
+    float* uniform_data = malloc(num_items * sizeof(float));
+    uniform->data = uniform_data;
     if (!uniform->data) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vector.");
-    memcpy(uniform->data, vector, num_items * sizeof(double));
+    for (uint i = 0; i < num_items; i++) {
+        memcpy(uniform_data + i, vector + i, sizeof(float));
+    }
     uniform->type = VEC2_DATA + (num_items - 2);
     return SUCCESS;
 }
@@ -344,7 +352,7 @@ exception tekBindMaterialVec3(const TekMaterial* material, vec3 vector, flag vec
     }
     if (!uniform)
         tekThrow(FAILURE, "Material does not have such a vec3 uniform.");
-    tekChainThrow(tekShaderUniformMat4(material->shader_program_id, uniform->name, vector));
+    tekChainThrow(tekShaderUniformVec3(material->shader_program_id, uniform->name, vector));
     return SUCCESS;
 }
 

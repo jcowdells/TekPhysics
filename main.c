@@ -195,6 +195,9 @@ exception run() {
     uint shader_program;
     tekChainThrow(tekCreateShaderProgramVF("../shader/vertex.glvs", "../shader/fragment.glfs", &shader_program));
 
+    TekMaterial material = {};
+    tekChainThrow(tekCreateMaterial("../res/material.tmat", &material));
+
     tekBindShaderProgram(shader_program);
 
     tekChainThrow(tekShaderUniformVec3(shader_program, "light_color", light_color));
@@ -204,7 +207,7 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    //tekSetMouseMode(MOUSE_MODE_CAMERA);
+    tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
@@ -216,7 +219,6 @@ exception run() {
                     printf("%s", state.data.message);
                     free(state.data.message);
                 }
-                sleep(1);
                 break;
             case EXCEPTION_STATE:
                 tekChainThrow(state.data.exception);
@@ -229,9 +231,15 @@ exception run() {
                     tekChainThrow(vectorSetItem(&entities, state.object_id, &dummy_entity));
                 }
                 TekEntity* create_entity = 0;
+                vec3 default_scale = { 1.0f, 1.0f, 1.0f };
                 tekChainThrow(vectorGetItemPtr(&entities, state.object_id, &create_entity));
-                tekChainThrow(tekCreateEntity(state.data.entity.mesh_filename, state.data.entity.material_filename, create_entity));
+                tekChainThrow(tekCreateEntity(state.data.entity.mesh_filename, state.data.entity.material_filename, state.data.entity.position, state.data.entity.rotation, default_scale, create_entity));
                 last_entity = create_entity;
+                break;
+            case ENTITY_UPDATE_STATE:
+                TekEntity* update_entity = 0;
+                tekChainThrow(vectorGetItemPtr(&entities, state.object_id, &update_entity));
+                tekUpdateEntity(update_entity, state.data.entity_update.position, state.data.entity_update.rotation);
                 break;
             case ENTITY_DELETE_STATE:
                 TekEntity* delete_entity;
@@ -258,6 +266,11 @@ exception run() {
             tekChainThrow(tekDrawEntity(entity, &camera));
         }
 
+        tekChainThrow(tekBindMaterial(&material));
+        tekChainThrow(tekBindMaterialMatrix(&material, camera.projection, PROJECTION_MATRIX_DATA));
+        tekChainThrow(tekBindMaterialMatrix(&material, camera.view, VIEW_MATRIX_DATA));
+        tekChainThrow(tekBindMaterialMatrix(&material, model, MODEL_MATRIX_DATA));
+        tekChainThrow(tekBindMaterialVec3(&material, camera.position, CAMERA_POSITION_DATA));
         tekDrawMesh(&cube_mesh);
         // printf("Camera position: %f %f %f, rotation: %f %f\n", camera.position[0], camera.position[1], camera.position[2],
         //     camera.rotation[0], camera.rotation[1]);

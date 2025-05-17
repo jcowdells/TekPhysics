@@ -61,7 +61,6 @@ flag threadQueueEnqueue(ThreadQueue* thread_queue, void* data) {
     thread_queue->buffer[rear] = data;
     // release order means that subsequent access to rear must happen after this, so other thread has to have the updated rear ptr
     atomic_store_explicit(&thread_queue->rear, next_rear, memory_order_release);
-    printf("stor %p @ %u\n", data, next_rear);
     return 1;
 }
 
@@ -88,7 +87,6 @@ flag threadQueueDequeue(ThreadQueue* thread_queue, void** data) {
     *data = thread_queue->buffer[front];
     // make sure that when front ptr is read next, it happens after it has been updated to the new size
     atomic_store_explicit(&thread_queue->front, (front + 1) % thread_queue->buffer_size, memory_order_release);
-    printf("read %p @ %u\n", *data, (front + 1) % thread_queue->buffer_size);
     return 1;
 }
 

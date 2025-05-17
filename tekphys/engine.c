@@ -8,6 +8,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <math.h>
+#include <pthread.h>
 
 #include "body.h"
 #include "../core/vector.h"
@@ -28,7 +29,7 @@ exception func_name(ThreadQueue* queue, func_type* param_name) { \
     return SUCCESS; \
 } \
 
-RECV_FUNC(recvEvent, TekEvent, event);
+static RECV_FUNC(recvEvent, TekEvent, event);
 RECV_FUNC(recvState, TekState, state);
 
 #define PUSH_FUNC(func_name, func_type, param_name) \
@@ -40,11 +41,11 @@ exception func_name(ThreadQueue* queue, const func_type param_name) { \
     return SUCCESS; \
 } \
 
-PUSH_FUNC(pushState, TekState, state);
+static PUSH_FUNC(pushState, TekState, state);
 PUSH_FUNC(pushEvent, TekEvent, event);
 
 #define CAM_UPDATE_FUNC(func_name, param_name, state_type) \
-exception func_name(ThreadQueue* state_queue, const vec3 param_name) { \
+static exception func_name(ThreadQueue* state_queue, const vec3 param_name) { \
     TekState state = {}; \
     memcpy(state.data.param_name, param_name, sizeof(vec3)); \
     state.type = state_type; \
@@ -55,7 +56,7 @@ exception func_name(ThreadQueue* state_queue, const vec3 param_name) { \
 CAM_UPDATE_FUNC(tekUpdateCamPos, cam_position, CAMERA_MOVE_STATE);
 CAM_UPDATE_FUNC(tekUpdateCamRot, cam_rotation, CAMERA_ROTATE_STATE);
 
-void thread_print(ThreadQueue* state_queue, const char* format, ...) {
+static void threadPrint(ThreadQueue* state_queue, const char* format, ...) {
     char temp_write;
     va_list va;
 
@@ -77,9 +78,9 @@ void thread_print(ThreadQueue* state_queue, const char* format, ...) {
     pushState(state_queue, message_state);
 }
 
-#define tprint(format, ...) thread_print(state_queue, format, __VA_ARGS__)
+#define tprint(format, ...) threadPrint(state_queue, format, __VA_ARGS__)
 
-void thread_except(ThreadQueue* state_queue, const uint exception) {
+static void threadExcept(ThreadQueue* state_queue, const uint exception) {
     TekState exception_state = {};
     exception_state.type = EXCEPTION_STATE;
     exception_state.object_id = 0;
@@ -87,8 +88,8 @@ void thread_except(ThreadQueue* state_queue, const uint exception) {
     pushState(state_queue, exception_state);
 }
 
-#define threadThrow(exception_code, exception_message) { const exception __thread_exception = exception_code; if (__thread_exception) { tekSetException(__thread_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); thread_except(state_queue, __thread_exception); return; } }
-#define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); thread_except(state_queue, __thread_exception); return; } }
+#define threadThrow(exception_code, exception_message) { const exception __thread_exception = exception_code; if (__thread_exception) { tekSetException(__thread_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); threadExcept(state_queue, __thread_exception); return; } }
+#define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); threadExcept(state_queue, __thread_exception); return; } }
 
 #define tekEngineCreateBodyCleanup \
     if (body) { tekDeleteBody(body); \
@@ -96,12 +97,17 @@ void thread_except(ThreadQueue* state_queue, const uint exception) {
     if (mesh_copy) free(mesh_copy); \
     if (material_copy) free(material_copy) \
 
-exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename,
-                              vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
+static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename,
+                              const float mass, vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
     TekBody* body = (TekBody*)malloc(sizeof(TekBody));
     if (!body) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for body.");
 
-    tekChainThrow(tekCreateBody(mesh_filename, body));
+    tekChainThrow(tekCreateBody(mesh_filename, mass, position, rotation, scale, body));
+    vec3 temp_velocity = { 0.5f, 0.0f, 0.0f };
+    glm_vec3_copy(temp_velocity, body->velocity);
+
+    vec3 temp_rotation = { 0.0f, 1.0f, 0.0f };
+    glm_vec3_copy(temp_rotation, body->angular_velocity);
 
     const uint len_mesh = strlen(mesh_filename) + 1;
     const uint len_material = strlen(material_filename) + 1;
@@ -141,9 +147,9 @@ exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* u
     state.type = ENTITY_CREATE_STATE;
     state.data.entity.mesh_filename = mesh_filename;
     state.data.entity.material_filename = material_filename;
-    memcpy(state.data.entity.position, position, sizeof(vec3));
-    memcpy(state.data.entity.rotation, rotation, sizeof(vec4));
-    memcpy(state.data.entity.scale, scale, sizeof(vec3));
+    glm_vec3_copy(position, state.data.entity.position);
+    glm_vec4_copy(rotation, state.data.entity.rotation);
+    glm_vec3_copy(scale, state.data.entity.scale);
     tekChainThrowThen(pushState(state_queue, state), {
         if (create_id_via_queue) {
             // if this enqueue also fails, then you're beyond screwed xD
@@ -157,7 +163,7 @@ exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* u
     return SUCCESS;
 }
 
-exception tekEngineUpdateBody(ThreadQueue* state_queue, Vector* bodies, const uint object_id, vec3 position, vec4 rotation) {
+static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bodies, const uint object_id, vec3 position, vec4 rotation) {
     TekBody* body;
     tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
     if (body->num_vertices == 0) {
@@ -169,13 +175,14 @@ exception tekEngineUpdateBody(ThreadQueue* state_queue, Vector* bodies, const ui
     TekState state = {};
     state.type = ENTITY_UPDATE_STATE;
     state.object_id = object_id;
-    memcpy(state.data.entity_update.position, position, sizeof(vec3));
-    memcpy(state.data.entity_update.rotation, rotation, sizeof(vec4));
+    glm_vec3_copy(position, state.data.entity_update.position);
+    glm_vec4_copy(rotation, state.data.entity_update.rotation);
+
     tekChainThrow(pushState(state_queue, state));
     return SUCCESS;
 }
 
-exception tekEngineDeleteBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const uint object_id) {
+static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bodies, Queue* unused_ids, const uint object_id) {
     TekBody* body;
     tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
     if (body->num_vertices == 0) {
@@ -203,7 +210,7 @@ struct TekEngineArgs {
     double phys_period;
 };
 
-void tekEngine(void* args) {
+static void tekEngine(void* args) {
     const struct TekEngineArgs* engine_args = (struct TekEngineArgs*)args;
     ThreadQueue* event_queue = engine_args->event_queue;
     ThreadQueue* state_queue = engine_args->state_queue;
@@ -258,8 +265,7 @@ void tekEngine(void* args) {
                     vec4 cube_rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
                     vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
                     threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/cube.tmsh", "../res/material.tmat",
-                                                       position, cube_rotation, cube_scale, 0));
-                    tprint("Spawn object!\n", "");
+                                                         10.0f, position, cube_rotation, cube_scale, 0));
                 }
                 break;
             case MOUSE_POS_EVENT:
@@ -278,6 +284,14 @@ void tekEngine(void* args) {
             default:
                 break;
             }
+        }
+
+        for (uint i = 0; i < bodies.length; i++) {
+            TekBody* body = 0;
+            threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
+            if (!body->num_vertices) continue;
+            tekBodyAdvanceTime(body, (float)phys_period);
+            threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation));
         }
 
         if (mouse_moving) {

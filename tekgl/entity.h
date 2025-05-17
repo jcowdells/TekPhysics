@@ -16,5 +16,6 @@ typedef struct TekEntity {
     vec3 scale;
 } TekEntity;
 
-exception tekCreateEntity(const char* mesh_filename, const char* material_filename, TekEntity* entity);
+exception tekCreateEntity(const char* mesh_filename, const char* material_filename, vec3 position, vec4 rotation, vec3 scale, TekEntity* entity);
+void tekUpdateEntity(TekEntity* entity, vec3 position, vec4 rotation);
 exception tekDrawEntity(TekEntity* entity, TekCamera* camera);

@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../core/hashtable.h"
 
@@ -54,7 +55,7 @@ static exception func_name(const char* filename, func_type** param_name) { \
 REQUEST_FUNC(requestMesh, TekMesh, mesh, tekReadMesh, tekDeleteMesh);
 REQUEST_FUNC(requestMaterial, TekMaterial, material, tekCreateMaterial, tekDeleteMaterial);
 
-exception tekCreateEntity(const char* mesh_filename, const char* material_filename, TekEntity* entity) {
+exception tekCreateEntity(const char* mesh_filename, const char* material_filename, vec3 position, vec4 rotation, vec3 scale, TekEntity* entity) {
     TekMesh* mesh;
     tekChainThrow(requestMesh(mesh_filename, &mesh));
     TekMaterial* material;
@@ -62,8 +63,16 @@ exception tekCreateEntity(const char* mesh_filename, const char* material_filena
 
     entity->mesh = mesh;
     entity->material = material;
+    glm_vec3_copy(position, entity->position);
+    glm_vec4_copy(rotation, entity->rotation);
+    glm_vec3_copy(scale, entity->scale);
 
     return SUCCESS;
+}
+
+void tekUpdateEntity(TekEntity* entity, vec3 position, vec4 rotation) {
+    glm_vec3_copy(position, entity->position);
+    glm_vec4_copy(rotation, entity->rotation);
 }
 
 exception tekDrawEntity(TekEntity* entity, TekCamera* camera) {
