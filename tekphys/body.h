@@ -9,9 +9,13 @@
 #include <cglm/quat.h>
 
 typedef struct TekBody {
-    float* vertices;
+    vec3* vertices;
     uint num_vertices;
+    uint* indices;
+    uint num_indices;
     float mass;
+    float volume;
+    vec3 centre_of_mass;
     vec3 position;
     vec3 velocity;
     vec4 rotation;

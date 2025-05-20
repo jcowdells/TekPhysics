@@ -115,17 +115,19 @@ ARRAY_BUILD_FUNC(tekCreateMeshVertices, float, stringToFloat);
 ARRAY_BUILD_FUNC(tekCreateMeshIndices, uint, stringToUint);
 ARRAY_BUILD_FUNC(tekCreateMeshLayout, int, stringToInt);
 
-exception tekCreateMeshArrays(const List* vertices, const List* indices, const List* layout, float* vertex_array, uint* index_array, int* layout_array) {
+static exception tekCreateMeshArrays(const List* vertices, const List* indices, const List* layout, float* vertex_array, uint* index_array, int* layout_array) {
     tekChainThrow(tekCreateMeshVertices(vertices, vertex_array));
     tekChainThrow(tekCreateMeshIndices(indices, index_array));
     tekChainThrow(tekCreateMeshLayout(layout, layout_array));
     return SUCCESS;
 }
 
-exception tekReadMeshLists(char* buffer, List* vertices, List* indices, List* layout) {
+static exception tekReadMeshLists(char* buffer, List* vertices, List* indices, List* layout, uint* position_layout_index) {
     char* prev_c = buffer;
     uint line = 1;
     flag in_word = 0;
+    flag in_wildcard = 0;
+    if (position_layout_index) *position_layout_index = 0;
 
     List* write_list = 0;
     char* c;
@@ -143,7 +145,15 @@ exception tekReadMeshLists(char* buffer, List* vertices, List* indices, List* la
                 if (!strcmp(prev_c, "VERTICES")) write_list = vertices;
                 else if (!strcmp(prev_c, "INDICES")) write_list = indices;
                 else if (!strcmp(prev_c, "LAYOUT")) write_list = layout;
-                else tekChainThrow(listInsertItem(write_list, 0, prev_c)); // inserting at 0, faster for linked list
+                else if (!strcmp(prev_c, "$POSITION_LAYOUT_INDEX")) {
+                    write_list = 0;
+                    in_wildcard = 1;
+                }
+                else if (!in_wildcard) {
+                    if (write_list) tekChainThrow(listInsertItem(write_list, 0, prev_c)); // inserting at 0, faster for linked list
+                } else {
+                    if (position_layout_index) tekChainThrow(stringToUint(prev_c, position_layout_index));
+                }
             }
             in_word = 0;
             continue;
@@ -151,14 +161,19 @@ exception tekReadMeshLists(char* buffer, List* vertices, List* indices, List* la
         if (!in_word) prev_c = c;
         in_word = 1;
     }
-    if (in_word)
+    if (in_word) {
         // if the last item is a section header, then there would be no items below it, which is pointless and should be an error anyway
         // so dont bother with checking at this stage.
-        tekChainThrow(listInsertItem(write_list, 0, prev_c));
+        if (!in_wildcard) {
+            if (write_list) tekChainThrow(listInsertItem(write_list, 0, prev_c)); // inserting at 0, faster for linked list
+        } else {
+            tekChainThrow(stringToUint(prev_c, position_layout_index));
+        }
+    }
     return SUCCESS;
 }
 
-exception tekReadMeshArrays(const char* filename, float** vertex_array, uint* len_vertex_array, uint** index_array, uint* len_index_array, int** layout_array, uint* len_layout_array) {
+exception tekReadMeshArrays(const char* filename, float** vertex_array, uint* len_vertex_array, uint** index_array, uint* len_index_array, int** layout_array, uint* len_layout_array, uint* position_layout_index) {
     uint file_size;
     tekChainThrow(getFileSize(filename, &file_size));
     char* buffer = (char*)malloc(file_size);
@@ -173,7 +188,7 @@ exception tekReadMeshArrays(const char* filename, float** vertex_array, uint* le
     List layout = {};
     listCreate(&layout);
 
-    tekChainThrowThen(tekReadMeshLists(buffer, &vertices, &indices, &layout), {
+    tekChainThrowThen(tekReadMeshLists(buffer, &vertices, &indices, &layout, position_layout_index), {
         listDelete(&vertices);
         listDelete(&indices);
         listDelete(&layout);
@@ -220,7 +235,7 @@ exception tekReadMesh(const char* filename, TekMesh* mesh_ptr) {
     int* layout_array = 0;
     uint len_vertex_array = 0, len_index_array = 0, len_layout_array = 0;
 
-    tekChainThrow(tekReadMeshArrays(filename, &vertex_array, &len_vertex_array, &index_array, &len_index_array, &layout_array, &len_layout_array));
+    tekChainThrow(tekReadMeshArrays(filename, &vertex_array, &len_vertex_array, &index_array, &len_index_array, &layout_array, &len_layout_array, NULL));
 
     const exception tek_exception = tekCreateMesh(vertex_array, (long)len_vertex_array, index_array, (long)len_index_array, layout_array, len_layout_array, mesh_ptr);
 

@@ -27,6 +27,7 @@
 #include "core/threadqueue.h"
 #include "core/vector.h"
 #include "tekphys/engine.h"
+#include "tekphys/body.h"
 
 #define printException(x) tekLog(x)
 
@@ -180,6 +181,7 @@ exception run() {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_CULL_FACE);
 
     vec3 camera_position = {0.0f, 0.0f, 0.0f};
     vec3 camera_rotation = {0.0f, 0.0f, 0.0f};
