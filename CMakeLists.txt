@@ -55,6 +55,8 @@ add_executable(
         core/vector.h
         tekgl/entity.c
         tekgl/entity.h
+        tekphys/geometry.c
+        tekphys/geometry.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})
