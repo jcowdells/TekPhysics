@@ -4,6 +4,7 @@
 #include <cglm/vec3.h>
 #include <stdarg.h>
 #include <math.h>
+#include <stdio.h>
 
 /**
  * @brief Find the sum of a number of vec3s.
@@ -25,28 +26,105 @@ static void sumVec3VA(vec3 dest, ...) {
 /// @copydoc sumVec3VA
 #define sumVec3(dest, ...) sumVec3VA(dest, __VA_ARGS__, 0);
 
-static void tekCalculateBodyCoM(TekBody* body) {
+struct TetrahedronData {
+    float volume;
+    vec3 centroid;
+};
+
+/**
+ * @brief Calculate the volume, centre of mass and inverse inertia tensor of an object.
+ *
+ * @param body The body to calculate properties of.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
+static exception tekCalculateBodyProperties(TekBody* body) {
+    // create an array to cache some data about tetrahedra
+    // avoids recalculation later on.
+    const uint len_tetrahedron_data = body->num_indices / 3;
+    struct TetrahedronData* tetrahedron_data = (struct TetrahedronData*)malloc(len_tetrahedron_data * sizeof(struct TetrahedronData));
+    if (!tetrahedron_data)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory to cache tetrahedron data.");
+
+    // inspiration for this algorithm from: http://number-none.com/blow/inertia/body_i.html
+    // the premise of this algorithm is to iterate over each triangle in the mesh
+    // an arbitrary point is picked (here i chose 0, 0, 0 for ease) and each triangle forms a tetrahedron with this point
+    // then you can calculate the volume, centre of mass and inertia tensor for each tetrahedron
+    // this can be used to find the volume, centre of mass and inertia tensor for the whole mesh.
+
     vec3 origin = { 0.0f, 0.0f, 0.0f };
     vec3 weighted_sum = { 0.0f, 0.0f, 0.0f };
     float volume = 0.0f;
+
+    // first loop to find the centre of mass
     for (uint i = 0; i < body->num_indices; i += 3) {
-        printf("vertex test: %f %f %f\n", EXPAND_VEC3(body->vertices[body->indices[i]]));
-        float tetra_volume = tetrahedronSignedVolume(
+        // calculate signed volume per tetrahedron
+        const float tetra_volume = tetrahedronSignedVolume(
             origin,
             body->vertices[body->indices[i]],
             body->vertices[body->indices[i + 1]],
             body->vertices[body->indices[i + 2]]
         );
-        printf("tetra vol: %f\n", tetra_volume);
+
+        // some will have negative or positive volume
+        // causes overlapping tetrahedra to "cancel out" and give the correct volume
         volume += tetra_volume;
 
+        // for all simplexes, centre of mass (CoM) is average position of vertices.
         vec3 tetra_centroid;
         sumVec3(tetra_centroid, origin, body->vertices[body->indices[i]], body->vertices[body->indices[i + 1]], body->vertices[body->indices[i + 2]]);
         glm_vec3_scale(tetra_centroid, 0.25f, tetra_centroid);
+
+        // for whole object, CoM is the weighted average of tetrahedron CoMs
         glm_vec3_muladds(tetra_centroid, tetra_volume, weighted_sum);
+
+        // cache the volume and centroid for next loop
+        const uint index = i / 3;
+        tetrahedron_data[index].volume = tetra_volume;
+        glm_vec3_copy(tetra_centroid, tetrahedron_data[index].centroid);
     }
+
+    // divide the weighted sum by total volume to get the centre of mass
     glm_vec3_scale(weighted_sum, 1.0f / volume, body->centre_of_mass);
-    body->volume = fabs(volume);
+
+    // in opengl, anticlockwise faces are outwards
+    // in maths, clockwise faces are outwards
+    // this leads to meshes appearing to be "inside out" and having negative volume
+    // so we should take absolute value of volume
+    // as long as face orientation is consistent however, this shouldn't affect much
+    body->volume = fabsf(volume);
+    body->mass = body->volume * body->density;
+
+    // prepare the inertia tensor, as we will be adding to it
+    mat3 inertia_tensor;
+    glm_mat3_zero(inertia_tensor);
+
+    // second iteration
+    for (uint i = 0; i < body->num_indices; i++) {
+        // retrieve stored information about this tetrahedron
+        const uint index = i / 3;
+        const float mass = fabsf(tetrahedron_data[index].volume * body->density);
+
+        // calculate inertia tensor for this tetrahedron
+        mat3 tetrahedron_inertia_tensor;
+        tetrahedronInertiaTensor(origin, body->vertices[body->indices[i]], body->vertices[body->indices[i + 1]], body->vertices[body->indices[i + 2]], mass, tetrahedron_inertia_tensor);
+
+        // translation vector from CoM of object, to CoM of tetrahedron
+        vec3 translate;
+        glm_vec3_sub(tetrahedron_data[index].centroid, body->centre_of_mass, translate);
+
+        // translate inertia tensor using parallel axis theorem
+        // centre the tensor around the body's centre of mass
+        translateInertiaTensor(tetrahedron_inertia_tensor, mass, translate);
+
+        // sum the translated tensor with the body tensor, to find final inertia tensor.
+        mat3Add(inertia_tensor, tetrahedron_inertia_tensor, inertia_tensor);
+    }
+
+    // store inverse inertia tensor, as this is more useful to us.
+    glm_mat3_inv(inertia_tensor, body->inverse_inertia_tensor);
+
+    free(tetrahedron_data);
+    return SUCCESS;
 }
 
 exception tekCreateBody(const char* mesh_filename, const float mass, vec3 position, vec4 rotation, vec3 scale, TekBody* body) {
@@ -69,7 +147,7 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     }
     free(layout_array);
 
-    uint num_vertices = len_vertex_array / vertex_size;
+    const uint num_vertices = len_vertex_array / vertex_size;
     body->vertices = (vec3*)malloc(num_vertices * sizeof(vec3));
     if (!body->vertices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vertices.");
 
@@ -82,13 +160,12 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     body->num_vertices = num_vertices;
     body->indices = index_array;
     body->num_indices = len_index_array;
-    body->mass = mass;
+    body->density = mass;
     glm_vec3_copy(position, body->position);
     glm_vec4_copy(rotation, body->rotation);
     glm_vec3_copy(scale, body->scale);
 
-    tekCalculateBodyCoM(body);
-    printf("CoM: %f %f %f\n Volume: %f\n", EXPAND_VEC3(body->centre_of_mass), body->volume);
+    tekChainThrow(tekCalculateBodyProperties(body));
 
     return SUCCESS;
 }
@@ -127,6 +204,32 @@ void tekBodyAdvanceTime(TekBody* body, const float delta_time) {
 
         glm_quat_copy(result, body->rotation);
     }
+}
+
+void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse, const float delta_time) {
+    // impulse = mass * Δvelocity
+    glm_vec3_muladds(impulse, 1.0f / body->mass, body->velocity);
+
+    // calculating force:
+    // force = impulse / time
+    vec3 force;
+    glm_vec3_scale(impulse, 1.0f / delta_time, force);
+
+    // calculating torque:
+    // τ = r × F
+    vec3 displacement;
+    glm_vec3_sub(point_of_application, body->centre_of_mass, displacement);
+    vec3 torque;
+    glm_vec3_cross(displacement, force, torque);
+
+    // calculating angular acceleration:
+    // α = I⁻¹τ
+    vec3 angular_acceleration;
+    glm_mat3_mulv(body->inverse_inertia_tensor, torque, angular_acceleration);
+
+    // add change in angular velocity (angular acceleration * Δtime = Δangular velocity)
+    glm_vec3_muladds(angular_acceleration, delta_time, body->angular_velocity);
+    printf("Angular acceleration: %f %f %f\n", EXPAND_VEC3(angular_acceleration));
 }
 
 void tekDeleteBody(const TekBody* body) {

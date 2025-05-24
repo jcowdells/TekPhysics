@@ -99,15 +99,10 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
 
 static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename,
                               const float mass, vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
-    TekBody* body = (TekBody*)malloc(sizeof(TekBody));
+    TekBody* body = (TekBody*)calloc(1, sizeof(TekBody));
     if (!body) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for body.");
 
     tekChainThrow(tekCreateBody(mesh_filename, mass, position, rotation, scale, body));
-    vec3 temp_velocity = { 0.5f, 0.0f, 0.0f };
-    glm_vec3_copy(temp_velocity, body->velocity);
-
-    vec3 temp_rotation = { 0.0f, 1.0f, 0.0f };
-    glm_vec3_copy(temp_rotation, body->angular_velocity);
 
     const uint len_mesh = strlen(mesh_filename) + 1;
     const uint len_material = strlen(material_filename) + 1;
@@ -224,7 +219,7 @@ static void tekEngine(void* args) {
     queueCreate(&unused_ids);
 
     flag mouse_moved = 0, mouse_moving = 0;
-    flag w = 0, a = 0, s = 0, d = 0;
+    flag w = 0, a = 0, s = 0, d = 0, q = 0;
     double prev_mx = 0.0, prev_my = 0.0, cur_mx = 0.0, cur_my = 0.0, delta_mx = 0.0, delta_my = 0.0;
     flag cam_pos_changed = 0;
     vec3 rotation = { 0.0f, 0.0f, 0.0f };
@@ -260,6 +255,10 @@ static void tekEngine(void* args) {
                 if (event.data.key_input.key == GLFW_KEY_D) {
                     if (event.data.key_input.action == GLFW_RELEASE) d = 0;
                     else d = 1;
+                }
+                if (event.data.key_input.key == GLFW_KEY_Q) {
+                    if (event.data.key_input.action == GLFW_RELEASE) q = 0;
+                    else q = 1;
                 }
                 if ((event.data.key_input.key == GLFW_KEY_E) && (event.data.key_input.action == GLFW_RELEASE)) {
                     vec4 cube_rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -327,6 +326,20 @@ static void tekEngine(void* args) {
             position[0] += (float)(cos(yaw + M_PI_2) * MOVE_SPEED);
             position[2] += (float)(sin(yaw + M_PI_2) * MOVE_SPEED);
             cam_pos_changed = 1;
+        }
+
+        // TODO: remove, as this is a test
+        if (q) {
+            vec3 impulse = {
+                (float)(cos(yaw) * cos(pitch)),
+                (float)(sin(pitch)),
+                (float)(sin(yaw) * cos(pitch))
+            };
+            if (bodies.length >= 1) {
+                TekBody* body_ptr;
+                threadChainThrow(vectorGetItemPtr(&bodies, 0, &body_ptr));
+                tekBodyApplyImpulse(body_ptr, position, impulse, (float)phys_period);
+            }
         }
 
         if (cam_pos_changed) {
