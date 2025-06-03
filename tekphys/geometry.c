@@ -34,7 +34,6 @@ float tetrahedronSignedVolume(const vec3 point_a, const vec3 point_b, const vec3
 
 /**
  * @brief Find the outer product of two vectors, a⊗b
- *
  * @param a Left-hand vector
  * @param b Right-hand vector
  * @param m Resultant matrix

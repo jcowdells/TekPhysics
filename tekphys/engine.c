@@ -29,7 +29,22 @@ exception func_name(ThreadQueue* queue, func_type* param_name) { \
     return SUCCESS; \
 } \
 
+/**
+ * @brief Recieve an event from the thread queue.
+ * @note Requires the event struct to exist already
+ * @param queue A pointer to the thread queue to recieve from.
+ * @param event A pointer to an empty TekEvent struct.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static RECV_FUNC(recvEvent, TekEvent, event);
+
+/**
+ * @brief Recieve a state from the thread queue.
+ * @note Requires the state struct to exist already.
+ * @param queue A pointer to the thread queue to recieve from.
+ * @param state A pointer to an empty TekState struct.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 RECV_FUNC(recvState, TekState, state);
 
 #define PUSH_FUNC(func_name, func_type, param_name) \
@@ -41,7 +56,20 @@ exception func_name(ThreadQueue* queue, const func_type param_name) { \
     return SUCCESS; \
 } \
 
+/**
+ * @brief Push a state to the thread queue.
+ * @param queue A pointer to the thread queue to push to.
+ * @param state A pointer to the state struct to push.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static PUSH_FUNC(pushState, TekState, state);
+
+/**
+ * @brief Push an event to the thread queue.
+ * @param queue A pointer to the thread queue to push to.
+ * @param event A pointer to the event to push.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 PUSH_FUNC(pushEvent, TekEvent, event);
 
 #define CAM_UPDATE_FUNC(func_name, param_name, state_type) \
@@ -49,13 +77,32 @@ static exception func_name(ThreadQueue* state_queue, const vec3 param_name) { \
     TekState state = {}; \
     memcpy(state.data.param_name, param_name, sizeof(vec3)); \
     state.type = state_type; \
-    pushState(state_queue, state); \
+    tekChainThrow(pushState(state_queue, state)); \
     return SUCCESS; \
 } \
 
+/**
+ * @brief Send a state that updates the camera position.
+ * @param state_queue The state queue (ThreadQueue) to push the state to.
+ * @param cam_position The new position of the camera.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 CAM_UPDATE_FUNC(tekUpdateCamPos, cam_position, CAMERA_MOVE_STATE);
+
+/**
+ * @brief Send a state that updates the camera rotation.
+ * @param state_queue The state queue (ThreadQueue) to push the camera rotation to.
+ * @param cam_rotation The new rotation of the camera.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 CAM_UPDATE_FUNC(tekUpdateCamRot, cam_rotation, CAMERA_ROTATE_STATE);
 
+/**
+ * @brief Send a print message through the state queue.
+ * @param state_queue The state queue to send the message through.
+ * @param format The message to send + formatting e.g. "string: %s"
+ * @param ... The formatting to add to the string
+ */
 static void threadPrint(ThreadQueue* state_queue, const char* format, ...) {
     char temp_write;
     va_list va;
@@ -80,6 +127,11 @@ static void threadPrint(ThreadQueue* state_queue, const char* format, ...) {
 
 #define tprint(format, ...) threadPrint(state_queue, format, __VA_ARGS__)
 
+/**
+ * @brief Send an exception message to the state queue.
+ * @param state_queue The state queue to send the exception to.
+ * @param exception The exception code.
+ */
 static void threadExcept(ThreadQueue* state_queue, const uint exception) {
     TekState exception_state = {};
     exception_state.type = EXCEPTION_STATE;
@@ -97,6 +149,21 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
     if (mesh_copy) free(mesh_copy); \
     if (material_copy) free(material_copy) \
 
+/**
+ * @brief Create a body given the mesh, material, position etc.
+ * @note Will create both a body and a corresponding entity on the graphics thread. The object ids are assigned in order, filling gaps in the order when they appear.
+ * @param state_queue The ThreadQueue that will be used to send the entity creation message to the graphics thread.
+ * @param bodies A pointer to a vector that contains the bodies.
+ * @param unused_ids A queue containing unused object ids, allowing gaps in the list of ids to be filled by new objects.
+ * @param mesh_filename The file that contains the mesh for the object.
+ * @param material_filename The file that contains the material for the object. Only used in the graphics thread.
+ * @param mass The mass of the body.
+ * @param position The position of the body in the world.
+ * @param rotation The rotation of the body as a quaternion.
+ * @param scale The scale in x, y, and z direction from the original shape of the body.
+ * @param object_id A pointer to where the new object id will be stored. Can be set to NULL if id is not needed.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename,
                               const float mass, vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
     TekBody* body = (TekBody*)calloc(1, sizeof(TekBody));
@@ -158,6 +225,15 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
     return SUCCESS;
 }
 
+/**
+ * @brief Update the position and rotation of a body given its object id.
+ * @param state_queue The ThreadQueue that links to the graphics thread.
+ * @param bodies A pointer to a vector containing the bodies.
+ * @param object_id The object id of the body to update.
+ * @param position The new position of the body.
+ * @param rotation The new rotation of the body as a quaternion.
+ * @throws ENGINE_EXCEPTION if the object id is invalid.
+ */
 static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bodies, const uint object_id, vec3 position, vec4 rotation) {
     TekBody* body;
     tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
@@ -177,6 +253,14 @@ static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bod
     return SUCCESS;
 }
 
+/**
+ * @brief Delete a body, freeing the object id for reuse and removing the counterpart on the graphics thread.
+ * @param state_queue The ThreadQueue linking to the graphics thread.
+ * @param bodies A vector containing the bodies.
+ * @param unused_ids The queue containing unused ids, the removed id will be enqueued to this.
+ * @param object_id The id of the body to delete.
+ * @throws ENGINE_EXCEPTION if the object id is invalid.
+ */
 static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bodies, Queue* unused_ids, const uint object_id) {
     TekBody* body;
     tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
@@ -199,12 +283,17 @@ static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bod
     return SUCCESS;
 }
 
+/// Store the args to link physics thread to graphics thread, so it can be passed as a single pointer to the thread procedure.
 struct TekEngineArgs {
     ThreadQueue* event_queue;
     ThreadQueue* state_queue;
     double phys_period;
 };
 
+/**
+ * @brief The main physics thread procedure, will run in parallel to the graphics thread. Responsible for logic, has a loop running at fixed time interval.
+ * @param args Required for use with pthread library. Used to pass TekEngineArgs pointer.
+ */
 static void tekEngine(void* args) {
     const struct TekEngineArgs* engine_args = (struct TekEngineArgs*)args;
     ThreadQueue* event_queue = engine_args->event_queue;
@@ -361,12 +450,20 @@ static void tekEngine(void* args) {
     printf("thread ended :(\n");
 }
 
+/**
+ * @brief Start the physics thread, providing two thread queues to send and recieve events / states.
+ * @param event_queue A pointer to an existing thread queue that will send events to the physics thread.
+ * @param state_queue A pointer to an existing thread queue that will recieve updates of the physics state.
+ * @param phys_period A time period that represents the length of a single iteration of the physics loop. In other words '1 / ticks per second'
+ * @throws THREAD_EXCEPTION if the call to pthread_create() fails.
+ */
 exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, const double phys_period) {
     struct TekEngineArgs* engine_args = (struct TekEngineArgs*)malloc(sizeof(struct TekEngineArgs));
     engine_args->event_queue = event_queue;
     engine_args->state_queue = state_queue;
     engine_args->phys_period = phys_period;
     pthread_t engine_thread;
-    pthread_create(&engine_thread, NULL, tekEngine, engine_args);
+    if (pthread_create(&engine_thread, NULL, tekEngine, engine_args))
+	tekThrow(THREAD_EXCEPTION, "Failed to create physics thread");
     return SUCCESS;
 }

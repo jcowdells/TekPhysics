@@ -8,7 +8,6 @@
 
 /**
  * @brief Find the sum of a number of vec3s.
- *
  * @note Stops counting when a null pointer is reached. Doesn't check if values are actually vec3s.
  * @param dest Where to store the sum.
  * @param ... Vec3s to sum.
@@ -26,6 +25,7 @@ static void sumVec3VA(vec3 dest, ...) {
 /// @copydoc sumVec3VA
 #define sumVec3(dest, ...) sumVec3VA(dest, __VA_ARGS__, 0);
 
+/// Struct containing the volume and center of a tetrahedron
 struct TetrahedronData {
     float volume;
     vec3 centroid;
@@ -33,7 +33,6 @@ struct TetrahedronData {
 
 /**
  * @brief Calculate the volume, centre of mass and inverse inertia tensor of an object.
- *
  * @param body The body to calculate properties of.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
@@ -127,6 +126,17 @@ static exception tekCalculateBodyProperties(TekBody* body) {
     return SUCCESS;
 }
 
+/**
+ * @brief Create an instance of a body given an empty TekBody struct.
+ * @note Will calculate properties of the body given the mesh data, so could take time for larger objects. Will also allocate memory to store vertices.
+ * @param mesh_filename The mesh file to use when creating the body.
+ * @param mass The mass of the object
+ * @param position The position (x, y, z) of the body's center of mass
+ * @param rotation The rotation quaternion of the body.
+ * @param scale The scaling applied to the object
+ * @param body A pointer to a struct to contain the new body.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception tekCreateBody(const char* mesh_filename, const float mass, vec3 position, vec4 rotation, vec3 scale, TekBody* body) {
     float* vertex_array = 0;
     uint* index_array = 0;
@@ -170,6 +180,12 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     return SUCCESS;
 }
 
+/**
+ * @brief Simulate the effect of a certain amount of time passing on the body's position and rotation.
+ * @note Simulate linearly, e.g. with constant acceleration between the two points in time.
+ * @param body The body to advance forward in time.
+ * @paran delta_time The length of time to advance by.
+ */
 void tekBodyAdvanceTime(TekBody* body, const float delta_time) {
     vec3 delta_position = { 0.0f, 0.0f, 0.0f };
     glm_vec3_scale(body->velocity, delta_time, delta_position);
@@ -206,6 +222,14 @@ void tekBodyAdvanceTime(TekBody* body, const float delta_time) {
     }
 }
 
+/**
+ * @brief Apply an impulse (change in momentum) to a body.
+ * @note The point of application is in world coordinates, not relative to the body.
+ * @param body The body to apply the impulse to.
+ * @param point_of_application The point in space where the impulse is applied.
+ * @param impulse The size of the impulse to apply.
+ * @param delta_time The duration of time for which this impulse takes place. Should be the same as the physics time step typically.
+ */
 void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse, const float delta_time) {
     // impulse = mass * Δvelocity
     glm_vec3_muladds(impulse, 1.0f / body->mass, body->velocity);
@@ -232,6 +256,10 @@ void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse,
     printf("Angular acceleration: %f %f %f\n", EXPAND_VEC3(angular_acceleration));
 }
 
+/**
+ * @brief Delete a body by freeing the vertices that were allocated.
+ * @param body The body to delete.
+ */
 void tekDeleteBody(const TekBody* body) {
     free(body->vertices);
 }
