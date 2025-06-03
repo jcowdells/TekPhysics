@@ -3,12 +3,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/**
+ * Create a list using an existing but empty List struct.
+ * @note Not strictly needed, but recommended incase struct was allocated using malloc() and contains bogus data.
+ * @param list A pointer to the list to initialise.
+ */
 void listCreate(List* list) {
     // just make sure that the list is empty
     list->data = 0;
     list->length = 0;
 }
 
+/**
+ * Delete a list by freeing all allocated nodes.
+ * @note Does not free any of the data added to the list, only the list structure itself. Anything stored in the list should be manually freed, or with \ref listFreeAllData'
+ * @param list The list to delete.
+ */
 void listDelete(List* list) {
     // iterate over each item
     ListItem* item = list->data;
@@ -25,7 +35,11 @@ void listDelete(List* list) {
     list->length = 0;
 }
 
-void listFreeAllData(List* list) {
+/**
+ * Call 'free(...)' on all data in the list.
+ * @param list The list to operate on.
+ */
+void listFreeAllData(const List* list) {
     ListItem* item = list->data;
     while (item) {
         // free each data ptr, and set it to 0 to avoid accidental usage
@@ -35,6 +49,13 @@ void listFreeAllData(List* list) {
     }
 }
 
+/**
+ * Add an item to the list.
+ * @note Will only copy the pointer into the list, but not actually the data. So don't try and add stack variables to it and then pass on to another function, etc.
+ * @param list The list to add the item to.
+ * @param data The data/ptr to add to the list.
+ * @throws MEMORY_EXCEPTION if a new node could not be allocated for the list.
+ */
 exception listAddItem(List* list, void* data) {
     // iterator variables
     // also get a pointer to next pointer so we can overwrite it
@@ -66,6 +87,14 @@ exception listAddItem(List* list, void* data) {
     return SUCCESS;
 }
 
+/**
+ * Insert an item at a specific index into the list.
+ * @note Will only copy the pointer into the list, but not actually the data. So don't try and add stack variables to it and then pass on to another function, etc.
+ * @param list The list to insert an item into.
+ * @param index
+ * @param data
+ * @return
+ */
 exception listInsertItem(List* list, const uint index, void* data) {
     // obviously we cant insert an item outside of the list
     if (index > list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
@@ -109,12 +138,19 @@ exception listInsertItem(List* list, const uint index, void* data) {
     return SUCCESS;
 }
 
+/**
+ * Get an item from the list.
+ * @param list The list to get an item from.
+ * @param index The index of the item to retrieve.
+ * @param data A pointer to where the data pointer will be stored.
+ * @throws LIST_EXCEPTION if index is out of range.
+ */
 exception listGetItem(const List* list, const uint index, void** data) {
     // make sure we are getting something that exists in the list
     if (index > list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
 
     // iterator variables
-    ListItem* item = list->data;
+    const ListItem* item = list->data;
     uint count = 0;
     while (item) {
         // if we have counted up to the index, stop
@@ -127,6 +163,12 @@ exception listGetItem(const List* list, const uint index, void** data) {
     return SUCCESS;
 }
 
+/**
+ * Pop an item from the end of the list.
+ * @param list The list to pop an item from.
+ * @param data A pointer to where the popped data will be stored.
+ * @throws LIST_EXCEPTION if the list is empty.
+ */
 exception listPopItem(List* list, void** data) {
     // track current and previous item in loop
     ListItem* prev = 0;
@@ -160,6 +202,13 @@ exception listPopItem(List* list, void** data) {
     return SUCCESS;
 }
 
+/**
+ * Remove an item from the list.
+ * @param list The list to remove an item from.
+ * @param index The index of the item that should be removed.
+ * @param data A pointer to where the data pointer should be stored.
+ * @throws LIST_EXCEPTION if the index is out of range.
+ */
 exception listRemoveItem(List* list, const uint index, void** data) {
     // track previous and current item
     ListItem* prev = 0;
@@ -199,9 +248,14 @@ exception listRemoveItem(List* list, const uint index, void** data) {
     return SUCCESS;
 }
 
+/**
+ * Print out the data pointer of each item in the list in hexadecimal format.
+ * @note Not very useful unless debugging. For more useful output, your own function is needed as the list has no idea what datatype you are storing.
+ * @param list The list to print out.
+ */
 void listPrint(const List* list) {
     // iterate over list
-    ListItem* item = list->data;
+    const ListItem* item = list->data;
     uint count = 0;
     printf("[");
     while (item) {
