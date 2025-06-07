@@ -22,7 +22,8 @@
 #define THREAD_EXCEPTION    15
 #define VECTOR_EXCEPTION    16
 #define ENGINE_EXCEPTION    17
-#define NUM_EXCEPTIONS      17
+#define BITSET_EXCEPTION    18
+#define NUM_EXCEPTIONS      18
 
 typedef int exception;
 

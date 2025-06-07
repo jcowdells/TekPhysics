@@ -2,8 +2,25 @@
 
 #include "../tekgl.h"
 #include <cglm/vec4.h>
+#include <stdarg.h>
 #include <cglm/mat3.h>
 #include <cglm/mat4.h>
+
+/**
+ * @brief Find the sum of a number of vec3s.
+ * @note Stops counting when a null pointer is reached. Doesn't check if values are actually vec3s.
+ * @param dest Where to store the sum.
+ * @param ... Vec3s to sum.
+ */
+void sumVec3VA(vec3 dest, ...) {
+    va_list vec3_list;
+    va_start(vec3_list, dest);
+    float* vector_ptr;
+    glm_vec3_zero(dest);
+    while ((vector_ptr = va_arg(vec3_list, float*))) {
+        glm_vec3_add(vector_ptr, dest, dest);
+    }
+}
 
 /**
  * @brief Calculate the signed volume of a tetrahedron from its four vertices.

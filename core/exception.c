@@ -50,6 +50,7 @@ void tekInitExceptions() {
     tekAddException(THREAD_EXCEPTION, "Thread Exception");
     tekAddException(VECTOR_EXCEPTION, "Vector Exception");
     tekAddException(ENGINE_EXCEPTION, "Engine Exception");
+    tekAddException(BITSET_EXCEPTION, "BitSet Exception");
 }
 
 /**

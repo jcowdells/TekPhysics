@@ -23,6 +23,7 @@
 #include <math.h>
 #include <unistd.h>
 
+#include "core/bitset.h"
 #include "core/queue.h"
 #include "core/threadqueue.h"
 #include "core/vector.h"
@@ -286,8 +287,29 @@ exception run() {
     return SUCCESS;
 }
 
+exception test() {
+    BitSet bitset = {};
+    tekChainThrow(bitsetCreate(0, 1, &bitset));
+
+    for (uint i = 0; i < 5; i++) {
+        tekChainThrow(bitsetSet(&bitset, i * 64));
+    }
+
+    tekChainThrow(bitsetSet(&bitset, 1000));
+    char value;
+    tekChainThrow(bitsetGet(&bitset, 1000, &value));
+    printf("Bit 1000: %d\n", value);
+    tekChainThrow(bitsetGet(&bitset, 1001, &value));
+    printf("Bit 1001: %d\n", value);
+    tekChainThrow(bitsetUnset(&bitset, 1000));
+    tekChainThrow(bitsetGet(&bitset, 1000, &value));
+    printf("Bit 1000: %d\n", value);
+    bitsetDelete(&bitset);
+    return SUCCESS;
+}
+
 int main(void) {
     tekInitExceptions();
-    tekLog(run());
+    tekLog(test());
     tekCloseExceptions();
 }

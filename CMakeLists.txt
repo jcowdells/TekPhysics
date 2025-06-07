@@ -57,6 +57,10 @@ add_executable(
         tekgl/entity.h
         tekphys/geometry.c
         tekphys/geometry.h
+        tekphys/collider.c
+        tekphys/collider.h
+        core/bitset.c
+        core/bitset.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})
