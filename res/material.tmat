@@ -3,9 +3,9 @@ shaders:
     fragment_shader: "../shader/fragment.glfs"
 uniforms:
     light_color:
-        r: 0.4
-        g: 0.4
-        b: 0.4
+        r: 0.9
+        g: 0.9
+        b: 0.9
     light_position:
         x: 4.0
         y: 12.0
