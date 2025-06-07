@@ -4,10 +4,8 @@
 #include <stdlib.h>
 
 /**
- * @brief Initialise a thread queue. Based on the principle of a lock-free circular queue.
- *
+ * Initialise a thread queue. Based on the principle of a lock-free circular queue.
  * @note Single-consumer single-producer
- *
  * @param thread_queue A pointer to an existing but empty ThreadQueue struct.
  * @param capacity The capacity of the thread queue.
  * @throws MEMORY_EXCEPTION if malloc() fails.
@@ -23,10 +21,8 @@ exception threadQueueCreate(ThreadQueue* thread_queue, const uint capacity) {
 }
 
 /**
- * @brief Delete a thread queue and free the buffer allocated.
- *
+ * Delete a thread queue and free the buffer allocated.
  * @note Only frees the thread queue's used memory, not that of stored pointers.
- *
  * @param thread_queue The thread queue to delete.
  */
 void threadQueueDelete(ThreadQueue* thread_queue) {
@@ -36,10 +32,8 @@ void threadQueueDelete(ThreadQueue* thread_queue) {
 }
 
 /**
- * @brief Enqueue a new item to the thread queue, storing a pointer.
- *
+ * Enqueue a new item to the thread queue, storing a pointer.
  * @note Only to be used by a single producer thread.
- *
  * @param thread_queue The thread queue to enqueue to.
  * @param data A pointer to store in the queue.
  * @returns 0 if the queue is already full, 1 if the operation was successful.
@@ -65,10 +59,8 @@ flag threadQueueEnqueue(ThreadQueue* thread_queue, void* data) {
 }
 
 /**
- * @brief Dequeue from a thread queue, returning the stored pointer.
- *
+ * Dequeue from a thread queue, returning the stored pointer.
  * @note Only to be used by a single consumer thread.
- *
  * @param thread_queue The thread queue to dequeue from.
  * @param data A pointer to a pointer that will recieve the dequeued data.
  * @returns 0 if the queue is empty, 1 if the operation was successful.
@@ -91,10 +83,8 @@ flag threadQueueDequeue(ThreadQueue* thread_queue, void** data) {
 }
 
 /**
- * @brief Peek into a thread queue, returning the stored pointer.
- *
+ * Peek into a thread queue, returning the stored pointer.
  * @note Only to be used by a single consumer thread.
- *
  * @param thread_queue The thread queue to peek.
  * @param data A pointer to a pointer that will recieve the peeked data.
  * @returns 0 if the queue is empty, 1 if the operation was successful.
@@ -115,10 +105,8 @@ flag threadQueuePeek(ThreadQueue* thread_queue, void** data) {
 }
 
 /**
- * @brief Determine whether a queue is empty.
- *
+ * Determine whether a queue is empty.
  * @note Only to be used by a single consumer thread.
- *
  * @param thread_queue The thread queue to check.
  * @returns 1 if the queue is empty, 0 if not.
  */
