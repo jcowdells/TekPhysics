@@ -75,7 +75,7 @@ exception queueDequeue(Queue* queue, void** data) {
 
     // set the front to the item before the old front.
     QueueItem* prev = queue->front->prev;
-    if (prev) free(queue->front);
+    free(queue->front);
     queue->front = prev;
 
     // if there is no longer a front of the queue, then that means we cleared the last item.

@@ -61,6 +61,8 @@ add_executable(
         tekphys/collider.h
         core/bitset.c
         core/bitset.h
+        core/priorityqueue.c
+        core/priorityqueue.h
 )
 find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})

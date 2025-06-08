@@ -6,12 +6,16 @@
 
 #include <cglm/vec3.h>
 
+#define COLLIDER_LEAF 0
+#define COLLIDER_NODE 1
+
 typedef struct  TekColliderNode {
     flag type;
+    uint id;
+    vec3 centre;
+    float radius;
     union {
         struct {
-            vec3 centre;
-            float radius;
             struct TekColliderNode* left;
             struct TekColliderNode* right;
         } node;
@@ -22,3 +26,5 @@ typedef struct  TekColliderNode {
 } TekColliderNode;
 
 typedef TekColliderNode* TekCollider;
+
+exception tekCreateCollider(TekBody* body, TekCollider* collider);

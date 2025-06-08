@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "core/bitset.h"
+#include "core/priorityqueue.h"
 #include "core/queue.h"
 #include "core/threadqueue.h"
 #include "core/vector.h"
@@ -210,7 +211,7 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    tekSetMouseMode(MOUSE_MODE_CAMERA);
+    //tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
@@ -287,29 +288,42 @@ exception run() {
     return SUCCESS;
 }
 
-exception test() {
-    BitSet bitset = {};
-    tekChainThrow(bitsetCreate(0, 1, &bitset));
+void print_test(const PriorityQueue* queue) {
+    printf("Test:\n");
+    const PriorityQueueItem* item = queue->queue;
+    while (item) {
+        printf("%f %p, len=%u\n", item->priority, item->data, queue->length);
+        item = item->prev;
+    }
+}
 
-    for (uint i = 0; i < 5; i++) {
-        tekChainThrow(bitsetSet(&bitset, i * 64));
+exception test() {
+    PriorityQueue queue = {};
+    priorityQueueCreate(&queue);
+    tekChainThrow(priorityQueueEnqueue(&queue, 100.0, 1));
+    print_test(&queue);
+    tekChainThrow(priorityQueueEnqueue(&queue, 1000.0, 2));
+    print_test(&queue);
+    tekChainThrow(priorityQueueEnqueue(&queue, 50.0, 3));
+    print_test(&queue);
+    tekChainThrow(priorityQueueEnqueue(&queue, 101.0, 4));
+    print_test(&queue);
+    tekChainThrow(priorityQueueEnqueue(&queue, 20.0, 5));
+    print_test(&queue);
+    tekChainThrow(priorityQueueEnqueue(&queue, 1001.0, 6));
+    print_test(&queue);
+
+    void* data;
+    while (priorityQueueDequeue(&queue, &data)) {
+        printf("DQd: %p, len=%u\n", data, queue.length);
     }
 
-    tekChainThrow(bitsetSet(&bitset, 1000));
-    char value;
-    tekChainThrow(bitsetGet(&bitset, 1000, &value));
-    printf("Bit 1000: %d\n", value);
-    tekChainThrow(bitsetGet(&bitset, 1001, &value));
-    printf("Bit 1001: %d\n", value);
-    tekChainThrow(bitsetUnset(&bitset, 1000));
-    tekChainThrow(bitsetGet(&bitset, 1000, &value));
-    printf("Bit 1000: %d\n", value);
-    bitsetDelete(&bitset);
+    priorityQueueDelete(&queue);
     return SUCCESS;
 }
 
 int main(void) {
     tekInitExceptions();
-    tekLog(test());
+    tekLog(run());
     tekCloseExceptions();
 }

@@ -11,6 +11,7 @@
 #include <pthread.h>
 
 #include "body.h"
+#include "collider.h"
 #include "../core/vector.h"
 #include "../core/queue.h"
 #include "GLFW/glfw3.h"
@@ -220,6 +221,10 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
         }
         tekEngineCreateBodyCleanup;
     });
+
+    TekCollider collider = {};
+    tekCreateCollider(body, &collider);
+
     if (object_id)
         *object_id = state.object_id;
     return SUCCESS;

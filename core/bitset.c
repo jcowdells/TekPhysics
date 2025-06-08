@@ -139,7 +139,7 @@ exception bitsetUnset(BitSet* bitset, const uint index) {
  * @param value A pointer to where the value of the bit (0 or 1) will be stored.
  * @throws BITSET_EXCEPTION if the index is out of range, and growth is disabled.
  */
-exception bitsetGet(const BitSet* bitset, const uint index, char* value) {
+exception bitsetGet(const BitSet* bitset, const uint index, flag* value) {
     uint array_index, bit_index;
     bitsetGetIndices(index, &array_index, &bit_index);
 
