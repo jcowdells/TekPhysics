@@ -167,10 +167,8 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
  */
 static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename,
                               const float mass, vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
-    TekBody* body = (TekBody*)calloc(1, sizeof(TekBody));
-    if (!body) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for body.");
-
-    tekChainThrow(tekCreateBody(mesh_filename, mass, position, rotation, scale, body));
+    TekBody body = {};
+    tekChainThrow(tekCreateBody(mesh_filename, mass, position, rotation, scale, &body));
 
     const uint len_mesh = strlen(mesh_filename) + 1;
     const uint len_material = strlen(material_filename) + 1;
@@ -194,14 +192,14 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
         tekChainThrowThen(queueDequeue(unused_ids, &unused_id), {
             tekEngineCreateBodyCleanup;
         });
-        tekChainThrowThen(vectorSetItem(bodies, unused_id, body),
+        tekChainThrowThen(vectorSetItem(bodies, unused_id, &body),
             queueEnqueue(unused_ids, (void*)unused_id);
             tekEngineCreateBodyCleanup;
         );
         state.object_id = unused_id;
     } else {
         create_id_via_queue = 0;
-        tekChainThrowThen(vectorAddItem(bodies, body), {
+        tekChainThrowThen(vectorAddItem(bodies, &body), {
             tekEngineCreateBodyCleanup;
         });
         state.object_id = bodies->length - 1;
@@ -221,9 +219,6 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
         }
         tekEngineCreateBodyCleanup;
     });
-
-    TekCollider collider = {};
-    tekCreateCollider(body, &collider);
 
     if (object_id)
         *object_id = state.object_id;
@@ -284,6 +279,7 @@ static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bod
     // set the data stored to be zeroes
     // removing the body would change the index of other bodies
     // index needed to find object by id.
+    tekDeleteBody(body);
     memset(body, 0, sizeof(TekBody));
     return SUCCESS;
 }
@@ -422,6 +418,16 @@ static void tekEngine(void* args) {
             cam_pos_changed = 1;
         }
 
+        for (uint i = 0; i < bodies.length; i++) {
+            TekBody* body_i;
+            threadChainThrow(vectorGetItemPtr(&bodies, &body_i));
+            for (uint j = 0; j < i; j++) {
+                TekBody* body_j;
+                threadChainThrow(vectorGetItemPtr(&bodies, &body_j));
+                threadChainThrow(tek
+            }
+        }
+
         // TODO: remove, as this is a test
         if (q) {
             vec3 impulse = {
@@ -452,6 +458,13 @@ static void tekEngine(void* args) {
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &engine_time, NULL);
         counter++;
     }
+    for (uint i = 0; i < bodies.length; i++) {
+        TekBody* loop_body;
+        tekThreadThrow(vectorGetItemPtr(&bodies, i, &loop_body));
+        tekDeleteBody(loop_body);
+    }
+    vectorDelete(&bodies);
+    queueDelete(&unused_ids);
     printf("thread ended :(\n");
 }
 
@@ -469,6 +482,6 @@ exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, cons
     engine_args->phys_period = phys_period;
     pthread_t engine_thread;
     if (pthread_create(&engine_thread, NULL, tekEngine, engine_args))
-	tekThrow(THREAD_EXCEPTION, "Failed to create physics thread");
+	    tekThrow(THREAD_EXCEPTION, "Failed to create physics thread");
     return SUCCESS;
 }

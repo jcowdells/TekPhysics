@@ -4,6 +4,22 @@
 #include <cglm/vec3.h>
 #include <math.h>
 #include <stdio.h>
+#include "collider.h"
+#include "../core/manager.h"
+
+#define COLLISION_STACK_SIZE 128 /// initial size, can grow if needed.
+
+static flag collision_stack_init = 0;
+static Vector collision_stack = {};
+
+static void tekBodyDelete() {
+    vectorDelete(&collision_stack);
+}
+
+tek_init tekBodyInit() {
+    if (vectorCreate(COLLISION_STACK_SIZE, 2 * sizeof(TekColliderNode*), &collision_stack) == SUCCESS) collision_stack_init = 1;
+    tekAddDeleteFunc(tekBodyDelete);
+}
 
 /// Struct containing the volume and center of a tetrahedron
 struct TetrahedronData {
@@ -156,6 +172,7 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     glm_vec3_copy(scale, body->scale);
 
     tekChainThrow(tekCalculateBodyProperties(body));
+    tekChainThrow(tekCreateCollider(body, &body->collider);
 
     return SUCCESS;
 }
@@ -237,9 +254,78 @@ void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse,
 }
 
 /**
- * @brief Delete a body by freeing the vertices that were allocated.
+ * Test whether two spheres are colliding (intersecting) given their centres and radii.
+ * @param centre_a The centre of the first sphere.
+ * @param radius_a The radius of the first sphere.
+ * @param centre_b The centre of the second sphere.
+ * @param radius_b The radius of the second sphere.
+ * @returns 1 if the spheres are intersecting, 0 if they are not.
+ */
+static flag tekSphereCollision(vec3 centre_a, const float radius_a, vec3 centre_b, const float radius_b) {
+    // given two spheres, if the distance between the centres is less than the sum of radii, then there must be a collision.
+    // squaring both sides removes the need for a (costly) square root operation.
+    const float sum_radii = radius_a + radius_b;
+    return glm_vec3_distance2(centre_a, centre_b) <= sum_radii * sum_radii ? 1 : 0;
+}
+
+#define stackAddLeafPair(pair_index) \
+TekColliderNode* _temp_node = pair[pair_index]; \
+pair[pair_index] = _temp_node->data.node.left; \
+tekChainThrow(vectorAddItem(&collision_stack, pair)); \
+pair[pair_index] = _temp_node->data.node.right; \
+tekChainThrow(vectorAddItem(&collision_stack, pair)); \
+
+#define stackAddNodePair() \
+TekColliderNode* _temp_node0 = pair[0]; \
+pair[0] = _temp_node0->data.node.left; \
+tekChainThrow(vectorAddItem(&collision_stack, pair)); \
+pair[0] = _temp_node0->data.node.right; \
+tekChainThrow(vectorAddItem(&collision_stack, pair)); \
+pair[0] = _temp_node0; \
+TekColliderNode* _temp_node1 = pair[1]; \
+pair[1] = _temp_node1->data.node.left; \
+tekChainThrow(vectorAddItem(&collision_stack, pair)); \
+pair[1] = _temp_node1->data.node.right; \
+tekChainThrow(vectorAddItem(&collision_stack, pair)); \
+
+/**
+ * Replace the contents of an existing vector with the contact points between two bodies.
+ * @param body_a One of the bodies to test.
+ * @param body_b The other body to test.
+ * @param contact_points An existing vector which will be used to store the contact points. Anything already in the vector will be overwritten, not appended to.
+ * @note Not thread safe.
+ */
+exception tekBodyGetContactPoints(TekBody* body_a, TekBody* body_b, Vector* contact_points) {
+    if (!init_collision_stack)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for collision stack.");
+    collision_stack.length = 0; // reset length so we can restart the collision stack.
+    TekColliderNode* pair[2];
+    pair[0] = body_a->collider;
+    pair[1] = body_b->collider;
+    tekChainThrow(vectorAddItem(&collision_stack, pair));
+    while (vectorPopItem(&collision_stack, pair)) {
+        if (!tekSphereCollision(pair[0]->centre, pair[0]->radius, pair[1]->centre, pair[1]->radius))
+            continue;
+
+        if ((pair[0]->type == COLLIDER_LEAF) && (pair[1]->type == COLLIDER_LEAF)) {
+            printf("Possible collision\n");
+            // TODO: triangle-triangle collision.
+        } else if (pair[0]->type == COLLIDER_LEAF) {
+            stackAddLeafPair(1);
+        } else if (pair[1]->type == COLLIDER_LEAF) {
+            stackAddLeafPair(0);
+        } else {
+            stackAddNodePair();
+        }
+    }
+    return SUCCESS;
+}
+
+/**
+ * @brief Delete a TekBody by freeing the vertices that were allocated.
  * @param body The body to delete.
  */
 void tekDeleteBody(const TekBody* body) {
+    tekDeleteCollider(&body->collider);
     free(body->vertices);
 }

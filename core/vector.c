@@ -130,6 +130,25 @@ exception vectorRemoveItem(Vector* vector, const uint index, void* item) {
 }
 
 /**
+ * Pop an item from the vector, e.g. return last item and remove it from the vector.
+ * @param vector The vector to pop from.
+ * @param item A pointer to where the item will be stored. Must point to a buffer large enough to store the returned data.
+ * @note Internally uses \ref vectorGetItem, check for more info.
+ * @returns 1 if successfull, 0 if the vector is empty.
+ */
+flag vectorPopItem(Vector* vector, void* item) {
+    if (vector->length == 0) {
+        *item = 0;
+        return 0;
+    };
+    // allowed to not check this error, can only fail if index out of range, and the by using length - 1, it must be in range.
+    // don't need to use vectorRemoveItem(...) because we are taking out the last item, so nothing needs to be moved around in the vector.
+    // new writes should overwrite the old data.
+    vectorGetItem(vector, vector->length--, item);
+    return 1;
+}
+
+/**
  * Delete a vector, freeing the internal list and zeroing the struct.
  * @param vector The vector to delete.
  */

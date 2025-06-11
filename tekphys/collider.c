@@ -99,6 +99,9 @@ static double tekFindSphereMergeCost(TekColliderNode* sphere_a, TekColliderNode*
 static exception tekGenSphereQueue(TekBody* body, Vector* spheres, PriorityQueue* queue, uint* sphere_id) {
     const uint num_triangles = body->num_indices / 3;
 
+    // firstly, generate a sphere for each of the vertices of the mesh that will completely enclose it.
+    // will be stored as a TekColliderNode*, as these will eventually be the leaf nodes of the collider tree
+    // stored in a vector temporarily for easy indexing and iteration.
     for (uint i = 0; i < num_triangles; i++) {
         TekColliderNode* sphere = (TekColliderNode*)malloc(sizeof(TekColliderNode));
         if (!sphere)
@@ -120,6 +123,8 @@ static exception tekGenSphereQueue(TekBody* body, Vector* spheres, PriorityQueue
         });
     }
 
+    // now, loop over all pairs of indices and add to priority queue, ignoring doubles and repeats, e.g. ignore index 1,1 or 0,2 if 2,0 is already in there.
+    // this is so we can calculate the cost of merging any two spheres together
     for (uint i = 0; i < num_triangles; i++) {
         for (uint j = 0; j < i; j++) {
             TekColliderNode* sphere_i;
@@ -136,11 +141,13 @@ static exception tekGenSphereQueue(TekBody* body, Vector* spheres, PriorityQueue
         }
     }
 
+    // if needed, set sphere id 
     if (sphere_id) *sphere_id = num_triangles;
 
     return SUCCESS;
 }
 
+/// Helper function, will clean up any pointers in priority queue or in the vector.
 #define createColliderCleanup() \
 struct Sphere** _pair; \
 while (priorityQueueDequeue(&sphere_queue, &_pair)) { \
@@ -154,7 +161,13 @@ for (uint _i = 0; _i < sphere_vector.length; _i++) { \
 } \
 vectorDelete(&sphere_vector) \
 
+/**
+ * Helper function, will print out the collider tree to the terminal.
+ * @param node The root node of the tree.
+ * @param indent The initial indent (used for recursion, set to 0)
+ */
 static void tekPrintCollider(const TekColliderNode* node, const uint indent) {
+    // recursive algorithm, using in order traversal of tree
     if (!node) {
         for (uint i = 0; i < indent; i++)
             printf("   ");
@@ -179,36 +192,49 @@ static void tekPrintCollider(const TekColliderNode* node, const uint indent) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 exception tekCreateCollider(TekBody* body, TekCollider* collider) {
-    // generate a sphere for each triangle
+    // firstly, set up our data structures
     PriorityQueue sphere_queue = {};
     priorityQueueCreate(&sphere_queue);
 
     Vector sphere_vector = {};
     tekChainThrow(vectorCreate(body->num_indices * 2 / 3, sizeof(TekColliderNode*), &sphere_vector));
 
+    // fill up the queue with the initial spheres.
     uint sphere_id = 0;
     tekChainThrowThen(tekGenSphereQueue(body, &sphere_vector, &sphere_queue, &sphere_id), {
         createColliderCleanup();
     });
 
-    // for each sphere, find the closest sphere to it, and group together
+    // bitset to keep track of which spheres have already been merged together.
     BitSet sphere_bitset = {};
     bitsetCreate(sphere_id * 2, 1, &sphere_bitset);
 
     TekColliderNode* newest_node = 0;
     TekColliderNode** pair;
+
+    // iterate until there are no pairs spheres left to merge (e.g. have been combined into a single sphere)
     while (priorityQueueDequeue(&sphere_queue, &pair)) {
+	// ignore any spheres that have already been merged.
         flag sphere_inactive;
         bitsetGet(&sphere_bitset, pair[0]->id, &sphere_inactive);
-        if (sphere_inactive) continue;
+        if (sphere_inactive) {
+		free(pair);
+		continue;
+	}
         bitsetGet(&sphere_bitset, pair[1]->id, &sphere_inactive);
-        if (sphere_inactive) continue;
+        if (sphere_inactive) {
+		free(pair);
+		continue;
+	}
 
+	// update so that both spheres we merge are marked as such.
         bitsetSet(&sphere_bitset, pair[0]->id);
         bitsetSet(&sphere_bitset, pair[1]->id);
 
+	// create a new node in the tree that will store the new sphere.
         TekColliderNode* new_node = (TekColliderNode*)malloc(sizeof(TekColliderNode));
         if (!new_node) {
+	    free(pair);
             createColliderCleanup();
             bitsetDelete(&sphere_bitset);
             tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for new collider node.");
@@ -224,14 +250,15 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         new_node->data.node.right = pair[1];
 
         tekChainThrowThen(vectorAddItem(&sphere_vector, &new_node), {
-            createColliderCleanup();
+            free(pair);
+	    createColliderCleanup();
             bitsetDelete(&sphere_bitset);
         });
 
-        printf("Added sphere with id: %u\n", sphere_id);
-
         newest_node = new_node;
 
+	// calculate costs of merging the new sphere with all existing spheres.
+	// add these to the priority queue
         for (uint i = 0; i < sphere_id; i++) {
             bitsetGet(&sphere_bitset, i, &sphere_inactive);
             if (!sphere_inactive) {
@@ -239,6 +266,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
                 vectorGetItem(&sphere_vector, i, &loop_node);
                 TekColliderNode** new_pair = (TekColliderNode**)malloc(2 * sizeof(TekColliderNode*));
                 if (!new_pair) {
+		    free(pair);
                     createColliderCleanup();
                     bitsetDelete(&sphere_bitset);
                     tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for new collider node pair.");
@@ -247,7 +275,8 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
                 new_pair[1] = loop_node;
                 const double merge_cost = tekFindSphereMergeCost(new_node, loop_node);
                 tekChainThrowThen(priorityQueueEnqueue(&sphere_queue, merge_cost, new_pair), {
-                    createColliderCleanup();
+                    free(pair);
+	 	    createColliderCleanup();
                     bitsetDelete(&sphere_bitset);
                 });
             }
@@ -258,8 +287,30 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         free(pair);
     }
 
-    tekPrintCollider(newest_node, 0);
     *collider = newest_node;
+    createColliderCleanup();
+    bitsetDelete(&sphere_bitset);
 
     return SUCCESS;
+}
+
+/**
+ * Recursively free a TekColliderNode by traversing its children.
+ * @param collider The collider node to free.
+ */
+static void tekDeleteColliderNode(TekColliderNode* collider) {
+    if (collider->type == COLLIDER_NODE) {
+	tekDeleteColliderNode(collider->data.node.left);
+	tekDeleteColliderNode(collider->data.node.right);
+    }
+    free(collider);
+}
+
+/**
+ * Delete a collider by freeing all its data.
+ * @param collider The collider to delete.
+ */
+void tekDeleteCollider(TekCollider* collider) {
+    tekDeleteColliderNode(*collider);
+    *collider = 0;
 }

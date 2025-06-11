@@ -28,3 +28,4 @@ typedef struct  TekColliderNode {
 typedef TekColliderNode* TekCollider;
 
 exception tekCreateCollider(TekBody* body, TekCollider* collider);
+void tekDeleteCollider(TekCollider* collider);

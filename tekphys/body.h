@@ -23,6 +23,7 @@ typedef struct TekBody {
     vec3 angular_velocity; // direction = axis of rotation, magnitude = speed of rotation (radians/second)
     vec3 scale;
     mat3 inverse_inertia_tensor;
+    TekCollider collider;
 } TekBody;
 
 exception tekCreateBody(const char* mesh_filename, float mass, vec3 position, vec4 rotation, vec3 scale, TekBody* body);
