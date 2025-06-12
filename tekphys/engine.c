@@ -145,8 +145,7 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
 #define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); threadExcept(state_queue, __thread_exception); return; } }
 
 #define tekEngineCreateBodyCleanup \
-    if (body) { tekDeleteBody(body); \
-    free(body); } \
+    tekDeleteBody(&body); \
     if (mesh_copy) free(mesh_copy); \
     if (material_copy) free(material_copy) \
 
@@ -420,11 +419,12 @@ static void tekEngine(void* args) {
 
         for (uint i = 0; i < bodies.length; i++) {
             TekBody* body_i;
-            threadChainThrow(vectorGetItemPtr(&bodies, &body_i));
+            threadChainThrow(vectorGetItemPtr(&bodies, i, &body_i));
             for (uint j = 0; j < i; j++) {
                 TekBody* body_j;
-                threadChainThrow(vectorGetItemPtr(&bodies, &body_j));
-                threadChainThrow(tek
+                printf("Testing body %u against body %u\n", i, j);
+                threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
+                threadChainThrow(tekBodyGetContactPoints(body_i, body_j, NULL));
             }
         }
 
@@ -460,7 +460,7 @@ static void tekEngine(void* args) {
     }
     for (uint i = 0; i < bodies.length; i++) {
         TekBody* loop_body;
-        tekThreadThrow(vectorGetItemPtr(&bodies, i, &loop_body));
+        threadChainThrow(vectorGetItemPtr(&bodies, i, &loop_body));
         tekDeleteBody(loop_body);
     }
     vectorDelete(&bodies);

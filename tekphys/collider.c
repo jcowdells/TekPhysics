@@ -6,6 +6,7 @@
 #include "../core/priorityqueue.h"
 #include "../core/bitset.h"
 #include "../core/vector.h"
+#include "body.h"
 
 /**
  * Find a sphere that completely encloses a triangle given its vertices.
@@ -67,6 +68,8 @@ static void tekCreateCombinedSphere(vec3 centre_a, const float radius_a, vec3 ce
     // farA = A - normalised(AB) * rA
     // farB = B + normalised(AB) * rB
     vec3 far_a, far_b;
+    glm_vec3_copy(centre_a, far_a);
+    glm_vec3_copy(centre_b, far_b);
     glm_vec3_mulsubs(direction, radius_a, far_a);
     glm_vec3_muladds(direction, radius_b, far_b);
     glm_vec3_add(far_a, far_b, centre);
@@ -181,7 +184,7 @@ static void tekPrintCollider(const TekColliderNode* node, const uint indent) {
     } else {
         for (uint i = 0; i < indent; i++)
             printf("   ");
-        printf("leaf id=%u\n", node->id);
+        printf("leaf: %f %f %f r=%f\n", EXPAND_VEC3(node->centre), node->radius);
     }
 }
 
@@ -192,6 +195,7 @@ static void tekPrintCollider(const TekColliderNode* node, const uint indent) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 exception tekCreateCollider(TekBody* body, TekCollider* collider) {
+    printf("Creating collider\n");
     // firstly, set up our data structures
     PriorityQueue sphere_queue = {};
     priorityQueueCreate(&sphere_queue);
@@ -218,23 +222,23 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         flag sphere_inactive;
         bitsetGet(&sphere_bitset, pair[0]->id, &sphere_inactive);
         if (sphere_inactive) {
-		free(pair);
-		continue;
-	}
+		    free(pair);
+		    continue;
+	    }
         bitsetGet(&sphere_bitset, pair[1]->id, &sphere_inactive);
         if (sphere_inactive) {
-		free(pair);
-		continue;
-	}
+		    free(pair);
+		    continue;
+	    }
 
-	// update so that both spheres we merge are marked as such.
+	    // update so that both spheres we merge are marked as such.
         bitsetSet(&sphere_bitset, pair[0]->id);
         bitsetSet(&sphere_bitset, pair[1]->id);
 
-	// create a new node in the tree that will store the new sphere.
+	    // create a new node in the tree that will store the new sphere.
         TekColliderNode* new_node = (TekColliderNode*)malloc(sizeof(TekColliderNode));
         if (!new_node) {
-	    free(pair);
+	        free(pair);
             createColliderCleanup();
             bitsetDelete(&sphere_bitset);
             tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for new collider node.");
@@ -244,6 +248,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
             pair[1]->centre, pair[1]->radius,
             new_node->centre, &new_node->radius
             );
+        printf("Combined sphere: %p %p\n", pair[0], pair[1]);
         new_node->id = sphere_id;
         new_node->type = COLLIDER_NODE;
         new_node->data.node.left = pair[0];
@@ -257,8 +262,8 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
 
         newest_node = new_node;
 
-	// calculate costs of merging the new sphere with all existing spheres.
-	// add these to the priority queue
+	    // calculate costs of merging the new sphere with all existing spheres.
+	    // add these to the priority queue
         for (uint i = 0; i < sphere_id; i++) {
             bitsetGet(&sphere_bitset, i, &sphere_inactive);
             if (!sphere_inactive) {
@@ -266,7 +271,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
                 vectorGetItem(&sphere_vector, i, &loop_node);
                 TekColliderNode** new_pair = (TekColliderNode**)malloc(2 * sizeof(TekColliderNode*));
                 if (!new_pair) {
-		    free(pair);
+		            free(pair);
                     createColliderCleanup();
                     bitsetDelete(&sphere_bitset);
                     tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for new collider node pair.");
@@ -276,7 +281,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
                 const double merge_cost = tekFindSphereMergeCost(new_node, loop_node);
                 tekChainThrowThen(priorityQueueEnqueue(&sphere_queue, merge_cost, new_pair), {
                     free(pair);
-	 	    createColliderCleanup();
+	 	            createColliderCleanup();
                     bitsetDelete(&sphere_bitset);
                 });
             }
@@ -290,6 +295,9 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
     *collider = newest_node;
     createColliderCleanup();
     bitsetDelete(&sphere_bitset);
+
+    tekPrintCollider(newest_node, 0);
+    printf("Created collider\n");
 
     return SUCCESS;
 }

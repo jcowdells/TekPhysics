@@ -3,10 +3,15 @@
 #include "../tekgl.h"
 #include "../tekgl/mesh.h"
 #include "../tekgl/material.h"
+#include "../core/exception.h"
+#include "../core/vector.h"
 
 #include <cglm/vec3.h>
 #include <cglm/vec4.h>
 #include <cglm/quat.h>
+
+struct TekColliderNode;
+typedef struct TekColliderNode* TekCollider;
 
 typedef struct TekBody {
     vec3* vertices;
@@ -30,3 +35,4 @@ exception tekCreateBody(const char* mesh_filename, float mass, vec3 position, ve
 void tekBodyAdvanceTime(TekBody* body, float delta_time);
 void tekDeleteBody(const TekBody* body);
 void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse, float delta_time);
+exception tekBodyGetContactPoints(TekBody* body_a, TekBody* body_b, Vector* contact_points);

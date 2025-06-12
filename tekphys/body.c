@@ -4,8 +4,8 @@
 #include <cglm/vec3.h>
 #include <math.h>
 #include <stdio.h>
+#include "../tekgl/manager.h"
 #include "collider.h"
-#include "../core/manager.h"
 
 #define COLLISION_STACK_SIZE 128 /// initial size, can grow if needed.
 
@@ -94,7 +94,7 @@ static exception tekCalculateBodyProperties(TekBody* body) {
     glm_mat3_zero(inertia_tensor);
 
     // second iteration
-    for (uint i = 0; i < body->num_indices; i++) {
+    for (uint i = 0; i < body->num_indices; i += 3) {
         // retrieve stored information about this tetrahedron
         const uint index = i / 3;
         const float mass = fabsf(tetrahedron_data[index].volume * body->density);
@@ -172,7 +172,7 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     glm_vec3_copy(scale, body->scale);
 
     tekChainThrow(tekCalculateBodyProperties(body));
-    tekChainThrow(tekCreateCollider(body, &body->collider);
+    tekChainThrow(tekCreateCollider(body, &body->collider));
 
     return SUCCESS;
 }
@@ -288,6 +288,10 @@ tekChainThrow(vectorAddItem(&collision_stack, pair)); \
 pair[1] = _temp_node1->data.node.right; \
 tekChainThrow(vectorAddItem(&collision_stack, pair)); \
 
+static void tekPrintColliderNode(TekColliderNode* node) {
+    printf("Centre: %f %f %f, Radius: %f\n", EXPAND_VEC3(node->centre), node->radius);
+}
+
 /**
  * Replace the contents of an existing vector with the contact points between two bodies.
  * @param body_a One of the bodies to test.
@@ -296,14 +300,18 @@ tekChainThrow(vectorAddItem(&collision_stack, pair)); \
  * @note Not thread safe.
  */
 exception tekBodyGetContactPoints(TekBody* body_a, TekBody* body_b, Vector* contact_points) {
-    if (!init_collision_stack)
+    if (!collision_stack_init)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for collision stack.");
     collision_stack.length = 0; // reset length so we can restart the collision stack.
     TekColliderNode* pair[2];
     pair[0] = body_a->collider;
     pair[1] = body_b->collider;
+    printf("Pair: %p %p\n", pair[0], pair[1]);
     tekChainThrow(vectorAddItem(&collision_stack, pair));
     while (vectorPopItem(&collision_stack, pair)) {
+        printf("Pair OG: %p %p\n", pair[0], pair[1]);
+        tekPrintColliderNode(pair[0]);
+        tekPrintColliderNode(pair[1]);
         if (!tekSphereCollision(pair[0]->centre, pair[0]->radius, pair[1]->centre, pair[1]->radius))
             continue;
 
@@ -317,6 +325,8 @@ exception tekBodyGetContactPoints(TekBody* body_a, TekBody* body_b, Vector* cont
         } else {
             stackAddNodePair();
         }
+
+        printf("Pair FN: %p %p\n", pair[0], pair[1]);
     }
     return SUCCESS;
 }

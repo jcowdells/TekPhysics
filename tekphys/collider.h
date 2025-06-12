@@ -2,12 +2,14 @@
 
 #include "../tekgl.h"
 #include "../core/exception.h"
-#include "body.h"
 
 #include <cglm/vec3.h>
 
 #define COLLIDER_LEAF 0
 #define COLLIDER_NODE 1
+
+struct TekBody;
+typedef struct TekBody TekBody;
 
 typedef struct  TekColliderNode {
     flag type;

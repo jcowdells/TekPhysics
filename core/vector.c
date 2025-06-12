@@ -138,7 +138,7 @@ exception vectorRemoveItem(Vector* vector, const uint index, void* item) {
  */
 flag vectorPopItem(Vector* vector, void* item) {
     if (vector->length == 0) {
-        *item = 0;
+        memset(item, 0, vector->element_size);
         return 0;
     };
     // allowed to not check this error, can only fail if index out of range, and the by using length - 1, it must be in range.
