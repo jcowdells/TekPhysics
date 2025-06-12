@@ -30,6 +30,7 @@
 #include "core/vector.h"
 #include "tekphys/engine.h"
 #include "tekphys/body.h"
+#include "tekphys/collider.h"
 
 #define printException(x) tekLog(x)
 
@@ -178,6 +179,9 @@ exception run() {
     Vector entities = {};
     tekChainThrow(vectorCreate(0, sizeof(TekEntity), &entities));
 
+    Vector colliders = {};
+    tekChainThrow(vectorCreate(0, sizeof(TekCollider), &colliders));
+
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
@@ -211,7 +215,13 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    //tekSetMouseMode(MOUSE_MODE_CAMERA);
+    tekSetMouseMode(MOUSE_MODE_CAMERA);
+
+    TekEntity sphere;
+    tekChainThrow(tekCreateEntity("../res/rad1.tmsh", "../res/translucent.tmat", (vec3){0.0f, 0.0f, 0.0f}, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, (vec3){1.0f, 1.0f, 1.0f}, &sphere));
+
+    Vector collider_stack = {};
+    vectorCreate(1, sizeof(TekColliderNode*), &collider_stack);
 
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
@@ -258,6 +268,13 @@ exception run() {
                 memcpy(camera_rotation, state.data.cam_rotation, sizeof(vec3));
                 tekSetCameraRotation(&camera, camera_rotation);
                 break;
+            case __COLLIDER_STATE:
+                if (state.object_id == colliders.length) {
+                    tekChainThrow(vectorAddItem(&colliders, &state.data.collider));
+                } else {
+                    tekChainThrow(vectorSetItem(&colliders, state.object_id, &state.data.collider));
+                }
+                break;
             default:
                 break;
             }
@@ -268,6 +285,33 @@ exception run() {
             tekChainThrow(vectorGetItemPtr(&entities, i, &entity));
             if (entity->mesh == 0) continue;
             tekChainThrow(tekDrawEntity(entity, &camera));
+
+            TekColliderNode* node = 0;
+            tekChainThrow(vectorGetItem(&colliders, i, &node));
+
+            collider_stack.length = 0;
+            vectorAddItem(&collider_stack, &node);
+            uint num_iters = 0;
+            while (vectorPopItem(&collider_stack, &node)) {
+                if (++num_iters >= 1000) {
+                    printf("Failed.\n");
+                    break;
+                }
+                if (node->type == COLLIDER_NODE) {
+                    vectorAddItem(&collider_stack, &node->data.node.left);
+                    vectorAddItem(&collider_stack, &node->data.node.right);
+                }
+                if (node->type == COLLIDER_LEAF) {
+                    mat3 rotation;
+                    glm_quat_mat3(entity->rotation, rotation);
+                    vec3 rotated;
+                    glm_mat3_mulv(rotation, node->centre, rotated);
+                    glm_vec3_add(rotated, entity->position, sphere.position);
+                    glm_vec3_fill(sphere.scale, node->radius);
+                    tekChainThrow(tekDrawEntity(&sphere, &camera));
+                }
+                node = 0;
+            }
         }
 
         // tekChainThrow(tekBindMaterial(&material));
@@ -284,6 +328,9 @@ exception run() {
     quit_event.type = QUIT_EVENT;
     quit_event.data.message = 0;
     pushEvent(&event_queue, quit_event);
+    vectorDelete(&entities);
+    vectorDelete(&colliders);
+    vectorDelete(&collider_stack);
     tekChainThrow(tekDelete());
     return SUCCESS;
 }

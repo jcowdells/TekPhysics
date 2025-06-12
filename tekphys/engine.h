@@ -17,6 +17,7 @@
 #define CAMERA_MOVE_STATE   4
 #define CAMERA_ROTATE_STATE 5
 #define ENTITY_UPDATE_STATE 6
+#define __COLLIDER_STATE    7 //TODO: remove
 
 typedef struct TekEvent {
     flag type;
@@ -54,6 +55,7 @@ typedef struct TekState {
             vec3 position;
             vec4 rotation;
         } entity_update;
+        void* collider;
     } data;
 } TekState;
 

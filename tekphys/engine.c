@@ -219,6 +219,11 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
         tekEngineCreateBodyCleanup;
     });
 
+    state.type = __COLLIDER_STATE;
+    state.data.collider = body.collider;
+    tprint("Pushing collider: %p\n", body.collider);
+    pushState(state_queue, state);
+
     if (object_id)
         *object_id = state.object_id;
     return SUCCESS;
@@ -301,6 +306,8 @@ static void tekEngine(void* args) {
     const double phys_period = engine_args->phys_period;
     free(args);
 
+    tekBodyInit();
+
     Vector bodies = {};
     threadChainThrow(vectorCreate(0, sizeof(TekBody), &bodies));
 
@@ -352,7 +359,7 @@ static void tekEngine(void* args) {
                 if ((event.data.key_input.key == GLFW_KEY_E) && (event.data.key_input.action == GLFW_RELEASE)) {
                     vec4 cube_rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
                     vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
-                    threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../scripts/test.tmsh", "../res/material.tmat",
+                    threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/rad1.tmsh", "../res/material.tmat",
                                                          10.0f, position, cube_rotation, cube_scale, 0));
                 }
                 break;
@@ -422,8 +429,8 @@ static void tekEngine(void* args) {
             threadChainThrow(vectorGetItemPtr(&bodies, i, &body_i));
             for (uint j = 0; j < i; j++) {
                 TekBody* body_j;
-                printf("Testing body %u against body %u\n", i, j);
                 threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
+                printf("Testing body %u against body %u %f %f %f, %f %f %f\n", i, j, EXPAND_VEC3(body_i->collider->centre), EXPAND_VEC3(body_j->collider->centre));
                 threadChainThrow(tekBodyGetContactPoints(body_i, body_j, NULL));
             }
         }
@@ -465,6 +472,7 @@ static void tekEngine(void* args) {
     }
     vectorDelete(&bodies);
     queueDelete(&unused_ids);
+    tekBodyDelete();
     printf("thread ended :(\n");
 }
 

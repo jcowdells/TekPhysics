@@ -12,16 +12,16 @@
 static flag collision_stack_init = 0;
 static Vector collision_stack = {};
 
-static void tekBodyDelete() {
+void tekBodyDelete() {
     vectorDelete(&collision_stack);
+    collision_stack_init = 0;
 }
 
-tek_init tekBodyInit() {
+void tekBodyInit() {
     if (vectorCreate(COLLISION_STACK_SIZE, 2 * sizeof(TekColliderNode*), &collision_stack) == SUCCESS) collision_stack_init = 1;
-    tekAddDeleteFunc(tekBodyDelete);
 }
 
-/// Struct containing the volume and center of a tetrahedron
+/// Struct containing the volume and centre of a tetrahedron
 struct TetrahedronData {
     float volume;
     vec3 centroid;
@@ -123,6 +123,18 @@ static exception tekCalculateBodyProperties(TekBody* body) {
 }
 
 /**
+ * Update the transformation matrix of a body based on its current position and rotation.
+ * @param body The body to update.
+ */
+static void tekBodyUpdateTransform(TekBody* body) {
+    mat4 translation;
+    glm_translate_make(translation, body->position);
+    mat4 rotation;
+    glm_quat_mat4(body->rotation, rotation);
+    glm_mat4_mul(translation, rotation, body->transform);
+}
+
+/**
  * @brief Create an instance of a body given an empty TekBody struct.
  * @note Will calculate properties of the body given the mesh data, so could take time for larger objects. Will also allocate memory to store vertices.
  * @param mesh_filename The mesh file to use when creating the body.
@@ -174,6 +186,8 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     tekChainThrow(tekCalculateBodyProperties(body));
     tekChainThrow(tekCreateCollider(body, &body->collider));
 
+    tekBodyUpdateTransform(body);
+
     return SUCCESS;
 }
 
@@ -217,6 +231,8 @@ void tekBodyAdvanceTime(TekBody* body, const float delta_time) {
 
         glm_quat_copy(result, body->rotation);
     }
+
+    tekBodyUpdateTransform(body);
 }
 
 /**
@@ -250,7 +266,6 @@ void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse,
 
     // add change in angular velocity (angular acceleration * Δtime = Δangular velocity)
     glm_vec3_muladds(angular_acceleration, delta_time, body->angular_velocity);
-    printf("Angular acceleration: %f %f %f\n", EXPAND_VEC3(angular_acceleration));
 }
 
 /**
@@ -299,24 +314,22 @@ static void tekPrintColliderNode(TekColliderNode* node) {
  * @param contact_points An existing vector which will be used to store the contact points. Anything already in the vector will be overwritten, not appended to.
  * @note Not thread safe.
  */
-exception tekBodyGetContactPoints(TekBody* body_a, TekBody* body_b, Vector* contact_points) {
+exception tekBodyGetContactPoints(const TekBody* body_a, const TekBody* body_b, Vector* contact_points) {
     if (!collision_stack_init)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for collision stack.");
     collision_stack.length = 0; // reset length so we can restart the collision stack.
     TekColliderNode* pair[2];
     pair[0] = body_a->collider;
     pair[1] = body_b->collider;
-    printf("Pair: %p %p\n", pair[0], pair[1]);
     tekChainThrow(vectorAddItem(&collision_stack, pair));
     while (vectorPopItem(&collision_stack, pair)) {
-        printf("Pair OG: %p %p\n", pair[0], pair[1]);
-        tekPrintColliderNode(pair[0]);
-        tekPrintColliderNode(pair[1]);
-        if (!tekSphereCollision(pair[0]->centre, pair[0]->radius, pair[1]->centre, pair[1]->radius))
+        vec3 centre_a, centre_b;
+        glm_mat4_mulv3(body_a->transform, pair[0]->centre, 1.0f, centre_a);
+        glm_mat4_mulv3(body_b->transform, pair[1]->centre, 1.0f, centre_b);
+        if (!tekSphereCollision(centre_a, pair[0]->radius, centre_b, pair[1]->radius))
             continue;
 
         if ((pair[0]->type == COLLIDER_LEAF) && (pair[1]->type == COLLIDER_LEAF)) {
-            printf("Possible collision\n");
             // TODO: triangle-triangle collision.
         } else if (pair[0]->type == COLLIDER_LEAF) {
             stackAddLeafPair(1);
@@ -325,8 +338,6 @@ exception tekBodyGetContactPoints(TekBody* body_a, TekBody* body_b, Vector* cont
         } else {
             stackAddNodePair();
         }
-
-        printf("Pair FN: %p %p\n", pair[0], pair[1]);
     }
     return SUCCESS;
 }

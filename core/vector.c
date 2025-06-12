@@ -144,7 +144,8 @@ flag vectorPopItem(Vector* vector, void* item) {
     // allowed to not check this error, can only fail if index out of range, and the by using length - 1, it must be in range.
     // don't need to use vectorRemoveItem(...) because we are taking out the last item, so nothing needs to be moved around in the vector.
     // new writes should overwrite the old data.
-    vectorGetItem(vector, vector->length--, item);
+    vectorGetItem(vector, vector->length - 1, item);
+    vector->length--;
     return 1;
 }
 

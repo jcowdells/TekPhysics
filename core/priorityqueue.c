@@ -42,6 +42,7 @@ exception priorityQueueEnqueue(PriorityQueue* queue, const double priority, void
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for priority queue item.");
     new_item->priority = priority;
     new_item->data = data;
+    new_item->prev = 0;
 
     queue->length++;
 
