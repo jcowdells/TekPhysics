@@ -1,0 +1,44 @@
+# CMake build files
+/build/
+/CMakeFiles/
+/cmake-build-debug/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/install_manifest.txt
+
+# CLion (JetBrains)
+/.idea/
+/*.iml
+
+# Doxygen
+/docs/html/
+/docs/latex/
+
+# Compilation artifacts
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+*.exe
+*.out
+*.app
+
+# Logs and temporary
+*.log
+*.tmp
+*.swp
+*~
+
+# vcpkg
+/vcpkg_installed/
+/vcpkg/buildtrees/
+/vcpkg/packages/
+/vcpkg/downloads/
+
+# Python virtualenv
+venv/
+.env/
