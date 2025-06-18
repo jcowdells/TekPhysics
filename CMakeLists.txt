@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.30)
 set(CMAKE_C_STANDARD 11)
 project(TekPhysics C)             # Defines name of project
+find_package(OpenGL REQUIRED)     # Require OpenGL
+find_package(LAPACK CONFIG REQUIRED)
+find_package(OpenBLAS CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(cglm CONFIG REQUIRED)
+find_package(Freetype REQUIRED)
 add_executable(
         TekPhysics main.c
         core/exception.h
@@ -64,23 +70,19 @@ add_executable(
         core/priorityqueue.c
         core/priorityqueue.h
 )
-find_package(OpenGL REQUIRED)     # Require OpenGL
 include_directories(${OPENGL_INCLUDE_DIR})
-target_link_libraries(TekPhysics ${OPENGL_LIBRARIES})
+include_directories(${OpenBLAS_INCLUDE_DIR})
+target_link_libraries(
+        TekPhysics PRIVATE ${OPENGL_LIBRARIES}
+        OpenGL::GL
+        glfw
+        cglm::cglm
+        Freetype::Freetype
+        LAPACK::LAPACK
+        OpenBLAS::OpenBLAS
+)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)     # Remove unnecessary includes
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)    #
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) #
-add_subdirectory(glfw)
-add_subdirectory(cglm)
-add_subdirectory(freetype)
-target_link_libraries(TekPhysics glfw)       # Link GLFW
-target_link_libraries(TekPhysics OpenGL::GL) # Link OpenGL
-target_link_libraries(TekPhysics cglm)       # Link CGLM
-target_link_libraries(TekPhysics freetype)
-target_include_directories(
-        TekPhysics PRIVATE
-        glfw/include
-        cglm/include
-        glad/include
-        freetype/include
-)
+target_include_directories(TekPhysics PRIVATE glad/include)
+
