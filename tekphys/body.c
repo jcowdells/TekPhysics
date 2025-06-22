@@ -183,8 +183,8 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     glm_vec4_copy(rotation, body->rotation);
     glm_vec3_copy(scale, body->scale);
 
-    // tekChainThrow(tekCalculateBodyProperties(body));
-    // tekChainThrow(tekCreateCollider(body, &body->collider));
+    tekChainThrow(tekCalculateBodyProperties(body));
+    tekChainThrow(tekCreateCollider(body, &body->collider));
 
     tekBodyUpdateTransform(body);
 

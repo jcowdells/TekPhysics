@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.30)
 set(CMAKE_C_STANDARD 11)
-project(TekPhysics C)             # Defines name of project
+project(TekPhysics C Fortran)     # Defines name of project
 find_package(OpenGL REQUIRED)     # Require OpenGL
-find_package(LAPACK CONFIG REQUIRED)
-find_package(OpenBLAS CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(cglm CONFIG REQUIRED)
 find_package(Freetype REQUIRED)
+find_library(LAPACK_LIB NAMES lapack PATHS ${CMAKE_PREFIX_PATH} REQUIRED)
+find_library(BLAS_LIB NAMES blas PATHS ${CMAKE_PREFIX_PATH} REQUIRED)
 add_executable(
         TekPhysics main.c
         core/exception.h
@@ -78,8 +78,9 @@ target_link_libraries(
         glfw
         cglm::cglm
         Freetype::Freetype
-        LAPACK::LAPACK
-        OpenBLAS::OpenBLAS
+        ${LAPACK_LIB}
+        ${BLAS_LIB}
+        gfortran
 )
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)     # Remove unnecessary includes
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)    #

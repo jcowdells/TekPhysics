@@ -219,10 +219,10 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
         tekEngineCreateBodyCleanup;
     });
 
-    state.type = __COLLIDER_STATE;
-    state.data.collider = body.collider;
-    tprint("Pushing collider: %p\n", body.collider);
-    pushState(state_queue, state);
+    //state.type = __COLLIDER_STATE;
+    //state.data.collider = body.collider;
+    //tprint("Pushing collider: %p\n", body.collider);
+    //pushState(state_queue, state);
 
     if (object_id)
         *object_id = state.object_id;
@@ -424,16 +424,16 @@ static void tekEngine(void* args) {
             cam_pos_changed = 1;
         }
 
-        for (uint i = 0; i < bodies.length; i++) {
-            TekBody* body_i;
-            threadChainThrow(vectorGetItemPtr(&bodies, i, &body_i));
-            for (uint j = 0; j < i; j++) {
-                TekBody* body_j;
-                threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
-                printf("Testing body %u against body %u %f %f %f, %f %f %f\n", i, j, EXPAND_VEC3(body_i->collider->centre), EXPAND_VEC3(body_j->collider->centre));
-                threadChainThrow(tekBodyGetContactPoints(body_i, body_j, NULL));
-            }
-        }
+        //for (uint i = 0; i < bodies.length; i++) {
+        //    TekBody* body_i;
+        //    threadChainThrow(vectorGetItemPtr(&bodies, i, &body_i));
+        //    for (uint j = 0; j < i; j++) {
+        //        TekBody* body_j;
+        //        threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
+        //        printf("Testing body %u against body %u %f %f %f, %f %f %f\n", i, j, EXPAND_VEC3(body_i->collider->centre), EXPAND_VEC3(body_j->collider->centre));
+        //        threadChainThrow(tekBodyGetContactPoints(body_i, body_j, NULL));
+        //    }
+        //}
 
         // TODO: remove, as this is a test
         if (q) {

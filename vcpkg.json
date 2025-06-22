@@ -2,7 +2,6 @@
   "name": "tek-physics",
   "version": "0.0.1",
   "dependencies": [
-    "openblas",
     "lapack",
     "glfw3",
     "cglm",

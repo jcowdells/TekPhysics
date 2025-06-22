@@ -286,32 +286,32 @@ exception run() {
             if (entity->mesh == 0) continue;
             tekChainThrow(tekDrawEntity(entity, &camera));
 
-            TekColliderNode* node = 0;
-            tekChainThrow(vectorGetItem(&colliders, i, &node));
-
-            collider_stack.length = 0;
-            vectorAddItem(&collider_stack, &node);
-            uint num_iters = 0;
-            while (vectorPopItem(&collider_stack, &node)) {
-                if (++num_iters >= 1000) {
-                    printf("Failed.\n");
-                    break;
-                }
-                if (node->type == COLLIDER_NODE) {
-                    vectorAddItem(&collider_stack, &node->data.node.left);
-                    vectorAddItem(&collider_stack, &node->data.node.right);
-                }
-                if (node->type == COLLIDER_LEAF) {
-                    mat3 rotation;
-                    glm_quat_mat3(entity->rotation, rotation);
-                    vec3 rotated;
-                    glm_mat3_mulv(rotation, node->centre, rotated);
-                    glm_vec3_add(rotated, entity->position, sphere.position);
-                    glm_vec3_fill(sphere.scale, node->radius);
-                    tekChainThrow(tekDrawEntity(&sphere, &camera));
-                }
-                node = 0;
-            }
+//            TekColliderNode* node = 0;
+//            tekChainThrow(vectorGetItem(&colliders, i, &node));
+//
+//            collider_stack.length = 0;
+//            vectorAddItem(&collider_stack, &node);
+//            uint num_iters = 0;
+//            while (vectorPopItem(&collider_stack, &node)) {
+//                if (++num_iters >= 1000) {
+//                    printf("Failed.\n");
+//                    break;
+//                }
+//                if (node->type == COLLIDER_NODE) {
+//                    vectorAddItem(&collider_stack, &node->data.node.left);
+//                    vectorAddItem(&collider_stack, &node->data.node.right);
+//                }
+//                if (node->type == COLLIDER_LEAF) {
+//                    mat3 rotation;
+//                    glm_quat_mat3(entity->rotation, rotation);
+//                    vec3 rotated;
+//                    glm_mat3_mulv(rotation, node->centre, rotated);
+//                    glm_vec3_add(rotated, entity->position, sphere.position);
+//                    glm_vec3_fill(sphere.scale, node->radius);
+//                    tekChainThrow(tekDrawEntity(&sphere, &camera));
+//                }
+//                node = 0;
+//            }
         }
 
         // tekChainThrow(tekBindMaterial(&material));
@@ -342,31 +342,6 @@ void print_test(const PriorityQueue* queue) {
         printf("%f %p, len=%u\n", item->priority, item->data, queue->length);
         item = item->prev;
     }
-}
-
-exception test() {
-    PriorityQueue queue = {};
-    priorityQueueCreate(&queue);
-    tekChainThrow(priorityQueueEnqueue(&queue, 100.0, 1));
-    print_test(&queue);
-    tekChainThrow(priorityQueueEnqueue(&queue, 1000.0, 2));
-    print_test(&queue);
-    tekChainThrow(priorityQueueEnqueue(&queue, 50.0, 3));
-    print_test(&queue);
-    tekChainThrow(priorityQueueEnqueue(&queue, 101.0, 4));
-    print_test(&queue);
-    tekChainThrow(priorityQueueEnqueue(&queue, 20.0, 5));
-    print_test(&queue);
-    tekChainThrow(priorityQueueEnqueue(&queue, 1001.0, 6));
-    print_test(&queue);
-
-    void* data;
-    while (priorityQueueDequeue(&queue, &data)) {
-        printf("DQd: %p, len=%u\n", data, queue.length);
-    }
-
-    priorityQueueDelete(&queue);
-    return SUCCESS;
 }
 
 int main(void) {
