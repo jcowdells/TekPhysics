@@ -11,18 +11,24 @@
 struct TekBody;
 typedef struct TekBody TekBody;
 
-typedef struct  TekColliderNode {
+struct OBB {
+    vec3 centre;
+    vec3 axes[3];
+    float half_extents[3];
+};
+
+typedef struct TekColliderNode {
     flag type;
     uint id;
-    vec3 centre;
-    float radius;
+    struct OBB obb;
     union {
         struct {
             struct TekColliderNode* left;
             struct TekColliderNode* right;
         } node;
         struct {
-            uint indices[3];
+            vec3* vertices;
+            uint num_vertices;
         } leaf;
     } data;
 } TekColliderNode;

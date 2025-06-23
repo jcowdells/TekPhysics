@@ -1,5 +1,8 @@
 #include "collider.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "geometry.h"
 #include "body.h"
 #include "../core/vector.h"
@@ -55,6 +58,7 @@ static exception symmetricMatrixCalculateEigenvectors(mat3 matrix, vec3* eigenve
 
 struct Triangle {
     vec3 vertices[3];
+    vec3 centroid;
     float area;
 };
 
@@ -104,6 +108,15 @@ static exception tekGenerateTriangleArray(const vec3* vertices, const uint num_v
         tekCheckIndex(indices[i + 2]);
         glm_vec3_copy(vertices[indices[i + 2]], triangle.vertices[2]);
         triangle.area = tekCalculateTriangleArea(triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]);
+        vec3 centroid;
+        glm_vec3_zero(centroid);
+        sumVec3(
+            centroid,
+            triangle.vertices[0],
+            triangle.vertices[1],
+            triangle.vertices[2]
+        );
+        glm_vec3_scale(centroid, 1.0f / 3.0f, triangle.centroid);
         tekChainThrowThen(vectorAddItem(triangles, &triangle), {
             vectorDelete(triangles);
         });
@@ -159,25 +172,106 @@ static void tekCalculateCovarianceMatrix(const Vector* triangles, const vec3 mea
     glm_mat3_scale(covariance, 1.0f / (float)triangles->length);
 }
 
-exception tekCreateCollider(TekBody* body, TekCollider* collider) {
-    Vector triangles = {};
-    tekChainThrow(tekGenerateTriangleArray(body->vertices, body->num_vertices, body->indices, body->num_indices, &triangles));
+static void tekFindProjections(const Vector* triangles, vec3 axis, float* min_p, float* max_p) {
+    float min_proj = INFINITY, max_proj = -INFINITY;
+    for (uint i = 0; i < triangles->length; i++) {
+        const struct Triangle* triangle;
+        vectorGetItemPtr(triangles, i, &triangle);
+        for (uint j = 0; j < 3; j++) {
+            const float proj = glm_vec3_dot(triangle->vertices[j], axis);
+            if (proj < min_proj) {
+                min_proj = proj;
+            }
+            if (proj > max_proj) {
+                max_proj = proj;
+            }
+        }
+    }
+    *min_p = min_proj;
+    *max_p = max_proj;
+}
+
+static exception tekCreateOBB(const Vector* triangles, struct OBB* obb) {
     vec3 mean;
     tekCalculateConvexHullMean(&triangles, mean);
-    printf("mean = %f %f %f\n", EXPAND_VEC3(mean));
     mat3 covariance;
     tekCalculateCovarianceMatrix(&triangles, mean, covariance);
-    for (uint i = 0; i < 3; i++) {
-        for (uint j = 0; j < 3; j++) {
-            printf("%f ", covariance[i][j]);
-        }
-        printf("\n");
-    }
     vec3 eigenvectors[3];
     float eigenvalues[3];
     tekChainThrow(symmetricMatrixCalculateEigenvectors(covariance, eigenvectors, eigenvalues));
+
+    vec3 centre = {0.0f, 0.0f, 0.0f};
     for (uint i = 0; i < 3; i++) {
-        printf("eigenvector: %f %f %f\neigenvalue: %f\n", EXPAND_VEC3(eigenvectors[i]), eigenvalues[i]);
+        float min_proj, max_proj;
+        tekFindProjections(triangles, eigenvectors[i], &min_proj, &max_proj);
+        const float half_extent = 0.5f * (max_proj - min_proj);
+        const float centre_proj = 0.5f * (max_proj + min_proj);
+        glm_vec3_muladds(eigenvectors[i], centre_proj, centre);
+        glm_vec3_copy(eigenvectors[i], obb->axes[i]);
+        obb->half_extents[i] = half_extent;
+    }
+    glm_vec3_copy(centre, obb->centre);
+
+    return SUCCESS;
+}
+
+static exception tekCreateColliderNode(const flag type, const uint id, const struct OBB* obb, TekColliderNode** collider_node) {
+    *collider_node = (TekColliderNode*)malloc(sizeof(TekColliderNode));
+    if (!*collider_node)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for collider node.");
+    (*collider_node)->id = id;
+    (*collider_node)->type = type;
+    memcpy(&(*collider_node)->obb, obb, sizeof(struct OBB));
+    return SUCCESS;
+}
+
+#define tekColliderCleanup() \
+{ \
+vectorDelete(&triangles); \
+vectorDelete(&collider_stack); \
+vectorDelete(&sub_triangles); \
+} \
+
+exception tekCreateCollider(TekBody* body, TekCollider* collider) {
+    Vector collider_stack = {};
+    tekChainThrow(vectorCreate(16, sizeof(TekColliderNode*), &collider_stack));
+
+    Vector triangles = {};
+    tekChainThrow(tekGenerateTriangleArray(body->vertices, body->num_vertices, body->indices, body->num_indices, &triangles), {
+        vectorDelete(&collider_stack);
+    });
+
+    struct OBB obb = {};
+    tekCreateOBB(&triangles, &obb);
+    TekColliderNode* collider_node;
+    uint node_id = 0;
+    tekChainThrowThen(tekCreateColliderNode(COLLIDER_NODE, node_id++, &obb, &collider_node), {
+        vectorDelete(&triangles);
+        vectorDelete(&collider_stack);
+    });
+    tekChainThrowThen(vectorAddItem(&collider_stack, &collider_node), {
+        vectorDelete(&triangles);
+        vectorDelete(&collider_stack);
+    });
+
+    while (vectorPopItem(&collider_stack, &collider_node)) {
+        for (uint i = 0; i < 3; i++) {
+            uint num_left = 0, num_right = 0;
+
+
+            for (uint j = 0; j < triangles.length; j++) {
+                const struct Triangle* triangle;
+                vectorGetItemPtr(&triangles, j, &triangle);
+                vec3 delta;
+                glm_vec3_sub(triangle->centroid, obb.centre, delta);
+                const float side = glm_vec3_dot(delta, obb.axes[i]);
+                if (side < 0) {
+                    // left child
+                } else {
+                    // right child
+                }
+            }
+        }
     }
 
     return SUCCESS;
