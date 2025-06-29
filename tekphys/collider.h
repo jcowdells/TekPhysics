@@ -15,6 +15,8 @@ struct OBB {
     vec3 centre;
     vec3 axes[3];
     float half_extents[3];
+    uint* indices;
+    uint num_indices;
 };
 
 typedef struct TekColliderNode {
