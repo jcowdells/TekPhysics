@@ -134,7 +134,7 @@ exception vectorRemoveItem(Vector* vector, const uint index, void* item) {
  * @param vector The vector to pop from.
  * @param item A pointer to where the item will be stored. Must point to a buffer large enough to store the returned data.
  * @note Internally uses \ref vectorGetItem, check for more info.
- * @returns 1 if successfull, 0 if the vector is empty.
+ * @returns 1 if successful, 0 if the vector is empty.
  */
 flag vectorPopItem(Vector* vector, void* item) {
     if (vector->length == 0) {
