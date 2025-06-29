@@ -215,7 +215,7 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    tekSetMouseMode(MOUSE_MODE_CAMERA);
+    //stekSetMouseMode(MOUSE_MODE_CAMERA);
 
     TekEntity sphere;
     tekChainThrow(tekCreateEntity("../res/rad1.tmsh", "../res/translucent.tmat", (vec3){0.0f, 0.0f, 0.0f}, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, (vec3){1.0f, 1.0f, 1.0f}, &sphere));
