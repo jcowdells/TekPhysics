@@ -39,14 +39,38 @@ mat4 perp_projection;
 ThreadQueue event_queue = {};
 TekEntity* last_entity = 0;
 
+uint depth = 0;
+char depth_message[64];
+flag text_init = 0;
+TekText depth_text = {};
+TekBitmapFont depth_font = {};
+
 void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
     width = (float)fb_width;
     height = (float)fb_height;
     glm_perspective(1.2f, width / height, 0.1f, 100.0f, perp_projection);
 }
 
+static void updateDepthMessage() {
+    if (!text_init) return;
+    if (depth_text.font) tekDeleteText(&depth_text);
+    sprintf(depth_message, "View depth: %03d", depth);
+    memset(&depth_text, 0, sizeof(TekText));
+    tekLog(tekCreateText(depth_message, 30, &depth_font, &depth_text));
+}
+
 void tekMainKeyCallback(const int key, const int scancode, const int action, const int mods) {
     TekEvent event = {};
+
+    if ((key == GLFW_KEY_EQUAL) && (action == GLFW_RELEASE) && (depth < 100)) {
+        depth++;
+        updateDepthMessage();
+    }
+    if ((key == GLFW_KEY_MINUS) && (action == GLFW_RELEASE) && (depth > 0)) {
+        depth--;
+        updateDepthMessage();
+    }
+
     event.type = KEY_EVENT;
     event.data.key_input.key = key;
     event.data.key_input.scancode = scancode;
@@ -175,6 +199,11 @@ exception run() {
     tekChainThrowThen(threadQueueCreate(&state_queue, 4096), {
         threadQueueDelete(&event_queue);
     });
+
+    tekChainThrow(tekCreateFreeType());
+    tekChainThrow(tekCreateBitmapFont("../res/verdana_bold.ttf", 0, 64, &depth_font));
+    text_init = 1;
+    updateDepthMessage();
 
     Vector entities = {};
     tekChainThrow(vectorCreate(0, sizeof(TekEntity), &entities));
@@ -310,10 +339,9 @@ exception run() {
 
                 collider_stack.length = 0;
                 vectorAddItem(&collider_stack, &node);
-                uint num_iters = 0;
-                while (vectorPopItem(&collider_stack, &node)) {
-                    if (num_iters++ >= 1) {
-                        printf("End.\n");
+                uint num_iters = 1;
+                while (vectorRemoveItem(&collider_stack, 0, &node) != VECTOR_EXCEPTION) {
+                    if (num_iters++ >= 1000) {
                         break;
                     }
                     if (node->type == COLLIDER_NODE) {
@@ -357,7 +385,7 @@ exception run() {
             tekChainThrow(tekDrawEntity(entity, &camera));
         }
 
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         tekBindShaderProgram(translucent_shader);
         tekChainThrow(tekShaderUniformMat4(translucent_shader, "projection", camera.projection));
         tekChainThrow(tekShaderUniformMat4(translucent_shader, "view", camera.view));
@@ -380,10 +408,15 @@ exception run() {
         tekChainThrow(tekShaderUniformMat4(translucent_shader, "model", collider_model));
         tekChainThrow(tekShaderUniformVec4(translucent_shader, "light_color", (vec4){1.0f, 0.0f, 0.0f, 0.5f}));
         glBindVertexArray(cdr_vertex_array);
-        glDrawArrays(GL_POINTS, 0, (GLint)collider_boxes.length);
+        const uint n = 1 << depth;
+        uint count = (n << 1) - n;
+        if (collider_boxes.length > 0)
+            glDrawArrays(GL_POINTS, (GLint)(n - 1), (GLint)count);
 
         tekNotifyEntityMaterialChange();
-        
+
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        tekChainThrow(tekDrawText(&depth_text, 10, 10));
 
         // tekChainThrow(tekBindMaterial(&material));
         // tekChainThrow(tekBindMaterialMatrix(&material, camera.projection, PROJECTION_MATRIX_DATA));
@@ -403,6 +436,7 @@ exception run() {
     vectorDelete(&colliders);
     vectorDelete(&collider_stack);
     tekDeleteMaterial(&translucent);
+    tekDeleteFreeType();
     tekChainThrow(tekDelete());
     return SUCCESS;
 }
