@@ -1,9 +1,10 @@
 #version 330 core
 
+in vec4 g_color;
 out vec4 color;
 
 uniform vec4 light_color;
 
 void main() {
-    color = light_color;
+    color = vec4(g_color.xyz, light_color.w);
 }

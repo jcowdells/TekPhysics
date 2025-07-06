@@ -190,7 +190,7 @@ exception run() {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_CULL_FACE);
+    //glEnable(GL_CULL_FACE);
 
     vec3 camera_position = {0.0f, 0.0f, 0.0f};
     vec3 camera_rotation = {0.0f, 0.0f, 0.0f};
@@ -218,15 +218,40 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    //stekSetMouseMode(MOUSE_MODE_CAMERA);
+    tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     TekEntity sphere;
     tekChainThrow(tekCreateEntity("../res/rad1.tmsh", "../res/translucent.tmat", (vec3){0.0f, 0.0f, 0.0f}, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, (vec3){1.0f, 1.0f, 1.0f}, &sphere));
 
+    TekMaterial translucent = {};
+    tekChainThrow(tekCreateMaterial("../res/translucent.tmat", &translucent));
+
     Vector collider_stack = {};
     vectorCreate(1, sizeof(TekColliderNode*), &collider_stack);
 
-    
+    uint cdr_vertex_array;
+    glGenVertexArrays(1, &cdr_vertex_array);
+    glBindVertexArray(cdr_vertex_array);
+
+    uint cdr_vertex_buffer;
+    glGenBuffers(1, &cdr_vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, cdr_vertex_buffer);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 15 * sizeof(float), 0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(9 * sizeof(float)));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, 15 * sizeof(float), (void*)(12 * sizeof(float)));
+    glEnableVertexAttribArray(4);
+
+    glBindVertexArray(0);
+
+    uint translucent_shader;
+    tekChainThrow(tekCreateShaderProgramVGF("../shader/translucent.glvs", "../shader/translucent.glgs", "../shader/translucent.glfs", &translucent_shader));
 
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
@@ -281,48 +306,83 @@ exception run() {
                 }
 
                 TekColliderNode* node = 0;
-                tekChainThrow(vectorGetItem(&colliders, i, &node));
+                tekChainThrow(vectorGetItem(&colliders, state.object_id, &node));
 
                 collider_stack.length = 0;
                 vectorAddItem(&collider_stack, &node);
                 uint num_iters = 0;
                 while (vectorPopItem(&collider_stack, &node)) {
-                    if (++num_iters >= 1000) {
-                        printf("Failed.\n");
+                    if (num_iters++ >= 1) {
+                        printf("End.\n");
                         break;
                     }
                     if (node->type == COLLIDER_NODE) {
                         vectorAddItem(&collider_stack, &node->data.node.left);
                         vectorAddItem(&collider_stack, &node->data.node.right);
                     }
-                    if (node->type == COLLIDER_LEAF) {
-                        vec3 vertex_data[5];
-                        glm_vec3_copy(node->data.obb.centre, vertex_data[0]);
-                        vertex_data[1][0] = node->data.obb.half_extents[0];
-                        vertex_data[1][1] = node->data.obb.half_extents[1];
-                        vertex_data[1][2] = node->data.obb.half_extents[2];
-                        glm_vec3_copy(node->data.obb.axes[0], vertex_data[2]);
-                        glm_vec3_copy(node->data.obb.axes[1], vertex_data[3]);
-                        glm_vec3_copy(node->data.obb.axes[2], vertex_data[4]);
-                        tekChainThrow(vectorAddItem(&collider_boxes, &vertex_data));
-                    }
+                    vec3 vertex_data[5];
+                    glm_vec3_copy(node->obb.centre, vertex_data[0]);
+                    vertex_data[1][0] = node->obb.half_extents[0];
+                    vertex_data[1][1] = node->obb.half_extents[1];
+                    vertex_data[1][2] = node->obb.half_extents[2];
+                    glm_vec3_copy(node->obb.axes[0], vertex_data[2]);
+                    glm_vec3_copy(node->obb.axes[1], vertex_data[3]);
+                    glm_vec3_copy(node->obb.axes[2], vertex_data[4]);
+                    tekChainThrow(vectorAddItem(&collider_boxes, &vertex_data));
                     node = 0;
                 }
+
+                glBindVertexArray(cdr_vertex_array);
+                glBindBuffer(GL_ARRAY_BUFFER, cdr_vertex_buffer);
+                glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(collider_boxes.length * 5 * 3 * sizeof(float)), collider_boxes.internal, GL_STATIC_DRAW);
+                glBindVertexArray(0);
+
+                // for (uint i = 0; i < collider_boxes.length; i++) {
+                //     vec3* vertex_data;
+                //     vectorGetItemPtr(&collider_boxes, i, &vertex_data);
+                //     printf("Axis: %f %f %f\n", EXPAND_VEC3(vertex_data[2]));
+                // }
+
                 break;
             default:
                 break;
             }
         }
 
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         for (uint i = 0; i < entities.length; i++) {
             TekEntity* entity;
             tekChainThrow(vectorGetItemPtr(&entities, i, &entity));
             if (entity->mesh == 0) continue;
             tekChainThrow(tekDrawEntity(entity, &camera));
-
-            
         }
 
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        tekBindShaderProgram(translucent_shader);
+        tekChainThrow(tekShaderUniformMat4(translucent_shader, "projection", camera.projection));
+        tekChainThrow(tekShaderUniformMat4(translucent_shader, "view", camera.view));
+        mat4 collider_model;
+        if (entities.length == 0) {
+            glm_mat4_identity(collider_model);
+        } else {
+            TekEntity* first_entity;
+            vectorGetItemPtr(&entities, 0, &first_entity);
+            mat4 translation;
+
+            glm_translate_make(translation, first_entity->position);
+            mat4 rotation;
+            glm_quat_mat4(first_entity->rotation, rotation);
+            mat4 scale;
+            glm_scale_make(scale, first_entity->scale);
+            glm_mat4_mul(rotation, scale, collider_model);
+            glm_mat4_mul(translation, collider_model, collider_model);
+        }
+        tekChainThrow(tekShaderUniformMat4(translucent_shader, "model", collider_model));
+        tekChainThrow(tekShaderUniformVec4(translucent_shader, "light_color", (vec4){1.0f, 0.0f, 0.0f, 0.5f}));
+        glBindVertexArray(cdr_vertex_array);
+        glDrawArrays(GL_POINTS, 0, (GLint)collider_boxes.length);
+
+        tekNotifyEntityMaterialChange();
         
 
         // tekChainThrow(tekBindMaterial(&material));
@@ -342,6 +402,7 @@ exception run() {
     vectorDelete(&entities);
     vectorDelete(&colliders);
     vectorDelete(&collider_stack);
+    tekDeleteMaterial(&translucent);
     tekChainThrow(tekDelete());
     return SUCCESS;
 }

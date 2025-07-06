@@ -319,6 +319,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
                     printf("Writing at %u/%u\n", num_indices - num_right - 1, num_indices);
                     num_right++;
                 }
+                printf("l:r = %u:%u\n", num_left, num_right);
             }
             for (uint j = 0; j < num_indices; j++) {
                 printf("indices_buffer[%u] = %u\n", j, indices_buffer[j]);

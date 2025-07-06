@@ -1,13 +1,8 @@
 shaders:
-  vertex_shader: "../shader/vertex.glvs"
+  vertex_shader: "../shader/translucent.glvs"
   geometry_shader: "../shader/translucent.glgs"
   fragment_shader: "../shader/translucent.glfs"
 uniforms:
-  light_color:
-    r: 0.9
-    g: 0.0
-    b: 0.0
-    a: 0.5
   model: $tek_model_matrix
   view: $tek_view_matrix
   projection: $tek_projection_matrix

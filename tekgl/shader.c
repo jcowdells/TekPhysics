@@ -109,7 +109,7 @@ exception tekCreateShaderProgramVGF(const char* vertex_shader_filename, const ch
     tekChainThrow(tekCreateShader(GL_VERTEX_SHADER, vertex_shader_filename, &vertex_shader_id));
 
     uint geometry_shader_id;
-    tekChainThrow(tekCreateShader(GL_GEOMETRY_SHADER, geometry_shader_filename, &vertex_shader_id));
+    tekChainThrow(tekCreateShader(GL_GEOMETRY_SHADER, geometry_shader_filename, &geometry_shader_id));
 
     uint fragment_shader_id;
     tekChainThrow(tekCreateShader(GL_FRAGMENT_SHADER, fragment_shader_filename, &fragment_shader_id));

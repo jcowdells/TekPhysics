@@ -103,3 +103,6 @@ exception tekDrawEntity(TekEntity* entity, TekCamera* camera) {
     return SUCCESS;
 }
 
+void tekNotifyEntityMaterialChange() {
+    using_material = 0;
+}
