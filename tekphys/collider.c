@@ -205,13 +205,13 @@ static exception tekCreateOBB(const Vector* triangles, const uint* indices, cons
         tekFindProjections(triangles, indices, num_indices, eigenvectors[i], &min_proj, &max_proj);
         const float half_extent = 0.5f * (max_proj - min_proj);
         const float centre_proj = 0.5f * (max_proj + min_proj);
-        printf("eigen %u = %f %f %f\n", i, EXPAND_VEC3(obb->axes[i]));
         glm_vec3_muladds(eigenvectors[i], centre_proj, centre);
-        vec3 dump;
         glm_vec3_copy(eigenvectors[i], obb->axes[i]);
         obb->half_extents[i] = half_extent;
     }
     glm_vec3_copy(centre, obb->centre);
+
+    printf("Created OBB: %f %f %f\n", EXPAND_VEC3(centre));
 
     return SUCCESS;
 }
@@ -241,6 +241,24 @@ vectorDelete(&triangles); \
 vectorDelete(&collider_stack); \
 tekDeleteCollider(collider); \
 } \
+
+static void tekPrintCollider(TekColliderNode* collider, uint indent) {
+    
+    if (collider->type == COLLIDER_NODE) {
+        tekPrintCollider(collider->data.node.left, indent + 1);
+        for (uint i = 0; i < indent; i++) {
+            printf("  ");
+        }
+        printf("%u > (%f %f %f)\n", collider->id, EXPAND_VEC3(collider->obb.half_extents));
+        tekPrintCollider(collider->data.node.right, indent + 1);
+    } else if (collider->type == COLLIDER_LEAF){
+        for (uint i = 0; i < indent; i++) {
+            printf("  ");
+        }
+        printf("Leaf %u : %u triangle(s)", collider->id, collider->data.leaf.num_vertices / 3);
+        printf(" %f %f %f\n", EXPAND_VEC3(collider->obb.half_extents));
+    }
+}
 
 exception tekCreateCollider(TekBody* body, TekCollider* collider) {
     Vector collider_stack = {};
@@ -312,7 +330,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         }
         if (axis == 3) {
             // indivisible - overwrite current node to be a leaf
-            printf("Indivisible node with %u triangles.", num_left + num_right);
+            printf("Indivisible node with %u triangles, centre=%f,%f,%f.", num_left + num_right, EXPAND_VEC3(collider_node->obb.centre));
             collider_node->type = COLLIDER_LEAF;
             const uint num_indices = collider_node->data.node.num_indices;
             const uint num_vertices = num_indices * 3;
@@ -350,6 +368,9 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
             }
         }
     }
+
+
+    tekPrintCollider(*collider, 0);
 
     return SUCCESS;
 }

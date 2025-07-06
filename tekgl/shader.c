@@ -67,8 +67,26 @@ exception tekCreateShaderProgramViFi(const uint vertex_shader_id, const uint fra
     return SUCCESS;
 }
 
+exception tekCreateShaderProgramViGiFi(const uint vertex_shader_id, const uint geometry_shader_id, const uint fragment_shader_id, uint* shader_program_id) {
+    if (!vertex_shader_id || !geometry_shader_id || !fragment_shader_id) tekThrow(NULL_PTR_EXCEPTION, "Cannot create shader program with id 0.")
+
+    // create an empty shader program
+    *shader_program_id = glCreateProgram();
+    if (!*shader_program_id) tekThrow(OPENGL_EXCEPTION, "Failed to create shader program.");
+
+    // attach shaders
+    glAttachShader(*shader_program_id, vertex_shader_id);
+    glAttachShader(*shader_program_id, geometry_shader_id);
+    glAttachShader(*shader_program_id, fragment_shader_id);
+
+    // link program
+    glLinkProgram(*shader_program_id);
+
+    return SUCCESS;
+}
+
 exception tekCreateShaderProgramVF(const char* vertex_shader_filename, const char* fragment_shader_filename, uint* shader_program_id) {
-    // create vertex and fragment shaders
+    // create vertex, geometry and fragment shaders
     uint vertex_shader_id;
     tekChainThrow(tekCreateShader(GL_VERTEX_SHADER, vertex_shader_filename, &vertex_shader_id));
 
@@ -80,6 +98,28 @@ exception tekCreateShaderProgramVF(const char* vertex_shader_filename, const cha
 
     // clean up shaders as they are not needed now
     tekDeleteShader(vertex_shader_id);
+    tekDeleteShader(fragment_shader_id);
+
+    return SUCCESS;
+}
+
+exception tekCreateShaderProgramVGF(const char* vertex_shader_filename, const char* geometry_shader_filename, const char* fragment_shader_filename, uint* shader_program_id) {
+    // create vertex, geometry and fragment shaders
+    uint vertex_shader_id;
+    tekChainThrow(tekCreateShader(GL_VERTEX_SHADER, vertex_shader_filename, &vertex_shader_id));
+
+    uint geometry_shader_id;
+    tekChainThrow(tekCreateShader(GL_GEOMETRY_SHADER, geometry_shader_filename, &vertex_shader_id));
+
+    uint fragment_shader_id;
+    tekChainThrow(tekCreateShader(GL_FRAGMENT_SHADER, fragment_shader_filename, &fragment_shader_id));
+
+    // create shader program
+    tekChainThrow(tekCreateShaderProgramViGiFi(vertex_shader_id, geometry_shader_id, fragment_shader_id, shader_program_id));
+
+    // clean up shaders as they are not needed now
+    tekDeleteShader(vertex_shader_id);
+    tekDeleteShader(geometry_shader_id);
     tekDeleteShader(fragment_shader_id);
 
     return SUCCESS;

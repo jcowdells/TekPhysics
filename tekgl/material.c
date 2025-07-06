@@ -207,8 +207,14 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
 
     YmlData* vs_data = 0;
     YmlData* fs_data = 0;
+    YmlData* gs_data = 0;
     tekChainThrow(ymlGet(&material_yml, &vs_data, "shaders", "vertex_shader"));
     tekChainThrow(ymlGet(&material_yml, &fs_data, "shaders", "fragment_shader"));
+
+    // geometry shader is optional, check if we have one, don't throw error otherwise.
+    exception check_for_geometry = ymlGet(&material_yml, &gs_data, "shaders", "geometry_shader");
+    flag has_geometry;
+    if (check_for_geometry == SUCCESS) has_geometry = 1;
 
     char* vertex_shader;
     char* fragment_shader;
@@ -231,7 +237,21 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
     }
 
     uint shader_program_id = 0;
-    tek_exception = tekCreateShaderProgramVF(vertex_shader, fragment_shader, &shader_program_id);
+
+    if (has_geometry) {
+        char* geometry_shader;
+        tekChainThrowThen(ymlDataToString(gs_data, &geometry_shader), {
+            free(vertex_shader);
+            free(fragment_shader);
+            free(geometry_shader);
+            ymlDelete(&material_yml);
+        });
+        tek_exception = tekCreateShaderProgramVGF(vertex_shader, geometry_shader, fragment_shader, &shader_program_id);
+        free(geometry_shader);
+    } else {
+        tek_exception = tekCreateShaderProgramVF(vertex_shader, fragment_shader, &shader_program_id);
+    }
+
     free(vertex_shader);
     free(fragment_shader);
     if (tek_exception) {

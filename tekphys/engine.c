@@ -219,10 +219,10 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
         tekEngineCreateBodyCleanup;
     });
 
-    //state.type = __COLLIDER_STATE;
-    //state.data.collider = body.collider;
-    //tprint("Pushing collider: %p\n", body.collider);
-    //pushState(state_queue, state);
+    state.type = __COLLIDER_STATE;
+    state.data.collider = body.collider;
+    tprint("Pushing collider: %p\n", body.collider);
+    pushState(state_queue, state);
 
     if (object_id)
         *object_id = state.object_id;
