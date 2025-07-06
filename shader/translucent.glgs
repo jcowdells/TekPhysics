@@ -1,0 +1,59 @@
+#version 330 core
+
+layout (points) in;
+layout (triangles, max_vertices = 36) out;
+
+in VS_OUT {
+    vec3 half_extents;
+    vec3 axes[3];
+} gs_in[];
+
+uniform mat4 projection;
+
+void emitTriangle(vec3 vertices[8], int a, int b, int c) {
+    gl_Position = vec4(vertices[a], 1.0f);
+    EmitVertex();
+    gl_Position = vec4(vertices[b], 1.0f);
+    EmitVertex();
+    gl_Position = vec4(vertices[c], 1.0f);
+    EmitVertex();
+    EndPrimitive();
+}
+
+void main() {
+    vec3 vertices[8];
+    for (int x = 0; x < 2; i++) {
+        for (int y = 0; y < 2; y++) {
+            for (int z = 0; z < 2; z++) {
+                int index = x + 2*y + 4*z;
+                if (x) {
+                    vertices[index] += gs_in[0].half_extents.x * axes;
+                } else {
+                    vertices[index] -= gs_in[0].half_extents.x * axes;
+                }
+                if (y) {
+                    vertices[index] += gs_in[0].half_extents.y * axes;
+                } else {
+                    vertices[index] -= gs_in[0].half_extents.y * axes;
+                }
+                if (z) {
+                    vertices[index] += gs_in[0].half_extents.z * axes;
+                } else {
+                    vertices[index] -= gs_in[0].half_extents.z * axes;
+                }
+            }
+        }
+    }
+    emitTriangle(vertices, 0, 2, 3);
+    emitTriangle(vertices, 0, 3, 1);
+    emitTriangle(vertices, 0, 4, 6);
+    emitTriangle(vertices, 0, 6, 2);
+    emitTriangle(vertices, 0, 1, 5);
+    emitTriangle(vertices, 0, 5, 4);
+    emitTriangle(vertices, 7, 6, 4);
+    emitTriangle(vertices, 7, 4, 5);
+    emitTriangle(vertices, 7, 3, 2);
+    emitTriangle(vertices, 7, 2, 6);
+    emitTriangle(vertices, 7, 5, 1);
+    emitTriangle(vertices, 7, 1, 3);
+}
