@@ -343,6 +343,6 @@ exception tekBodyGetContactPoints(const TekBody* body_a, const TekBody* body_b, 
  * @param body The body to delete.
  */
 void tekDeleteBody(const TekBody* body) {
-    // tekDeleteCollider(&body->collider);
+    tekDeleteCollider(&body->collider);
     free(body->vertices);
 }

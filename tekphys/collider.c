@@ -98,16 +98,23 @@ tekThrowThen(FAILURE, "Vertex does not exist.", { \
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekGenerateTriangleArray(const vec3* vertices, const uint num_vertices, const uint* indices, const uint num_indices, Vector* triangles) {
+    // 1 triangle : 3 vertices, so triangle list is a third of the size of vertices array.
     tekChainThrow(vectorCreate(num_indices / 3, sizeof(struct Triangle), triangles));
+
+    // temp struct to fill with triangle data to copy into the vector.
     struct Triangle triangle = {};
     for (uint i = 0; i < num_indices; i += 3) {
+        // copy each vertex into the triangle struct.
         tekCheckIndex(indices[i]);
         glm_vec3_copy(vertices[indices[i]], triangle.vertices[0]);
         tekCheckIndex(indices[i + 1]);
         glm_vec3_copy(vertices[indices[i + 1]], triangle.vertices[1]);
         tekCheckIndex(indices[i + 2]);
         glm_vec3_copy(vertices[indices[i + 2]], triangle.vertices[2]);
+
         triangle.area = tekCalculateTriangleArea(triangle.vertices[0], triangle.vertices[1], triangle.vertices[2]);
+
+        // centroid = (sum of vertices) / 3
         vec3 centroid;
         glm_vec3_zero(centroid);
         sumVec3(
@@ -117,6 +124,8 @@ static exception tekGenerateTriangleArray(const vec3* vertices, const uint num_v
             triangle.vertices[2]
         );
         glm_vec3_scale(centroid, 1.0f / 3.0f, triangle.centroid);
+
+        // add to vector
         tekChainThrowThen(vectorAddItem(triangles, &triangle), {
             vectorDelete(triangles);
         });
@@ -124,6 +133,13 @@ static exception tekGenerateTriangleArray(const vec3* vertices, const uint num_v
     return SUCCESS;
 }
 
+/**
+ * Calculate the mean point of a set of triangles interpreted as a convex hull.
+ * @param[in] triangles A vector containing a list of triangles (3 vertices, centroid and area).
+ * @param[in] indices An array of indices that determine which triangles from the triangles vector will be used in the calculation.
+ * @param[in] num_indices The number of indices contained in the array.
+ * @param[out] mean The calculated mean of the convex hull.
+ */
 static void tekCalculateConvexHullMean(const Vector* triangles, const uint* indices, const uint num_indices, vec3 mean) {
     // https://www.cs.unc.edu/techreports/96-013.pdf
     // mean of convex hull = (1/(6n)) * SUM((1/area)(a + b + c))
@@ -137,46 +153,77 @@ static void tekCalculateConvexHullMean(const Vector* triangles, const uint* indi
         glm_vec3_zero(sum);
         const struct Triangle* triangle;
         vectorGetItemPtr(triangles, indices[i], &triangle);
+
+        // (a + b + c)
         sumVec3(
             sum,
             triangle->vertices[0],
             triangle->vertices[1],
             triangle->vertices[2]
         );
+
+        // SUM(1 / area)(a + b + c)
         glm_vec3_muladds(sum, 1.0f / triangle->area, mean);
     }
 
+    // divide by 6n to complete calculation
     const float num_triangles = (float)(6 * triangles->length);
     glm_vec3_scale(mean, 1.0f / num_triangles, mean);
 }
 
+/**
+ * Calculate the covariance matrix of a convex hull. This is a statistical measure of the spread of "matter" in the rigidbody, or like the standard deviation in 3 axes.
+ * @param[in] triangles A vector of triangle data (1 triangle = 3 vertices, centroid and area).
+ * @param[in] indices An array of indices that determine which triangles are used from the vector.
+ * @param[in] num_indices The length of the indices array.
+ * @param[in] mean The mean point of the convex hull, calculated using \ref tekCalculateConvexHullMean
+ * @param[out] covariance The calculated covariance matrix of the convex hull.
+ */
 static void tekCalculateCovarianceMatrix(const Vector* triangles, const uint* indices, const uint num_indices, const vec3 mean, mat3 covariance) {
     // https://www.cs.unc.edu/techreports/96-013.pdf
+    // Covariance[x, y] = (1/n) * SUM 1->n(area[i] * ((am[x] + bm[x] + cm[x]) * (am[y] + bm[y] + cm[y]) + am[i]am[j] + bm[i]bm[j] + cm[i]cm[j]))
+    // a = a - mean, b = b - mean, c = c - mean
+    // a, b, c = vertices of triangle
+    // x, y are row and column of covariance matrix in range 0..2
     glm_mat3_zero(covariance);
     for (uint i = 0; i < num_indices; i++) {
         struct Triangle* triangle;
         vectorGetItemPtr(triangles, indices[i], &triangle);
         for (uint j = 0; j < 3; j++) {
             for (uint k = 0; k < 3; k++) {
+                // calculate vertex - mean as variable for easier reading
                 const float pj = triangle->vertices[0][j] - mean[0];
                 const float pk = triangle->vertices[0][k] - mean[0];
                 const float qj = triangle->vertices[1][j] - mean[1];
                 const float qk = triangle->vertices[1][k] - mean[1];
                 const float rj = triangle->vertices[2][j] - mean[2];
                 const float rk = triangle->vertices[2][k] - mean[2];
+                // perform calculation for each element of matrix
                 covariance[k][j] += triangle->area * ((pj + qj + rj) * (pk + qk + rk) + pj * pk + qj * qk + rj * rk);
             }
         }
     }
+
+    // divide by number of triangles to complete the calculation.
     glm_mat3_scale(covariance, 1.0f / (float)triangles->length);
 }
 
+/**
+ * Find the minimum and maximum point of a set of triangles projected onto a single axis. Used to find the half extents of an OBB.
+ * @param[in] triangles A vector containing the triangles of a mesh.
+ * @param[in] indices An array containing the indices of the triangles that should be included in the calculation.
+ * @param[in] num_indices The length of the indices array.
+ * @param[in] axis The axis to project along. Should be one of the eigenvectors of the covariance matrix.
+ * @param[out] min_p A pointer to where the minimum projection should be stored.
+ * @param[out] max_p A pointer to where the maximum projection should be stored.
+ */
 static void tekFindProjections(const Vector* triangles, const uint* indices, const uint num_indices, vec3 axis, float* min_p, float* max_p) {
     float min_proj = INFINITY, max_proj = -INFINITY;
     for (uint i = 0; i < num_indices; i++) {
         const struct Triangle* triangle;
         vectorGetItemPtr(triangles, indices[i], &triangle);
         for (uint j = 0; j < 3; j++) {
+            // dot product = find the projection of point along the axis.
             const float proj = glm_vec3_dot(triangle->vertices[j], axis);
             if (proj < min_proj) {
                 min_proj = proj;
@@ -190,15 +237,29 @@ static void tekFindProjections(const Vector* triangles, const uint* indices, con
     *max_p = max_proj;
 }
 
+/**
+ * Create an OBB based on a set of triangles. This will be the smallest rectangular prism that contains all points of the triangles.
+ * @param[in] triangles A vector containing all the triangles of a mesh.
+ * @param[in] indices An array containing the indices of triangles which should be used in the calculations.
+ * @param[in] num_indices The number of indices that are in the array.
+ * @param[out] obb The obb struct that will be filled with the calculated data.
+ * @throws FAILURE if the calculation of eigenvectors fails.
+ */
 static exception tekCreateOBB(const Vector* triangles, const uint* indices, const uint num_indices, struct OBB* obb) {
+    // calculate mean and covariance of the set of triangles. This represents the central tendency and spread of the points
     vec3 mean;
     tekCalculateConvexHullMean(triangles, indices, num_indices, mean);
     mat3 covariance;
     tekCalculateCovarianceMatrix(triangles, indices, num_indices, mean, covariance);
+
+    // using this, we can find the eigenvectors which represent three orthogonal vectors of greatest spread.
+    // these eigenvectors are used to construct the OBB by producing a face perpendicular to each eigenvector.
     vec3 eigenvectors[3];
     float eigenvalues[3];
     tekChainThrow(symmetricMatrixCalculateEigenvectors(covariance, eigenvectors, eigenvalues));
 
+    // iterate over each eigenvector to find the centre of the OBB and the half extents
+    // the half extent is the shortest distance between the centre and one of the faces (2 * half extent = full extent = height of OBB in one axis)
     vec3 centre = {0.0f, 0.0f, 0.0f};
     for (uint i = 0; i < 3; i++) {
         float min_proj, max_proj;
@@ -209,13 +270,28 @@ static exception tekCreateOBB(const Vector* triangles, const uint* indices, cons
         glm_vec3_copy(eigenvectors[i], obb->axes[i]);
         obb->half_extents[i] = half_extent;
     }
-    glm_vec3_copy(centre, obb->centre);
 
+    glm_vec3_copy(centre, obb->centre);
+    obb->indices = indices;
+    obb->num_indices = num_indices;
+
+    // TODO: remove this print statement
     printf("Created OBB: %f %f %f\n", EXPAND_VEC3(centre));
 
     return SUCCESS;
 }
 
+/**
+ * Create a collider node struct given some information. Mostly just a helper function to create the internal OBB and set some values rather than copy-pasting a 10 line statement.
+ * @param[in] type The type of collider node, should be either COLLIDER_NODE or COLLIDER_LEAF.
+ * @param[in] id The id of the collider node (unused for now, may be needed).
+ * @param[in] triangles A vector of triangles that make up a mesh (triangle = 3 vertices, centroid and area).
+ * @param[in] indices An array of indices specifying which triangles should be used from the vector.
+ * @param[in] num_indices The number of indices in the array.
+ * @param[out] collider_node The collider node that was produced. Should point to an empty pointer that will be set to the memory address where the collider node was creatd at.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FAILURE if there is an error while calculating eigenvectors.
+ */
 static exception tekCreateColliderNode(const flag type, const uint id, const Vector* triangles, uint* indices, const uint num_indices, TekColliderNode** collider_node) {
     *collider_node = (TekColliderNode*)malloc(sizeof(TekColliderNode));
     if (!*collider_node)
@@ -226,9 +302,9 @@ static exception tekCreateColliderNode(const flag type, const uint id, const Vec
     });
     (*collider_node)->id = id;
     (*collider_node)->type = type;
+
+    // setting left & right pointers to NULL, in case someone tries to dereference them with junk in there.
     if (type == COLLIDER_NODE) {
-        (*collider_node)->data.node.indices = indices;
-        (*collider_node)->data.node.num_indices = num_indices;
         (*collider_node)->data.node.left = 0;
         (*collider_node)->data.node.right = 0;
     }
@@ -242,9 +318,14 @@ vectorDelete(&collider_stack); \
 tekDeleteCollider(collider); \
 } \
 
+/**
+ * Helper function to print out a collider tree.
+ * @param collider The collider structure to print out.
+ * @param indent The indent to print at (set to 0 if calling this, recursive calls set to indent + 1)
+ */
 static void tekPrintCollider(TekColliderNode* collider, uint indent) {
-    
     if (collider->type == COLLIDER_NODE) {
+        // using in order traversal, prints bottom left item of tree as the first line, and branches from there.
         tekPrintCollider(collider->data.node.left, indent + 1);
         for (uint i = 0; i < indent; i++) {
             printf("  ");
@@ -252,6 +333,7 @@ static void tekPrintCollider(TekColliderNode* collider, uint indent) {
         printf("%u > (%f %f %f)\n", collider->id, EXPAND_VEC3(collider->obb.half_extents));
         tekPrintCollider(collider->data.node.right, indent + 1);
     } else if (collider->type == COLLIDER_LEAF){
+        // if leaf node, stop recursing and print something.
         for (uint i = 0; i < indent; i++) {
             printf("  ");
         }
@@ -260,7 +342,15 @@ static void tekPrintCollider(TekColliderNode* collider, uint indent) {
     }
 }
 
+/**
+ * Create a collider structure given a body. The body must be initialised and contain the vertex and index data for the mesh.
+ * @param[in] body The body to calculate the collider for.
+ * @param[out] A pointer to where the collider structure pointer should be written to.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FAILURE if there was an exception during calculations.
+ */
 exception tekCreateCollider(TekBody* body, TekCollider* collider) {
+    // just set up some vectors and whatever
     Vector collider_stack = {};
     tekChainThrow(vectorCreate(16, sizeof(TekColliderNode*), &collider_stack));
 
@@ -277,6 +367,8 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         vectorDelete(&collider_stack);
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for indices.");
     }
+
+    // bogus code, basically just tell the create collider node function to use every index in the triangle vector
     for (uint i = 0; i < triangles.length; i++) {
         all_indices[i] = i;
     }
@@ -286,25 +378,32 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         vectorDelete(&collider_stack);
     });
 
+    // add initial node to the stack so we can start traversing
     *collider = collider_node;
     tekChainThrowThen(vectorAddItem(&collider_stack, &collider_node), {
         tekColliderCleanup();
     });
 
+    // TODO: remove some debugging prints
     while (vectorPopItem(&collider_stack, &collider_node)) {
-        uint* indices_buffer = (uint*)malloc(collider_node->data.node.num_indices * sizeof(uint));
+        // create an indices buffer, this will organise indices into left and right of the dividing axis.
+        uint* indices_buffer = (uint*)malloc(collider_node->obb.num_indices * sizeof(uint));
         if (!indices_buffer) {
             tekColliderCleanup();
             tekThrow(MEMORY_EXCEPTION, "Failed to allocate buffer for indices.");
         }
+
+        // starting with an impossible axis (3), so if it doesn't change we can tell that the polygons are indivisible.
         uint axis = 3;
         uint num_left = 0, num_right = 0;
+
+        // check each axis and count the number of triangles left and right of the dividing axis.
         for (uint i = 0; i < 3; i++) {
             num_left = 0;
             num_right = 0;
-            const uint num_indices = collider_node->data.node.num_indices;
+            const uint num_indices = collider_node->obb.num_indices;
             for (uint j = 0; j < num_indices; j++) {
-                const uint index = collider_node->data.node.indices[j];
+                const uint index = collider_node->obb.indices[j];
                 const struct Triangle* triangle;
                 vectorGetItemPtr(&triangles, index, &triangle);
                 vec3 delta;
@@ -324,6 +423,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
             for (uint j = 0; j < num_indices; j++) {
                 printf("indices_buffer[%u] = %u\n", j, indices_buffer[j]);
             }
+            // once a divisible axis is found (e.g. not all on the one side) then stop.
             if ((num_left != 0) && (num_right != 0)) {
                 axis = i;
                 break;
@@ -333,7 +433,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
             // indivisible - overwrite current node to be a leaf
             printf("Indivisible node with %u triangles, centre=%f,%f,%f.", num_left + num_right, EXPAND_VEC3(collider_node->obb.centre));
             collider_node->type = COLLIDER_LEAF;
-            const uint num_indices = collider_node->data.node.num_indices;
+            const uint num_indices = collider_node->obb.num_indices;
             const uint num_vertices = num_indices * 3;
             vec3* vertices = (vec3*)malloc(num_vertices * sizeof(vec3));
             if (!vertices) {
@@ -370,12 +470,61 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         }
     }
 
-
     tekPrintCollider(*collider, 0);
 
     return SUCCESS;
 }
 
-void tekDeleteCollider(TekCollider* collider) {
+#define LEFT  0
+#define RIGHT 1
 
+/**
+ * Delete a collider node
+ * @param collider_node The pointer to be freed.
+ * @param handedness Whether the node was a left or right child (use LEFT or RIGHT, assume LEFT for root node).
+ */
+static void tekDeleteColliderNode(TekColliderNode* collider_node, const flag handedness) {
+    if (collider_node->type == COLLIDER_LEAF)
+        free(collider_node->data.leaf.vertices);
+    // the right hand node has half the indices buffer, but left and right indices are allocated as one block. Left has index 0 as the start. Right has index 0 + num_left as the start
+    if (handedness == LEFT)
+        free(collider_node->obb.indices);
+    free(collider_node);
+}
+
+struct TekNodeHandednessPair {
+    TekColliderNode* collider_node;
+    flag handedness;
+};
+
+/**
+ * Delete a collider node by freeing all allocated memory. Will set pointer to NULL to avoid misuse of freed pointer.
+ * @param collider The collider structure to free.
+ */
+void tekDeleteCollider(TekCollider* collider) {
+    if (!collider || !(*collider)) return;
+    Vector collider_stack = {};
+    if (vectorCreate(16, sizeof(struct TekNodeHandednessPair), &collider_stack) != SUCCESS) return;
+
+    // traverse tree and record the handedness of each child node for when freeing.
+    struct TekNodeHandednessPair pair = {*collider, LEFT};
+    vectorAddItem(&collider_stack, &pair);
+    while (vectorPopItem(&collider_stack, &pair)) {
+        // post-order traversal so that child nodes can be recorded before freeing the parent.
+        if (pair.collider_node->type == COLLIDER_NODE) {
+            // temp struct so that the data can be copied into the vector
+            struct TekNodeHandednessPair temp_pair = {};
+            temp_pair.collider_node = pair.collider_node->data.node.right;
+            temp_pair.handedness = RIGHT;
+            vectorAddItem(&collider_stack, &temp_pair);
+            temp_pair.collider_node = pair.collider_node->data.node.left;
+            temp_pair.handedness = LEFT;
+            vectorAddItem(&collider_stack, &temp_pair);
+        }
+        tekDeleteColliderNode(pair.collider_node, pair.handedness);
+    }
+
+    // free vector used to iterate.
+    vectorDelete(&collider_stack);
+    *collider = 0;
 }

@@ -25,8 +25,6 @@ typedef struct TekColliderNode {
     struct OBB obb;
     union {
         struct {
-            uint num_indices;
-            uint* indices;
             struct TekColliderNode* left;
             struct TekColliderNode* right;
         } node;
