@@ -3,10 +3,16 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <cglm/vec3-ext.h>
+#include <cglm/mat3.h>
+
 #include "geometry.h"
 #include "body.h"
 #include "../core/vector.h"
-#include "cglm/mat3.h"
+
+#define EPSILON 1e-6
+#define LEFT  0
+#define RIGHT 1
 
 /**
  * Single-precision symmetric matrix compute eigenvalues (and optionally eigenvectors)\.
@@ -272,8 +278,6 @@ static exception tekCreateOBB(const Vector* triangles, const uint* indices, cons
     }
 
     glm_vec3_copy(centre, obb->centre);
-    obb->indices = indices;
-    obb->num_indices = num_indices;
 
     // TODO: remove this print statement
     printf("Created OBB: %f %f %f\n", EXPAND_VEC3(centre));
@@ -304,6 +308,8 @@ static exception tekCreateColliderNode(const flag type, const uint id, const Vec
     (*collider_node)->type = type;
 
     // setting left & right pointers to NULL, in case someone tries to dereference them with junk in there.
+    (*collider_node)->indices = indices;
+    (*collider_node)->num_indices = num_indices;
     if (type == COLLIDER_NODE) {
         (*collider_node)->data.node.left = 0;
         (*collider_node)->data.node.right = 0;
@@ -387,7 +393,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
     // TODO: remove some debugging prints
     while (vectorPopItem(&collider_stack, &collider_node)) {
         // create an indices buffer, this will organise indices into left and right of the dividing axis.
-        uint* indices_buffer = (uint*)malloc(collider_node->obb.num_indices * sizeof(uint));
+        uint* indices_buffer = (uint*)malloc(collider_node->num_indices * sizeof(uint));
         if (!indices_buffer) {
             tekColliderCleanup();
             tekThrow(MEMORY_EXCEPTION, "Failed to allocate buffer for indices.");
@@ -401,9 +407,9 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
         for (uint i = 0; i < 3; i++) {
             num_left = 0;
             num_right = 0;
-            const uint num_indices = collider_node->obb.num_indices;
+            const uint num_indices = collider_node->num_indices;
             for (uint j = 0; j < num_indices; j++) {
-                const uint index = collider_node->obb.indices[j];
+                const uint index = collider_node->indices[j];
                 const struct Triangle* triangle;
                 vectorGetItemPtr(&triangles, index, &triangle);
                 vec3 delta;
@@ -433,7 +439,7 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
             // indivisible - overwrite current node to be a leaf
             printf("Indivisible node with %u triangles, centre=%f,%f,%f.", num_left + num_right, EXPAND_VEC3(collider_node->obb.centre));
             collider_node->type = COLLIDER_LEAF;
-            const uint num_indices = collider_node->obb.num_indices;
+            const uint num_indices = collider_node->num_indices;
             const uint num_vertices = num_indices * 3;
             vec3* vertices = (vec3*)malloc(num_vertices * sizeof(vec3));
             if (!vertices) {
@@ -475,9 +481,6 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
     return SUCCESS;
 }
 
-#define LEFT  0
-#define RIGHT 1
-
 /**
  * Delete a collider node
  * @param collider_node The pointer to be freed.
@@ -488,7 +491,7 @@ static void tekDeleteColliderNode(TekColliderNode* collider_node, const flag han
         free(collider_node->data.leaf.vertices);
     // the right hand node has half the indices buffer, but left and right indices are allocated as one block. Left has index 0 as the start. Right has index 0 + num_left as the start
     if (handedness == LEFT)
-        free(collider_node->obb.indices);
+        free(collider_node->indices);
     free(collider_node);
 }
 
@@ -527,4 +530,73 @@ void tekDeleteCollider(TekCollider* collider) {
     // free vector used to iterate.
     vectorDelete(&collider_stack);
     *collider = 0;
+}
+
+/**
+ * Check whether there is a collision between two OBBs using the separating axis theorem.
+ * @param obb_a The first obb.
+ * @param obb_b The obb that will be tested against the first one.
+ */
+static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
+    // OBB-OBB collision using the separating axis theorem (SAT)
+    // based on Gottschalk et al., "OBBTree" (1996) https://www.cs.unc.edu/techreports/96-013.pdf
+    // also described in Ericson, "Real-Time Collision Detection", Ch. 4
+
+    printf("---------------------------------");
+
+    // some buffers to store some precalculated data that is reused throughout.
+    float dots[3][3];
+    float abs_dots[3][3];
+
+    for (uint i = 0; i < 3; i++) {
+        for (uint j = 0; j < 3; j++) {
+            dots[i][j] = glm_vec3_dot(obb_a->axes[i], obb_b->axes[j]);
+            abs_dots[i][j] = fabsf(dots[i][j]) + EPSILON;
+        }
+    }
+
+    // find the vector between the centres
+    vec3 translate;
+    glm_vec3_sub(obb_b->centre, obb_a->centre, translate);
+
+    // find the projections of this vector on each axis. (forms the basis of checks)
+    float projections[3];
+    for (uint i = 0; i < 3; i++) {
+        projections[i] = glm_vec3_dot(translate, obb_a->axes[i]);
+    }
+
+    // simple cases - check axes aligned with faces of the first obb.
+    for (uint i = 0; i < 3; i++) {
+        const float proj_a = obb_a->half_extents[i];
+        const float proj_b = obb_b->half_extents[0] * abs_dots[i][0] + obb_b->half_extents[1] * abs_dots[i][1] + obb_b->half_extents[2] * abs_dots[i][2];
+        printf("%f > %f + %f\n", fabsf(projections[i]), proj_a, proj_b);
+        if (fabsf(projections[i]) > proj_a + proj_b) return 0;
+    }
+
+    // medium cases - check axes aligned with the faces of the second obb.
+    for (uint i = 0; i < 3; i++) {
+        const float proj_a = obb_a->half_extents[0] * abs_dots[0][i] + obb_a->half_extents[1] * abs_dots[1][i] + obb_a->half_extents[2] * abs_dots[2][i];
+        const float proj_b = obb_b->half_extents[i];
+        const float proj_total = fabsf(projections[0] * dots[0][i] + projections[1] * dots[1][i] + projections[2] * dots[2][i]);
+        printf("%f > %f + %f\n", proj_total, proj_a, proj_b);
+        if (proj_total > proj_a + proj_b) return 0;
+    }
+
+    // tricky tricky cases - check axes aligned with the edges of both - cross products of the axes from before.
+    for (uint i = 0; i < 3; i++) {
+        for (uint j = 0; j < 3; j++) {
+            const float proj_a = obb_a->half_extents[(i + 1) % 3] * abs_dots[(i + 2) % 3][j] + obb_a->half_extents[(i + 2) % 3] * abs_dots[(i + 1) % 3][j];
+            const float proj_b = obb_b->half_extents[(j + 1) % 3] * abs_dots[i][(j + 2) % 3] + obb_b->half_extents[(j + 2) % 3] * abs_dots[i][(j + 1) % 3];
+            const float proj_total = fabsf(projections[(i + 2) % 3] * dots[(i + 1) % 3][j] - projections[(i + 1) % 3] * dots[(i + 2) % 3][j]);
+            printf("%f > %f + %f\n", proj_total, proj_a, proj_b);
+            if (proj_total > proj_a + proj_b) return 0;
+        }
+    }
+
+    // if no separation is found in any axis, there must be a collision.
+    return 1;
+}
+
+flag testCollision(TekBody* a, TekBody* b) {
+    return tekCheckOBBCollision(&a->collider->obb, &b->collider->obb);
 }

@@ -15,14 +15,18 @@ struct OBB {
     vec3 centre;
     vec3 axes[3];
     float half_extents[3];
-    uint* indices;
-    uint num_indices;
+
+    vec3 w_centre;
+    vec3 w_axes[3];
+    float w_half_extents[3];
 };
 
 typedef struct TekColliderNode {
     flag type;
     uint id;
     struct OBB obb;
+    uint* indices;
+    uint num_indices;
     union {
         struct {
             struct TekColliderNode* left;
@@ -39,3 +43,4 @@ typedef TekColliderNode* TekCollider;
 
 exception tekCreateCollider(TekBody* body, TekCollider* collider);
 void tekDeleteCollider(TekCollider* collider);
+flag testCollision(TekBody* a, TekBody* b);

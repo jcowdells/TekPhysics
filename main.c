@@ -441,15 +441,6 @@ exception run() {
     return SUCCESS;
 }
 
-void print_test(const PriorityQueue* queue) {
-    printf("Test:\n");
-    const PriorityQueueItem* item = queue->queue;
-    while (item) {
-        printf("%f %p, len=%u\n", item->priority, item->data, queue->length);
-        item = item->prev;
-    }
-}
-
 int main(void) {
     tekInitExceptions();
     tekLog(run());
