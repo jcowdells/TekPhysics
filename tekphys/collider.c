@@ -9,10 +9,33 @@
 #include "geometry.h"
 #include "body.h"
 #include "../core/vector.h"
+#include "../tekgl/manager.h"
 
 #define EPSILON 1e-6
 #define LEFT  0
 #define RIGHT 1
+
+#define NOT_INITIALISED 0
+#define INITIALISED     1
+#define DE_INITIALISED  2
+
+static Vector collider_buffer = {};
+static flag collider_init = NOT_INITIALISED;
+
+void tekColliderDelete() {
+    collider_init = DE_INITIALISED;
+    vectorDelete(&collider_buffer);
+}
+
+tek_init TekColliderInit() {
+    exception tek_exception = vectorCreate(16, 2 * sizeof(TekColliderNode*), &collider_buffer);
+    if (tek_exception != SUCCESS) return;
+
+    tek_exception = tekAddDeleteFunc(tekColliderDelete);
+    if (tek_exception != SUCCESS) return;
+
+    collider_init = INITIALISED;
+}
 
 /**
  * Single-precision symmetric matrix compute eigenvalues (and optionally eigenvectors)\.
@@ -550,43 +573,43 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
 
     for (uint i = 0; i < 3; i++) {
         for (uint j = 0; j < 3; j++) {
-            dots[i][j] = glm_vec3_dot(obb_a->axes[i], obb_b->axes[j]);
+            dots[i][j] = glm_vec3_dot(obb_a->w_axes[i], obb_b->w_axes[j]);
             abs_dots[i][j] = fabsf(dots[i][j]) + EPSILON;
         }
     }
 
     // find the vector between the centres
     vec3 translate;
-    glm_vec3_sub(obb_b->centre, obb_a->centre, translate);
+    glm_vec3_sub(obb_b->w_centre, obb_a->w_centre, translate);
 
     // find the projections of this vector on each axis. (forms the basis of checks)
     float projections[3];
     for (uint i = 0; i < 3; i++) {
-        projections[i] = glm_vec3_dot(translate, obb_a->axes[i]);
+        projections[i] = glm_vec3_dot(translate, obb_a->w_axes[i]);
     }
 
     // simple cases - check axes aligned with faces of the first obb.
     for (uint i = 0; i < 3; i++) {
-        const float proj_a = obb_a->half_extents[i];
-        const float proj_b = obb_b->half_extents[0] * abs_dots[i][0] + obb_b->half_extents[1] * abs_dots[i][1] + obb_b->half_extents[2] * abs_dots[i][2];
+        const float proj_a = obb_a->w_half_extents[i];
+        const float proj_b = obb_b->w_half_extents[0] * abs_dots[i][0] + obb_b->w_half_extents[1] * abs_dots[i][1] + obb_b->w_half_extents[2] * abs_dots[i][2];
         printf("%f > %f + %f\n", fabsf(projections[i]), proj_a, proj_b);
         if (fabsf(projections[i]) > proj_a + proj_b) return 0;
     }
 
     // medium cases - check axes aligned with the faces of the second obb.
     for (uint i = 0; i < 3; i++) {
-        const float proj_a = obb_a->half_extents[0] * abs_dots[0][i] + obb_a->half_extents[1] * abs_dots[1][i] + obb_a->half_extents[2] * abs_dots[2][i];
-        const float proj_b = obb_b->half_extents[i];
+        const float proj_a = obb_a->w_half_extents[0] * abs_dots[0][i] + obb_a->w_half_extents[1] * abs_dots[1][i] + obb_a->w_half_extents[2] * abs_dots[2][i];
+        const float proj_b = obb_b->w_half_extents[i];
         const float proj_total = fabsf(projections[0] * dots[0][i] + projections[1] * dots[1][i] + projections[2] * dots[2][i]);
         printf("%f > %f + %f\n", proj_total, proj_a, proj_b);
         if (proj_total > proj_a + proj_b) return 0;
     }
 
-    // tricky tricky cases - check axes aligned with the edges of both - cross products of the axes from before.
+    // tricky tricky cases - check axes aligned with the edges and corners of both - cross products of the axes from before.
     for (uint i = 0; i < 3; i++) {
         for (uint j = 0; j < 3; j++) {
-            const float proj_a = obb_a->half_extents[(i + 1) % 3] * abs_dots[(i + 2) % 3][j] + obb_a->half_extents[(i + 2) % 3] * abs_dots[(i + 1) % 3][j];
-            const float proj_b = obb_b->half_extents[(j + 1) % 3] * abs_dots[i][(j + 2) % 3] + obb_b->half_extents[(j + 2) % 3] * abs_dots[i][(j + 1) % 3];
+            const float proj_a = obb_a->w_half_extents[(i + 1) % 3] * abs_dots[(i + 2) % 3][j] + obb_a->w_half_extents[(i + 2) % 3] * abs_dots[(i + 1) % 3][j];
+            const float proj_b = obb_b->w_half_extents[(j + 1) % 3] * abs_dots[i][(j + 2) % 3] + obb_b->w_half_extents[(j + 2) % 3] * abs_dots[i][(j + 1) % 3];
             const float proj_total = fabsf(projections[(i + 2) % 3] * dots[(i + 1) % 3][j] - projections[(i + 1) % 3] * dots[(i + 2) % 3][j]);
             printf("%f > %f + %f\n", proj_total, proj_a, proj_b);
             if (proj_total > proj_a + proj_b) return 0;
@@ -597,6 +620,59 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     return 1;
 }
 
+static void tekUpdateOBB(struct OBB* obb, mat4 transform) {
+    glm_mat4_mulv3(transform, obb->centre, 1.0f, obb->w_centre);
+
+    for (uint i = 0; i < 3; i++) {
+        glm_mat4_mulv3(transform, obb->axes[i], 0.0f, obb->w_axes[i]);
+        const float scale_factor = glm_vec3_norm(obb->axes[i]);
+        glm_vec3_scale(obb->axes[i], 1.0f / scale_factor, obb->axes[i]);
+        obb->w_half_extents[i] = obb->half_extents[i] * scale_factor;
+    }
+}
+
+#define getChild(collider_node, i) (i == LEFT) ? collider_node->data->node->left : collider_node->data->node->right
+
+static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
+    if (collider_init == DE_INITIALISED) return SUCCESS;
+    if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
+    collider_buffer.length = 0;
+    TekColliderNode* pair[2] {
+        a->collider, b->collider
+    };
+    tekChainThrow(vectorAddItem(&collider_buffer, &pair));
+    while (vectorPopItem(&collider_buffer, &pair)) {
+        if (pair[LEFT]->type == COLLIDER_NODE) {
+            tekUpdateOBB(&pair[LEFT]->data->node->left->obb);
+            tekUpdateOBB(&pair[LEFT]->data->node->right->obb);
+        }
+        if (pair[RIGHT]->type == COLLIDER_NODE) {
+            tekUpdateOBB(&pair[RIGHT]->data->node->left->obb);
+            tekUpdateOBB(&pair[RIGHT]->data->node->right->obb);
+        }
+
+        TekColliderNode* temp_pair[2];
+        for (uint i = 0; i < 2; i++) {
+            for (uint j = 0; j < 2; j++) {
+                const TekColliderNode* node_a = (pair[LEFT]->type == COLLIDER_NODE) ? getChild(pair[LEFT], i) : pair[LEFT];
+                const TekColliderNode* node_b = (pair[RIGHT]->type == COLLIDER_NODE) ? getChild(pair[RIGHT], j) : pair[RIGHT];
+
+                if (pair[LEFT]->type == COLLIDER_NODE) {
+
+                }
+
+                if (tekCheckOBBCollision(node_a->obb, node_b->obb)) {
+                    temp_pair[LEFT] = node_a;
+                    temp_pair[RIGHT] = node_b;
+                    tekChainThrow(vectorAddItem(&collider_buffer, &temp_pair));
+                }
+            }
+        }
+    }
+}
+
 flag testCollision(TekBody* a, TekBody* b) {
+    tekUpdateOBB(&a->collider->obb, a->transform);
+    tekUpdateOBB(&b->collider->obb, b->transform);
     return tekCheckOBBCollision(&a->collider->obb, &b->collider->obb);
 }
