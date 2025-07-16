@@ -91,6 +91,11 @@ struct Triangle {
     float area;
 };
 
+struct AABB {
+    vec3 centre;
+    float half_extents[3];
+}
+
 /**
  * Calculate the area of a triangle given three points in space.
  * @param point_a The first point of the triangle.
@@ -636,12 +641,15 @@ static void tekCreateOBBTransform(struct OBB* obb, mat4 transform) {
         obb->w_axes[0][2], obb->w_axes[1][2], obb->w_axes[2][2], obb->w_centre[2],
         0.0f, 0.0f, 0.0f, 1.0f
     };
-    glm_mat4_inv_fast(temp_transform, temp_transform);
+    glm_mat4_inv_fast(temp_transform, transform);
+}
+
+static flag tekCheckAABBTriangleCollision(struct AABB* aabb, vec3 triangle[3]) {
     
 }
 
-static flag tekCheckOBBTriangleCollision(struct OBB* obb_a, vec3 triangle[3]) {
-
+static flag tekCheckOBBTriangleCollision(struct OBB* obb, vec3 triangle[3]) {
+    
     return 1;
 }
 
