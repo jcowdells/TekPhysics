@@ -34,6 +34,7 @@ typedef struct TekColliderNode {
         } node;
         struct {
             vec3* vertices;
+            vec3* w_vertices;
             uint num_vertices;
         } leaf;
     } data;

@@ -469,15 +469,24 @@ exception tekCreateCollider(TekBody* body, TekCollider* collider) {
                 tekColliderCleanup();
                 tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vertices.");
             }
+            vec3* w_vertices = (vec3*)malloc(num_vertices * sizeof(vec3));
+            if (!w_vertices) {
+                tekColliderCleanup();
+                tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for world space vertices.");
+            }
             for (uint i = 0; i < num_indices; i++) {
                 const struct Triangle* triangle;
                 vectorGetItemPtr(&triangles, i, &triangle);
                 glm_vec3_copy(triangle->vertices[0], vertices[i * 3]);
                 glm_vec3_copy(triangle->vertices[1], vertices[i * 3 + 1]);
                 glm_vec3_copy(triangle->vertices[2], vertices[i * 3 + 2]);
+                for (uint j = 0; j < 3; j++) {
+                    glm_vec3_zero(vertices[i * 3 + j]);
+                }
             }
             collider_node->data.leaf.num_vertices = num_vertices;
             collider_node->data.leaf.vertices = vertices;
+            collider_node->data.leaf.w_vertices = w_vertices;
         } else {
             // divisible, create two new nodes and set as children.
             for (uint right = 0; right < 2; right++) {
@@ -574,7 +583,7 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     for (uint i = 0; i < 3; i++) {
         for (uint j = 0; j < 3; j++) {
             dots[i][j] = glm_vec3_dot(obb_a->w_axes[i], obb_b->w_axes[j]);
-            abs_dots[i][j] = fabsf(dots[i][j]) + EPSILON;
+            abs_dots[i][j] = fabsf(dots[i][j]) + FLT_EPSILON;
         }
     }
 
@@ -620,6 +629,22 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     return 1;
 }
 
+static void tekCreateOBBTransform(struct OBB* obb, mat4 transform) {
+    mat4 temp_transform = {
+        obb->w_axes[0][0], obb->w_axes[1][0], obb->w_axes[2][0], obb->w_centre[0],
+        obb->w_axes[0][1], obb->w_axes[1][1], obb->w_axes[2][1], obb->w_centre[1],
+        obb->w_axes[0][2], obb->w_axes[1][2], obb->w_axes[2][2], obb->w_centre[2],
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    glm_mat4_inv_fast(temp_transform, temp_transform);
+    
+}
+
+static flag tekCheckOBBTriangleCollision(struct OBB* obb_a, vec3 triangle[3]) {
+
+    return 1;
+}
+
 static void tekUpdateOBB(struct OBB* obb, mat4 transform) {
     glm_mat4_mulv3(transform, obb->centre, 1.0f, obb->w_centre);
 
@@ -631,7 +656,7 @@ static void tekUpdateOBB(struct OBB* obb, mat4 transform) {
     }
 }
 
-#define getChild(collider_node, i) (i == LEFT) ? collider_node->data->node->left : collider_node->data->node->right
+#define getChild(collider_node, i) (i == LEFT) ? collider_node->data.node.left : collider_node->data.node.right
 
 static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
     if (collider_init == DE_INITIALISED) return SUCCESS;
@@ -643,12 +668,12 @@ static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
     tekChainThrow(vectorAddItem(&collider_buffer, &pair));
     while (vectorPopItem(&collider_buffer, &pair)) {
         if (pair[LEFT]->type == COLLIDER_NODE) {
-            tekUpdateOBB(&pair[LEFT]->data->node->left->obb);
-            tekUpdateOBB(&pair[LEFT]->data->node->right->obb);
+            tekUpdateOBB(&pair[LEFT]->data.node.left->obb, a->transform);
+            tekUpdateOBB(&pair[LEFT]->data.node.right->obb, a->transform);
         }
         if (pair[RIGHT]->type == COLLIDER_NODE) {
-            tekUpdateOBB(&pair[RIGHT]->data->node->left->obb);
-            tekUpdateOBB(&pair[RIGHT]->data->node->right->obb);
+            tekUpdateOBB(&pair[RIGHT]->data.node.left->obb, b->transform);
+            tekUpdateOBB(&pair[RIGHT]->data.node.right->obb, b->transform);
         }
 
         TekColliderNode* temp_pair[2];
@@ -661,7 +686,7 @@ static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
 
                 }
 
-                if (tekCheckOBBCollision(node_a->obb, node_b->obb)) {
+                if (tekCheckOBBCollision(&node_a->obb, &node_b->obb)) {
                     temp_pair[LEFT] = node_a;
                     temp_pair[RIGHT] = node_b;
                     tekChainThrow(vectorAddItem(&collider_buffer, &temp_pair));
