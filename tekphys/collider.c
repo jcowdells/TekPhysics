@@ -91,11 +91,6 @@ struct Triangle {
     float area;
 };
 
-struct AABB {
-    vec3 centre;
-    float half_extents[3];
-}
-
 /**
  * Calculate the area of a triangle given three points in space.
  * @param point_a The first point of the triangle.
@@ -634,7 +629,7 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     return 1;
 }
 
-static void tekCreateOBBTransform(struct OBB* obb, mat4 transform) {
+static void tekCreateOBBTransform(const struct OBB* obb, mat4 transform) {
     mat4 temp_transform = {
         obb->w_axes[0][0], obb->w_axes[1][0], obb->w_axes[2][0], obb->w_centre[0],
         obb->w_axes[0][1], obb->w_axes[1][1], obb->w_axes[2][1], obb->w_centre[1],
@@ -644,13 +639,95 @@ static void tekCreateOBBTransform(struct OBB* obb, mat4 transform) {
     glm_mat4_inv_fast(temp_transform, transform);
 }
 
-static flag tekCheckAABBTriangleCollision(struct AABB* aabb, vec3 triangle[3]) {
-    
+static flag tekCheckAABBTriangleCollision(const struct OBB* aabb, vec3 triangle[3]) {
+    vec3 face_vectors[3];
+    for (uint i = 0; i < 3; i++) {
+        glm_vec3_sub(
+            triangle[(i + 1) % 3],
+            triangle[i],
+            face_vectors[i]
+            );
+    }
+
+    vec3 xyz_axes[3] = {
+        {1.0f, 0.0f, 0.0f},
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f}
+    };
+    float dots[3];
+
+    // first, test the axis which is the normal of the triangle.
+    // dots[0] = the distance of the triangle from the centre of the aabb when projected onto the normal.
+    // face_projection = half the length of the aabb when projected onto the normal axis
+    //
+    // +---+      /|
+    // |   |     / |
+    // +---+    /__|
+    //
+    // |===|------|-    < this is the axis being projected against
+    //   ^    ^   ^
+    //   a    b   c
+    // a = face_projection - the aabb projected onto the axis
+    // b = the separation (Separating Axis Theorem)
+    // c = dots[0] - the triangle which is perpendicular to the axis, projection is a single point.
+    // hence, when c > a, there is separation and no collision. if a > c, then there is no separation in this axis, continue the search
+    vec3 face_normal;
+    // normal of a triangle = cross product of any two edges
+    glm_vec3_cross(face_vectors[0], face_vectors[1], face_normal);
+    glm_vec3_normalize(face_normal);
+    // when testing the face normal axis, all three points of the triangle project to the same point. so just check point 0
+    dots[0] = glm_vec3_dot(triangle[0], face_normal);
+    const float face_projection = aabb->w_half_extents[0] * fabsf(face_normal[0]) + aabb->w_half_extents[1] * fabsf(face_normal[1]) + aabb->w_half_extents[2] * fabsf(face_normal[2]);
+    if (fabsf(dots[0]) > face_projection) {
+        return 0;
+    }
+
+    // testing against the 3 axes of the AABB, which are by definition the X, Y and Z axes.
+    for (uint i = 0; i < 3; i++) {
+        for (uint j = 0; j < 3; j++) {
+            dots[j] = glm_vec3_dot(triangle[j], xyz_axes[i]);
+        }
+        // the projection of the AABB along this axis will just be the half extent:
+        //
+        // +-----------+
+        // |     O---->|   this vector represents an axis, as you can see the axis aligns with the half extent.
+        // +-----------+
+        if (fmaxf(-fmaxf(dots[0], fmaxf(dots[1], dots[2])), fminf(dots[0], fminf(dots[1], dots[2]))) > aabb->w_half_extents[i]) {
+            return 0;
+        }
+    }
+
+    // testing against the final 9 axes, which are the cross products against the AABB's axes and the triangle's edge vectors.
+    for (uint i = 0; i < 3; i++) {
+        for (uint j = 0; j < 3; j++) {
+            vec3 curr_axis;
+            glm_vec3_cross(xyz_axes[i], face_vectors[j], curr_axis);
+            float projection = 0.0f;
+            for (uint k = 0; k < 3; k++) {
+                projection += aabb->w_half_extents[k] * fabsf(glm_vec3_dot(xyz_axes[k], curr_axis));
+                dots[k] = glm_vec3_dot(triangle[k], curr_axis);
+            }
+            if (fmaxf(-fmaxf(dots[0], fmaxf(dots[1], dots[2])), fminf(dots[0], fminf(dots[1], dots[2]))) > projection) {
+                return 0;
+            }
+        }
+    }
+
+    // assuming no separation was found in any axis, then there must be a collision.
+    return 1;
 }
 
-static flag tekCheckOBBTriangleCollision(struct OBB* obb, vec3 triangle[3]) {
-    
-    return 1;
+static flag tekCheckOBBTriangleCollision(const struct OBB* obb, const vec3 triangle[3]) {
+    mat4 transform;
+    tekCreateOBBTransform(obb, transform);
+
+    vec3 transformed_triangle[3];
+
+    for (uint i = 0; i < 3; i++) {
+        glm_mat4_mulv3(transform, triangle[i], 1.0f, transformed_triangle[i]);
+    }
+
+    return tekCheckAABBTriangleCollision(obb, transformed_triangle);
 }
 
 static void tekUpdateOBB(struct OBB* obb, mat4 transform) {
