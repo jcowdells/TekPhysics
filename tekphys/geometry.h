@@ -12,3 +12,4 @@ void tetrahedronInertiaTensor(const vec3 point_a, const vec3 point_b, const vec3
 void translateInertiaTensor(mat3 tensor, float mass, vec3 translate);
 
 void mat3Add(mat3 a, mat3 b, mat3 m);
+float scalarTripleProduct(vec3 vector_a, vec3 vector_b, vec3 vector_c);

@@ -374,11 +374,11 @@ static void tekPrintCollider(TekColliderNode* collider, uint indent) {
 /**
  * Create a collider structure given a body. The body must be initialised and contain the vertex and index data for the mesh.
  * @param[in] body The body to calculate the collider for.
- * @param[out] A pointer to where the collider structure pointer should be written to.
+ * @param[out] collider A pointer to where the collider structure pointer should be written to.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  * @throws FAILURE if there was an exception during calculations.
  */
-exception tekCreateCollider(TekBody* body, TekCollider* collider) {
+exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
     // just set up some vectors and whatever
     Vector collider_stack = {};
     tekChainThrow(vectorCreate(16, sizeof(TekColliderNode*), &collider_stack));
@@ -639,8 +639,14 @@ static void tekCreateOBBTransform(const struct OBB* obb, mat4 transform) {
     glm_mat4_inv_fast(temp_transform, transform);
 }
 
-static int get_sign(const float x) {
-    return (x > 0) ? 1 : (x < 0) ? -1 : 0;
+static int getSign(const float x) {
+    if (x > 0) {
+        return 1;
+    }
+    if (x < 0) {
+        return -1;
+    }
+    return 0;
 }
 
 static float tekCalculateOrientation(vec3 point, vec3 triangle[3]) {
@@ -648,6 +654,14 @@ static float tekCalculateOrientation(vec3 point, vec3 triangle[3]) {
     for (uint i = 0; i < 3; i++) {
         glm_vec3_sub(triangle[i], point, sub_buffer[i]);
     }
+    return scalarTripleProduct(sub_buffer[0], sub_buffer[1], sub_buffer[2]);
+}
+
+static float tekCalculateOrientationPoints(vec3 point_a, vec3 point_b, vec3 point_c, vec3 point_d) {
+    vec3 sub_buffer[3];
+    glm_vec3_sub(point_a, point_d, sub_buffer[0]);
+    glm_vec3_sub(point_b, point_d, sub_buffer[1]);
+    glm_vec3_sub(point_c, point_d, sub_buffer[2]);
     return scalarTripleProduct(sub_buffer[0], sub_buffer[1], sub_buffer[2]);
 }
 
@@ -664,29 +678,43 @@ void tekSwapTriangleVertices(vec3 vertices[3], uint swap_index) {
         memmove(&vertices[1], &vertices[0], 2 * sizeof(vec3));
         glm_vec3_copy(swap_vertex, vertices[0]);
     default:
-        return;
     }
 }
 
-static int tekCalculateSignNumber(vec3 triangle_a[3], vec3 triangle_b[3]) {
+static void tekCalculateSignArray(vec3 triangle_a[3], vec3 triangle_b[3], int sign_array[3]) {
     // find the "determinants" of each point on triangle_a against triangle_b
     // we only care about the sign of the calculation though.
     // the sign represents whether the point is in the positive or negative halfspace represented by the plane formed by the triangle.
     // the two halfspaces are if you imagine the triangle extended to an infinite plane and dividing the universe in **half** on either side of the plane.
-    int signs[3];
     for (uint i = 0; i < 3; i++) {
-        signs[i] = get_sign(tekCalculateOrientation(triangle_a[i], triangle_b));
+        sign_array[i] = getSign(tekCalculateOrientation(triangle_b, triangle_a[i]));
     }
+}
 
+static int tekCalculateSignNumber(int sign_array[3]) {
     // create a unique number for any combination of signs.
-    return 9 * signs[0] + 3 * signs[1] + signs[2];
+    return 9 * sign_array[0] + 3 * sign_array[1] + sign_array[2];
+}
+
+static void tekFindAndSwapTriangleVertices(vec3 triangle[3], int sign_array[3]) {
+    // get the triangle into a point where there is only one vertex with a negative sign.
+    if (sign_array[0] + sign_array[1] + sign_array[2] < 0) {
+        for (uint i = 0; i < 3; i++) sign_array[i] *= -1;
+    }
+    if (sign_array[1] == -1) {
+        tekSwapTriangleVertices(triangle, 1);
+    } else if (sign_array[2] == -1) {
+        tekSwapTriangleVertices(triangle, 2);
+    }
 }
 
 static exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision) {
     // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
-    static int cumulative_sign = tekCalculateSignNumber(triangle_a, triangle_b);
+    int sign_array[3];
+    tekCalculateSignArray(triangle_a, triangle_b, sign_array);
+    const int cumulative_sign = tekCalculateSignNumber(sign_array);
 
-    // if theyre all positive or all negative, this means that all points are on the same side of the plane
+    // if they're all positive or all negative, this means that all points are on the same side of the plane
     // this means its truly impossible for there to be a collision, there needs to be a point that crosses the plane for an intersection to happen.
     if ((cumulative_sign == 13) || (cumulative_sign == -13)) {
         *collision = 0;
@@ -699,14 +727,38 @@ static exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3
         return SUCCESS;
     }
 
-    if (cumulative_sign < 0) {
-        for (uint i = 0; i < 3; i++) signs[i] *= -1;
-    }
+    // now we need to permute the triangle vertices so that the point at index 0 is alone on it's side of the halfspace.
+    tekFindAndSwapTriangleVertices(triangle_a, sign_array);
 
-    if (signs[1] == -1) {
-        tekSwapTriangleVertices(triangle_a, 1);
-    } else if (signs[2] == -1) {
-        tekSwapTriangleVertices(triangle_a, 2);
+    // do the same for the other triangle
+    tekCalculateSignArray(triangle_b, triangle_a, sign_array);
+    tekFindAndSwapTriangleVertices(triangle_b, sign_array);
+
+    const int orient_a = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[0], triangle_b[1]));
+    if (orient_a > 0) {
+        *collision = 0;
+        return SUCCESS;
+    }
+    const int orient_b = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[2], triangle_b[0]));
+    if (orient_b > 0) {
+        *collision = 0;
+        return SUCCESS;
+    }
+    *collision = 1;
+    const int orient_c = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[1], triangle_b[0]));
+    const int orient_d = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[2], triangle_b[0]));
+    if (orient_c > 0) {
+        if (orient_d > 0) {
+            // k i l j
+        } else {
+            // k i j l
+        }
+    } else {
+        if (orient_d > 0) {
+            // i k l j
+        } else {
+            // i k j l
+        }
     }
 
     return SUCCESS;
@@ -854,7 +906,7 @@ static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
                 } else if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_LEAF)) {
                     collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
                 } else if ((node_a->type == COLLIDER_LEAF) && (node_b->type == COLLIDER_NODE)) {
-                    collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
+                    collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
                 } else {
                     // TODO: triangle-triangle collision test ==> return array of vec3 which is points of contact
                 }

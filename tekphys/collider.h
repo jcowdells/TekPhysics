@@ -42,7 +42,7 @@ typedef struct TekColliderNode {
 
 typedef TekColliderNode* TekCollider;
 
-exception tekCreateCollider(TekBody* body, TekCollider* collider);
+exception tekCreateCollider(const TekBody* body, TekCollider* collider);
 void tekDeleteCollider(TekCollider* collider);
 flag testCollision(TekBody* a, TekBody* b);
 void tekSwapTriangleVertices(vec3 vertices[3], uint swap_index);
