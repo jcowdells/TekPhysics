@@ -639,7 +639,80 @@ static void tekCreateOBBTransform(const struct OBB* obb, mat4 transform) {
     glm_mat4_inv_fast(temp_transform, transform);
 }
 
-static flag tekCheckAABBTriangleCollision(const struct OBB* aabb, vec3 triangle[3]) {
+static int get_sign(const float x) {
+    return (x > 0) ? 1 : (x < 0) ? -1 : 0;
+}
+
+static float tekCalculateOrientation(vec3 point, vec3 triangle[3]) {
+    vec3 sub_buffer[3];
+    for (uint i = 0; i < 3; i++) {
+        glm_vec3_sub(triangle[i], point, sub_buffer[i]);
+    }
+    return scalarTripleProduct(sub_buffer[0], sub_buffer[1], sub_buffer[2]);
+}
+
+void tekSwapTriangleVertices(vec3 vertices[3], uint swap_index) {
+    vec3 swap_vertex;
+    switch (swap_index) {
+    case 1:
+        glm_vec3_copy(vertices[0], swap_vertex);
+        memmove(&vertices[0], &vertices[1], 2 * sizeof(vec3));
+        glm_vec3_copy(swap_vertex, vertices[2]);
+        return;
+    case 2:
+        glm_vec3_copy(vertices[2], swap_vertex);
+        memmove(&vertices[1], &vertices[0], 2 * sizeof(vec3));
+        glm_vec3_copy(swap_vertex, vertices[0]);
+    default:
+        return;
+    }
+}
+
+static int tekCalculateSignNumber(vec3 triangle_a[3], vec3 triangle_b[3]) {
+    // find the "determinants" of each point on triangle_a against triangle_b
+    // we only care about the sign of the calculation though.
+    // the sign represents whether the point is in the positive or negative halfspace represented by the plane formed by the triangle.
+    // the two halfspaces are if you imagine the triangle extended to an infinite plane and dividing the universe in **half** on either side of the plane.
+    int signs[3];
+    for (uint i = 0; i < 3; i++) {
+        signs[i] = get_sign(tekCalculateOrientation(triangle_a[i], triangle_b));
+    }
+
+    // create a unique number for any combination of signs.
+    return 9 * signs[0] + 3 * signs[1] + signs[2];
+}
+
+static exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision) {
+    // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
+    static int cumulative_sign = tekCalculateSignNumber(triangle_a, triangle_b);
+
+    // if theyre all positive or all negative, this means that all points are on the same side of the plane
+    // this means its truly impossible for there to be a collision, there needs to be a point that crosses the plane for an intersection to happen.
+    if ((cumulative_sign == 13) || (cumulative_sign == -13)) {
+        *collision = 0;
+        return SUCCESS;
+    }
+    // only occurs when all points lie exactly on the plane
+    if (cumulative_sign == 0) {
+        // TODO: triangles occupying the same plane. not necessarily no collision
+        *collision = 0;
+        return SUCCESS;
+    }
+
+    if (cumulative_sign < 0) {
+        for (uint i = 0; i < 3; i++) signs[i] *= -1;
+    }
+
+    if (signs[1] == -1) {
+        tekSwapTriangleVertices(triangle_a, 1);
+    } else if (signs[2] == -1) {
+        tekSwapTriangleVertices(triangle_a, 2);
+    }
+
+    return SUCCESS;
+}
+
+static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 triangle[3]) {
     vec3 face_vectors[3];
     for (uint i = 0; i < 3; i++) {
         glm_vec3_sub(
@@ -677,7 +750,7 @@ static flag tekCheckAABBTriangleCollision(const struct OBB* aabb, vec3 triangle[
     glm_vec3_normalize(face_normal);
     // when testing the face normal axis, all three points of the triangle project to the same point. so just check point 0
     dots[0] = glm_vec3_dot(triangle[0], face_normal);
-    const float face_projection = aabb->w_half_extents[0] * fabsf(face_normal[0]) + aabb->w_half_extents[1] * fabsf(face_normal[1]) + aabb->w_half_extents[2] * fabsf(face_normal[2]);
+    const float face_projection = half_extents[0] * fabsf(face_normal[0]) + half_extents[1] * fabsf(face_normal[1]) + half_extents[2] * fabsf(face_normal[2]);
     if (fabsf(dots[0]) > face_projection) {
         return 0;
     }
@@ -692,7 +765,7 @@ static flag tekCheckAABBTriangleCollision(const struct OBB* aabb, vec3 triangle[
         // +-----------+
         // |     O---->|   this vector represents an axis, as you can see the axis aligns with the half extent.
         // +-----------+
-        if (fmaxf(-fmaxf(dots[0], fmaxf(dots[1], dots[2])), fminf(dots[0], fminf(dots[1], dots[2]))) > aabb->w_half_extents[i]) {
+        if (fmaxf(-fmaxf(dots[0], fmaxf(dots[1], dots[2])), fminf(dots[0], fminf(dots[1], dots[2]))) > half_extents[i]) {
             return 0;
         }
     }
@@ -704,7 +777,7 @@ static flag tekCheckAABBTriangleCollision(const struct OBB* aabb, vec3 triangle[
             glm_vec3_cross(xyz_axes[i], face_vectors[j], curr_axis);
             float projection = 0.0f;
             for (uint k = 0; k < 3; k++) {
-                projection += aabb->w_half_extents[k] * fabsf(glm_vec3_dot(xyz_axes[k], curr_axis));
+                projection += half_extents[k] * fabsf(glm_vec3_dot(xyz_axes[k], curr_axis));
                 dots[k] = glm_vec3_dot(triangle[k], curr_axis);
             }
             if (fmaxf(-fmaxf(dots[0], fmaxf(dots[1], dots[2])), fminf(dots[0], fminf(dots[1], dots[2]))) > projection) {
@@ -730,6 +803,13 @@ static flag tekCheckOBBTriangleCollision(const struct OBB* obb, const vec3 trian
     return tekCheckAABBTriangleCollision(obb, transformed_triangle);
 }
 
+static flag tekCheckOBBTrianglesCollision(const struct OBB* obb, const vec3* triangles, const uint num_triangles) {
+    for (uint i = 0; i < num_triangles; i ++) {
+        if (tekCheckOBBTriangleCollision(obb, triangles + i * 3)) return 1;
+    }
+    return 0;
+}
+
 static void tekUpdateOBB(struct OBB* obb, mat4 transform) {
     glm_mat4_mulv3(transform, obb->centre, 1.0f, obb->w_centre);
 
@@ -747,7 +827,7 @@ static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
     if (collider_init == DE_INITIALISED) return SUCCESS;
     if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
     collider_buffer.length = 0;
-    TekColliderNode* pair[2] {
+    TekColliderNode* pair[2] = {
         a->collider, b->collider
     };
     tekChainThrow(vectorAddItem(&collider_buffer, &pair));
@@ -764,14 +844,22 @@ static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
         TekColliderNode* temp_pair[2];
         for (uint i = 0; i < 2; i++) {
             for (uint j = 0; j < 2; j++) {
-                const TekColliderNode* node_a = (pair[LEFT]->type == COLLIDER_NODE) ? getChild(pair[LEFT], i) : pair[LEFT];
-                const TekColliderNode* node_b = (pair[RIGHT]->type == COLLIDER_NODE) ? getChild(pair[RIGHT], j) : pair[RIGHT];
+                TekColliderNode* node_a = (pair[LEFT]->type == COLLIDER_NODE) ? getChild(pair[LEFT], i) : pair[LEFT];
+                TekColliderNode* node_b = (pair[RIGHT]->type == COLLIDER_NODE) ? getChild(pair[RIGHT], j) : pair[RIGHT];
 
-                if (pair[LEFT]->type == COLLIDER_NODE) {
+                flag collision = 0;
 
+                if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_NODE)) {
+                    collision = tekCheckOBBCollision(&node_a->obb, &node_b->obb);
+                } else if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_LEAF)) {
+                    collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
+                } else if ((node_a->type == COLLIDER_LEAF) && (node_b->type == COLLIDER_NODE)) {
+                    collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
+                } else {
+                    // TODO: triangle-triangle collision test ==> return array of vec3 which is points of contact
                 }
 
-                if (tekCheckOBBCollision(&node_a->obb, &node_b->obb)) {
+                if (collision) {
                     temp_pair[LEFT] = node_a;
                     temp_pair[RIGHT] = node_b;
                     tekChainThrow(vectorAddItem(&collider_buffer, &temp_pair));

@@ -201,3 +201,9 @@ void translateInertiaTensor(mat3 tensor, const float mass, vec3 translate) {
     // calculating Iₜ + m[(R⋅R)I - R⊗R]
     mat3Add(tensor, tensor_mod, tensor);
 }
+
+float scalarTripleProduct(vec3 vector_a, vec3 vector_b, vec3 vector_c) {
+    vec3 cross_product;
+    glm_vec3_cross(vector_b, vector_c, cross_product);
+    return glm_vec3_dot(vector_a, cross_product);
+}
