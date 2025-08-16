@@ -241,8 +241,8 @@ exception run() {
     tekBindShaderProgram(shader_program);
 
     tekChainThrow(tekShaderUniformVec3(shader_program, "light_color", light_color));
-    tekChainThrow(tekShaderUniformVec3(shader_program, "light_position", light_position));
-    tekChainThrow(tekShaderUniformVec3(shader_program, "camera_pos", camera_position));
+    // tekChainThrow(tekShaderUniformVec3(shader_program, "light_position", light_position));
+    // tekChainThrow(tekShaderUniformVec3(shader_program, "camera_pos", camera_position));
 
     mat4 model;
     glm_mat4_identity(model);
@@ -284,6 +284,33 @@ exception run() {
 
     tekChainThrow(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0));
     TekState state = {};
+
+    uint trg_vertex_array;
+    glGenVertexArrays(1, &trg_vertex_array);
+    glBindVertexArray(trg_vertex_array);
+
+    uint trg_vertex_buffer;
+    glGenBuffers(1, &trg_vertex_buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, trg_vertex_buffer);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    vec3 triangle_buffer[12];
+    glBindBuffer(GL_ARRAY_BUFFER, trg_vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER, 12 * 3 * sizeof(float), (void*)triangle_buffer, GL_STATIC_DRAW);
+    glBindVertexArray(0);
+
+    flag collision = 0;
+
+    Vector triangle_write_buffer;
+    tekChainThrow(vectorCreate(1, 3 * sizeof(vec3), &triangle_write_buffer));
+
+    Vector triangle_display_buffer;
+    tekChainThrow(vectorCreate(1, 6 * sizeof(vec3), &triangle_display_buffer));
+
     while (tekRunning()) {
         while (recvState(&state_queue, &state) == SUCCESS) {
             switch (state.type) {
@@ -372,6 +399,60 @@ exception run() {
                 // }
 
                 break;
+            // case __TRI_PAIR_STATE:
+            //     //printf("Triangle state: %u\n", state.object_id);
+            //
+            //     memcpy(triangle_buffer, state.data.triangle_pair.vertices, 3 * 3 * sizeof(float));
+            //     memcpy(triangle_buffer + 6, (vec3*)state.data.triangle_pair.vertices + 3, 3 * 3 * sizeof(float));
+            //
+            //     for (uint i = 0; i < 6; i++) {
+            //         memcpy(triangle_buffer + i * 2, (vec3*)state.data.triangle_pair.vertices + i, 3 * sizeof(float));
+            //         glm_vec3_copy((vec3){0.0f, 1.0f, 0.0f}, triangle_buffer[2 * i + 1]);
+            //     }
+            //
+            //     glBindVertexArray(trg_vertex_array);
+            //     glBindBuffer(GL_ARRAY_BUFFER, trg_vertex_buffer);
+            //     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(12 * 3 * sizeof(float)), triangle_buffer, GL_STATIC_DRAW);
+            //     glBindVertexArray(0);
+            //
+            //     // for (uint i = 0; i < 12; i++) {
+            //     //     float* vector = (vec3*)(state.data.collider) + i;
+            //     //     for (uint j = 0; j < 3; j++) {
+            //     //         printf("%f ", triangle_buffer[i][j]);
+            //     //     }
+            //     //     printf("\n");
+            //     // }
+            //
+            //     collision = state.data.triangle_pair.collision;
+            //
+            //     break;
+            case __TRI_BFFR_STATE:
+                tekChainThrow(vectorAddItem(&triangle_write_buffer, state.data.triangle));
+                break;
+            case __TRI_BCLR_STATE:
+                triangle_display_buffer.length = 0;
+                vec3 tri_buffer[6];
+                for (uint i = 0; i < triangle_write_buffer.length; i++) {
+                    vec3* tri_ptr;
+                    tekChainThrow(vectorGetItemPtr(&triangle_write_buffer, i, &tri_ptr));
+                    vec3 normal, vector_a, vector_b;
+                    glm_vec3_sub(tri_ptr[1], tri_ptr[0], vector_a);
+                    glm_vec3_sub(tri_ptr[2], tri_ptr[0], vector_b);
+                    glm_vec3_cross(vector_a, vector_b, normal);
+                    for (uint j = 0; j < 3; j++) {
+                        glm_vec3_copy(tri_ptr[j], tri_buffer[j * 2]);
+                        glm_vec3_copy(normal, tri_buffer[j * 2 + 1]);
+                    }
+                    tekChainThrow(vectorAddItem(&triangle_display_buffer, tri_buffer));
+                }
+                triangle_write_buffer.length = 0;
+
+                glBindVertexArray(trg_vertex_array);
+                glBindBuffer(GL_ARRAY_BUFFER, trg_vertex_buffer);
+                glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(triangle_display_buffer.length * 6 * sizeof(float)), triangle_display_buffer.internal, GL_STATIC_DRAW);
+                glBindVertexArray(0);
+
+                break;
             default:
                 break;
             }
@@ -412,6 +493,17 @@ exception run() {
         uint count = (n << 1) - n;
         if (collider_boxes.length > 0)
             glDrawArrays(GL_POINTS, (GLint)(n - 1), (GLint)count);
+
+        tekBindShaderProgram(shader_program);
+        tekChainThrow(tekShaderUniformMat4(shader_program, "projection", camera.projection));
+        tekChainThrow(tekShaderUniformMat4(shader_program, "view", camera.view));
+        tekChainThrow(tekShaderUniformMat4(shader_program, "model", collider_model));
+        tekChainThrow(tekShaderUniformVec3(shader_program, "light_color", collision ? (vec3){1.0f, 0.0f, 0.0f} : (vec3){0.0f, 1.0f, 0.0f}));
+        // tekChainThrow(tekShaderUniformVec4(shader_program, "camera_pos", camera.position));
+        // tekChainThrow(tekShaderUniformVec4(shader_program, "light_position", (vec4){0.0f, 3.0f, 0.0f}));
+
+        glBindVertexArray(trg_vertex_array);
+        glDrawArrays(GL_TRIANGLES, 0, (int)(triangle_display_buffer.length * 3));
 
         tekNotifyEntityMaterialChange();
 
@@ -465,6 +557,6 @@ exception test() {
 
 int main(void) {
     tekInitExceptions();
-    tekLog(test());
+    tekLog(run());
     tekCloseExceptions();
 }

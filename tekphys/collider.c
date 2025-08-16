@@ -8,6 +8,7 @@
 
 #include "geometry.h"
 #include "body.h"
+#include "engine.h"
 #include "../core/vector.h"
 #include "../tekgl/manager.h"
 
@@ -481,7 +482,7 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
                 glm_vec3_copy(triangle->vertices[1], vertices[i * 3 + 1]);
                 glm_vec3_copy(triangle->vertices[2], vertices[i * 3 + 2]);
                 for (uint j = 0; j < 3; j++) {
-                    glm_vec3_zero(vertices[i * 3 + j]);
+                    glm_vec3_zero(w_vertices[i * 3 + j]);
                 }
             }
             collider_node->data.leaf.num_vertices = num_vertices;
@@ -574,8 +575,6 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     // based on Gottschalk et al., "OBBTree" (1996) https://www.cs.unc.edu/techreports/96-013.pdf
     // also described in Ericson, "Real-Time Collision Detection", Ch. 4
 
-    printf("---------------------------------");
-
     // some buffers to store some precalculated data that is reused throughout.
     float dots[3][3];
     float abs_dots[3][3];
@@ -601,7 +600,6 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     for (uint i = 0; i < 3; i++) {
         const float proj_a = obb_a->w_half_extents[i];
         const float proj_b = obb_b->w_half_extents[0] * abs_dots[i][0] + obb_b->w_half_extents[1] * abs_dots[i][1] + obb_b->w_half_extents[2] * abs_dots[i][2];
-        printf("%f > %f + %f\n", fabsf(projections[i]), proj_a, proj_b);
         if (fabsf(projections[i]) > proj_a + proj_b) return 0;
     }
 
@@ -610,7 +608,6 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
         const float proj_a = obb_a->w_half_extents[0] * abs_dots[0][i] + obb_a->w_half_extents[1] * abs_dots[1][i] + obb_a->w_half_extents[2] * abs_dots[2][i];
         const float proj_b = obb_b->w_half_extents[i];
         const float proj_total = fabsf(projections[0] * dots[0][i] + projections[1] * dots[1][i] + projections[2] * dots[2][i]);
-        printf("%f > %f + %f\n", proj_total, proj_a, proj_b);
         if (proj_total > proj_a + proj_b) return 0;
     }
 
@@ -620,7 +617,6 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
             const float proj_a = obb_a->w_half_extents[(i + 1) % 3] * abs_dots[(i + 2) % 3][j] + obb_a->w_half_extents[(i + 2) % 3] * abs_dots[(i + 1) % 3][j];
             const float proj_b = obb_b->w_half_extents[(j + 1) % 3] * abs_dots[i][(j + 2) % 3] + obb_b->w_half_extents[(j + 2) % 3] * abs_dots[i][(j + 1) % 3];
             const float proj_total = fabsf(projections[(i + 2) % 3] * dots[(i + 1) % 3][j] - projections[(i + 1) % 3] * dots[(i + 2) % 3][j]);
-            printf("%f > %f + %f\n", proj_total, proj_a, proj_b);
             if (proj_total > proj_a + proj_b) return 0;
         }
     }
@@ -640,16 +636,16 @@ static void tekCreateOBBTransform(const struct OBB* obb, mat4 transform) {
 }
 
 static int getSign(const float x) {
-    if (x > 0) {
+    if (x > FLT_EPSILON) {
         return 1;
     }
-    if (x < 0) {
+    if (x < -FLT_EPSILON) {
         return -1;
     }
     return 0;
 }
 
-static float tekCalculateOrientation(vec3 point, vec3 triangle[3]) {
+static float tekCalculateOrientation(vec3 triangle[3], vec3 point) {
     vec3 sub_buffer[3];
     for (uint i = 0; i < 3; i++) {
         glm_vec3_sub(triangle[i], point, sub_buffer[i]);
@@ -665,7 +661,7 @@ static float tekCalculateOrientationPoints(vec3 point_a, vec3 point_b, vec3 poin
     return scalarTripleProduct(sub_buffer[0], sub_buffer[1], sub_buffer[2]);
 }
 
-void tekSwapTriangleVertices(vec3 vertices[3], uint swap_index) {
+void tekSwapTriangleVertices(vec3 vertices[3], const uint swap_index) {
     vec3 swap_vertex;
     switch (swap_index) {
     case 1:
@@ -696,19 +692,32 @@ static int tekCalculateSignNumber(int sign_array[3]) {
     return 9 * sign_array[0] + 3 * sign_array[1] + sign_array[2];
 }
 
-static void tekFindAndSwapTriangleVertices(vec3 triangle[3], int sign_array[3]) {
+static void tekFindAndSwapTriangleVertices(vec3 triangle[3], const int sign_array[3]) {
     // get the triangle into a point where there is only one vertex with a negative sign.
-    if (sign_array[0] + sign_array[1] + sign_array[2] < 0) {
-        for (uint i = 0; i < 3; i++) sign_array[i] *= -1;
-    }
-    if (sign_array[1] == -1) {
+    if (sign_array[0] == sign_array[1]) {
         tekSwapTriangleVertices(triangle, 1);
-    } else if (sign_array[2] == -1) {
+    } else if (sign_array[0] == sign_array[2]) {
         tekSwapTriangleVertices(triangle, 2);
+    } else if (sign_array[1] != sign_array[2]) {
+        if (sign_array[1] > 0) {
+            tekSwapTriangleVertices(triangle, 2);
+        } else if (sign_array[2] > 0) {
+            tekSwapTriangleVertices(triangle, 1);
+        }
     }
 }
 
-static exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision) {
+static void tekSwapToMakePositive(vec3 triangle_a[3], vec3 triangle_b[3]) {
+    const int sign_check = getSign(tekCalculateOrientation(triangle_b, triangle_a[0]));
+    if (sign_check == -1) {
+        vec3 temp;
+        glm_vec3_copy(triangle_b[1], temp);
+        glm_vec3_copy(triangle_b[2], triangle_b[1]);
+        glm_vec3_copy(temp, triangle_b[2]);
+    }
+}
+
+exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision) {
     // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
     int sign_array[3];
     tekCalculateSignArray(triangle_a, triangle_b, sign_array);
@@ -723,6 +732,7 @@ static exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3
     // only occurs when all points lie exactly on the plane
     if (cumulative_sign == 0) {
         // TODO: triangles occupying the same plane. not necessarily no collision
+        // printf("Flat contact!!\n");
         *collision = 0;
         return SUCCESS;
     }
@@ -730,37 +740,65 @@ static exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3
     // now we need to permute the triangle vertices so that the point at index 0 is alone on it's side of the halfspace.
     tekFindAndSwapTriangleVertices(triangle_a, sign_array);
 
-    // do the same for the other triangle
+    // do the same for the other triangle, quitting early if there is a scenario where the planes of triangles have no intersection.
     tekCalculateSignArray(triangle_b, triangle_a, sign_array);
+    if ((sign_array[0] == sign_array[1]) && (sign_array[0] == sign_array[2])) {
+        printf("Removed the bogus.\n");
+        *collision = 0;
+        return SUCCESS;
+    }
+
     tekFindAndSwapTriangleVertices(triangle_b, sign_array);
+
+    tekSwapToMakePositive(triangle_b, triangle_a);
+    tekSwapToMakePositive(triangle_a, triangle_b);
 
     const int orient_a = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[0], triangle_b[1]));
     if (orient_a > 0) {
         *collision = 0;
+        printf("Early exit 1\n");
         return SUCCESS;
     }
     const int orient_b = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[2], triangle_b[0]));
     if (orient_b > 0) {
         *collision = 0;
+        printf("Early exit 2\n");
         return SUCCESS;
     }
     *collision = 1;
     const int orient_c = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[1], triangle_b[0]));
     const int orient_d = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[2], triangle_b[0]));
+
     if (orient_c > 0) {
         if (orient_d > 0) {
             // k i l j
+            printf("1 k i l j\n");
         } else {
             // k i j l
+            printf("2 k i j l\n");
         }
     } else {
         if (orient_d > 0) {
             // i k l j
+            printf("3 i k l j\n");
         } else {
             // i k j l
+            printf("4 i k j l\n");
         }
     }
 
+    return SUCCESS;
+}
+
+static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_triangles_a, vec3* triangles_b, const uint num_triangles_b, flag* collision) {
+    flag sub_collision = 0;
+    *collision = 0;
+    for (uint i = 0; i < num_triangles_a; i++) {
+        for (uint j = 0; j < num_triangles_b; j++) {
+            tekChainThrow(tekCheckTriangleCollision(triangles_a + i * 3, triangles_b + j * 3, &sub_collision));
+            if (sub_collision) *collision = 1;
+        }
+    }
     return SUCCESS;
 }
 
@@ -804,6 +842,7 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
     dots[0] = glm_vec3_dot(triangle[0], face_normal);
     const float face_projection = half_extents[0] * fabsf(face_normal[0]) + half_extents[1] * fabsf(face_normal[1]) + half_extents[2] * fabsf(face_normal[2]);
     if (fabsf(dots[0]) > face_projection) {
+        printf("Failure 1\n");
         return 0;
     }
 
@@ -817,7 +856,11 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
         // +-----------+
         // |     O---->|   this vector represents an axis, as you can see the axis aligns with the half extent.
         // +-----------+
-        if (fmaxf(-fmaxf(dots[0], fmaxf(dots[1], dots[2])), fminf(dots[0], fminf(dots[1], dots[2]))) > half_extents[i]) {
+
+        const float tri_min = fminf(dots[0], fminf(dots[1], dots[2]));
+        const float tri_max = fmaxf(dots[0], fmaxf(dots[1], dots[2]));
+        if (tri_min >  half_extents[i] || tri_max < -half_extents[i]) {
+            printf("Failure 2\n");
             return 0;
         }
     }
@@ -832,7 +875,11 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
                 projection += half_extents[k] * fabsf(glm_vec3_dot(xyz_axes[k], curr_axis));
                 dots[k] = glm_vec3_dot(triangle[k], curr_axis);
             }
-            if (fmaxf(-fmaxf(dots[0], fmaxf(dots[1], dots[2])), fminf(dots[0], fminf(dots[1], dots[2]))) > projection) {
+
+            const float tri_min = fminf(dots[0], fminf(dots[1], dots[2]));
+            const float tri_max = fmaxf(dots[0], fmaxf(dots[1], dots[2]));
+            if (tri_min >  projection || tri_max < -projection) {
+                printf("Failure 3\n");
                 return 0;
             }
         }
@@ -873,11 +920,18 @@ static void tekUpdateOBB(struct OBB* obb, mat4 transform) {
     }
 }
 
+static void tekUpdateLeaf(TekColliderNode* leaf, mat4 transform) {
+    for (uint i = 0; i < leaf->data.leaf.num_vertices; i++) {
+        glm_mat4_mulv3(transform, leaf->data.leaf.vertices[i], 1.0f, leaf->data.leaf.w_vertices[i]);
+    }
+}
+
 #define getChild(collider_node, i) (i == LEFT) ? collider_node->data.node.left : collider_node->data.node.right
 
-static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
+exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
     if (collider_init == DE_INITIALISED) return SUCCESS;
     if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
+    *collision = 0;
     collider_buffer.length = 0;
     TekColliderNode* pair[2] = {
         a->collider, b->collider
@@ -899,19 +953,46 @@ static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
                 TekColliderNode* node_a = (pair[LEFT]->type == COLLIDER_NODE) ? getChild(pair[LEFT], i) : pair[LEFT];
                 TekColliderNode* node_b = (pair[RIGHT]->type == COLLIDER_NODE) ? getChild(pair[RIGHT], j) : pair[RIGHT];
 
-                flag collision = 0;
+                flag sub_collision = 0;
 
                 if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_NODE)) {
-                    collision = tekCheckOBBCollision(&node_a->obb, &node_b->obb);
+                    sub_collision = tekCheckOBBCollision(&node_a->obb, &node_b->obb);
                 } else if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_LEAF)) {
-                    collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
+                    sub_collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
+                    if (sub_collision) printf("OBB Triangle\n");
+                    pushOBB(&node_a->obb);
+                    pushTriangle(node_b->data.leaf.w_vertices);
                 } else if ((node_a->type == COLLIDER_LEAF) && (node_b->type == COLLIDER_NODE)) {
-                    collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
+                    sub_collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
+                    if (sub_collision) printf("OBB Triangle\n");
                 } else {
-                    // TODO: triangle-triangle collision test ==> return array of vec3 which is points of contact
+                    tekUpdateLeaf(node_a, a->transform);
+                    tekUpdateLeaf(node_b, b->transform);
+                    tekChainThrow(tekCheckTriangleCollision(
+                        node_a->data.leaf.w_vertices, //node_a->data.leaf.num_vertices / 3,
+                        node_b->data.leaf.w_vertices, //node_b->data.leaf.num_vertices / 3,
+                        &sub_collision
+                        ));
+                    if (sub_collision) {
+                        sub_collision = 0;
+                        *collision = 1;
+                        printf("Yes\n");
+                    } else {
+                        printf("riangle(");
+                        for (uint z = 0; z < 3; z++) {
+                            if (z != 0) printf(", ");
+                            printf("(%f, %f, %f)", EXPAND_VEC3(node_a->data.leaf.w_vertices[z]));
+                        }
+                        printf(")\nriangle(");
+                        for (uint z = 0; z < 3; z++) {
+                            if (z != 0) printf(", ");
+                            printf("(%f, %f, %f)", EXPAND_VEC3(node_b->data.leaf.w_vertices[z]));
+                        }
+                        printf(")\n");
+                    }
                 }
 
-                if (collision) {
+                if (sub_collision) {
                     temp_pair[LEFT] = node_a;
                     temp_pair[RIGHT] = node_b;
                     tekChainThrow(vectorAddItem(&collider_buffer, &temp_pair));
@@ -919,6 +1000,7 @@ static exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
             }
         }
     }
+    return SUCCESS;
 }
 
 flag testCollision(TekBody* a, TekBody* b) {

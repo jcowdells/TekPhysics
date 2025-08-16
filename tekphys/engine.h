@@ -18,6 +18,9 @@
 #define CAMERA_ROTATE_STATE 5
 #define ENTITY_UPDATE_STATE 6
 #define __COLLIDER_STATE    7 //TODO: remove
+#define __TRI_PAIR_STATE    8 //TODO: remove
+#define __TRI_BFFR_STATE    9 // TODO: remove both!!!
+#define __TRI_BCLR_STATE   10
 
 typedef struct TekEvent {
     flag type;
@@ -56,9 +59,17 @@ typedef struct TekState {
             vec4 rotation;
         } entity_update;
         void* collider;
+        struct {
+            void* vertices;
+            flag collision;
+        } triangle_pair;
+        vec3 triangle[3];
     } data;
 } TekState;
 
 exception recvState(ThreadQueue* queue, TekState* state);
 exception pushEvent(ThreadQueue* queue, TekEvent event);
 exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, double phys_period);
+
+exception pushTriangle(vec3 triangle[3]);
+exception pushOBB(void* obb);

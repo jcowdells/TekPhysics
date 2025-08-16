@@ -295,6 +295,59 @@ struct TekEngineArgs {
     double phys_period;
 };
 
+static ThreadQueue* static_state_queue = NULL; // TODO: remove, for debugging only as well as pushTriangle and pushOBB
+
+exception pushTriangle(vec3 triangle[3]) {
+    if (!static_state_queue) return FAILURE;
+    TekState triangle_state;
+    triangle_state.type = __TRI_BFFR_STATE;
+    triangle_state.object_id = 0;
+    memcpy(triangle_state.data.triangle, triangle, 3 * sizeof(vec3));
+    return pushState(static_state_queue, triangle_state);
+}
+
+exception pushOBB(void* obb_ptr) {
+    if (!static_state_queue) return FAILURE;
+    struct OBB* obb = (struct OBB*)obb_ptr;
+    vec3 vertex_buffer[8];
+    for (uint i = 0; i < 2; i++) {
+        for (uint j = 0; j < 2; j++) {
+            for (uint k = 0; k < 2; k++) {
+                glm_vec3_scale(obb->w_axes[0], i ? obb->w_half_extents[0] : -obb->w_half_extents[0], vertex_buffer[i + 2 * j + 4 * k]);
+                glm_vec3_muladds(obb->w_axes[1], j ? obb->w_half_extents[1] : -obb->w_half_extents[1], vertex_buffer[i + 2 * j + 4 * k]);
+                glm_vec3_muladds(obb->w_axes[2], k ? obb->w_half_extents[2] : -obb->w_half_extents[2], vertex_buffer[i + 2 * j + 4 * k]);
+            }
+        }
+    }
+
+    // define the 12 triangles (each group of 3 is one triangle)
+    // the vertices are indexed according to the (i + 2*j + 4*k) formula above:
+    // bit0 = i (x), bit1 = j (y), bit2 = k (z)
+    static const uint tri_indices[12][3] = {
+        // +X face
+        {1, 3, 7}, {1, 7, 5},
+        // -X face
+        {0, 4, 6}, {0, 6, 2},
+        // +Y face
+        {2, 6, 7}, {2, 7, 3},
+        // -Y face
+        {0, 1, 5}, {0, 5, 4},
+        // +Z face
+        {4, 5, 7}, {4, 7, 6},
+        // -Z face
+        {0, 2, 3}, {0, 3, 1}
+    };
+
+    vec3 tri[3];
+    for (uint t = 0; t < 12; t++) {
+        glm_vec3_copy(vertex_buffer[tri_indices[t][0]], tri[0]);
+        glm_vec3_copy(vertex_buffer[tri_indices[t][1]], tri[1]);
+        glm_vec3_copy(vertex_buffer[tri_indices[t][2]], tri[2]);
+        pushTriangle(tri);
+    }
+    return SUCCESS;
+}
+
 /**
  * @brief The main physics thread procedure, will run in parallel to the graphics thread. Responsible for logic, has a loop running at fixed time interval.
  * @param args Required for use with pthread library. Used to pass TekEngineArgs pointer.
@@ -305,6 +358,8 @@ static void tekEngine(void* args) {
     ThreadQueue* state_queue = engine_args->state_queue;
     const double phys_period = engine_args->phys_period;
     free(args);
+
+    static_state_queue = state_queue; // TODO: remove this too
 
     tekBodyInit();
 
@@ -328,7 +383,14 @@ static void tekEngine(void* args) {
     clock_gettime(CLOCK_MONOTONIC, &engine_time);
     flag running = 1;
     uint counter = 0;
+    TekState triangle_state = {};
+    triangle_state.type = __TRI_PAIR_STATE;
+    triangle_state.data.triangle_pair.vertices = malloc(6 * sizeof(vec3));
+    vec3* triangles_vertices = (vec3*)triangle_state.data.triangle_pair.vertices;
+    int triangles_index = 0;
     while (running) {
+        triangle_state.type = __TRI_BCLR_STATE;
+        threadChainThrow(pushState(state_queue, triangle_state));
         TekEvent event = {};
         while (recvEvent(event_queue, &event) == SUCCESS) {
             switch (event.type) {
@@ -361,6 +423,10 @@ static void tekEngine(void* args) {
                     vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
                     threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/rad1.tmsh", "../res/material.tmat",
                                                          10.0f, position, cube_rotation, cube_scale, 0));
+                }
+                if ((event.data.key_input.key >= GLFW_KEY_1) && (event.data.key_input.key <= GLFW_KEY_7) && (event.data.key_input.action == GLFW_RELEASE)) {
+                    triangles_index = event.data.key_input.key - GLFW_KEY_1;
+                    triangle_state.object_id = (uint)triangles_index;
                 }
                 break;
             case MOUSE_POS_EVENT:
@@ -431,7 +497,9 @@ static void tekEngine(void* args) {
                 TekBody* body_j;
                 threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
                 printf("Testing body %u against body %u\n", i, j);
-                printf("%s between outers\n", testCollision(body_i, body_j) ? "collision" : "no collision");
+                flag is_collision = 0;
+                threadChainThrow(tekTestForCollisions(body_i, body_j, &is_collision))
+                printf("%s between some triangles\n", is_collision ? "collision" : "no collision");
             }
         }
 
@@ -447,6 +515,20 @@ static void tekEngine(void* args) {
                 threadChainThrow(vectorGetItemPtr(&bodies, 0, &body_ptr));
                 tekBodyApplyImpulse(body_ptr, position, impulse, (float)phys_period);
             }
+        }
+
+        if (triangles_index != 6) {
+            triangle_state.type =  __TRI_PAIR_STATE;
+            glm_vec3_sub(position, (vec3){0.0f, 0.1f, 0.0f}, triangles_vertices[triangles_index]);
+
+            vec3 swap_buffer[6];
+            memcpy(swap_buffer, triangles_vertices, 6 * sizeof(vec3));
+
+            flag collision;
+            threadChainThrow(tekCheckTriangleCollision(swap_buffer, swap_buffer + 3, &collision));
+            triangle_state.data.triangle_pair.collision = collision;
+
+            pushState(state_queue, triangle_state);
         }
 
         if (cam_pos_changed) {
@@ -470,6 +552,7 @@ static void tekEngine(void* args) {
         threadChainThrow(vectorGetItemPtr(&bodies, i, &loop_body));
         tekDeleteBody(loop_body);
     }
+    free(triangle_state.data.triangle_pair.vertices);
     vectorDelete(&bodies);
     queueDelete(&unused_ids);
     tekBodyDelete();

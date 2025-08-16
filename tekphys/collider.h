@@ -44,5 +44,7 @@ typedef TekColliderNode* TekCollider;
 
 exception tekCreateCollider(const TekBody* body, TekCollider* collider);
 void tekDeleteCollider(TekCollider* collider);
+exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision);
 flag testCollision(TekBody* a, TekBody* b);
 void tekSwapTriangleVertices(vec3 vertices[3], uint swap_index);
+exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision);
