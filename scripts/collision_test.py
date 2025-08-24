@@ -223,7 +223,105 @@ def check_obb_triangle_collision(obb: OBB, triangle: Triangle) -> bool:
         transformed_vertices.append(np.array([product[0], product[1], product[2]]))
     return check_aabb_triangle_collision(obb.half_extents, Triangle(vertices=transformed_vertices))
 
+def scalar_triple_product(vec_a: np.ndarray, vec_b: np.ndarray, vec_c: np.ndarray) -> float:
+    cross_product: np.ndarray = np.cross(vec_b, vec_c)
+    return float(np.dot(vec_a, cross_product))
+
+def calculate_orientation(vec_a: np.ndarray, vec_b: np.ndarray, vec_c: np.ndarray, vec_d: np.ndarray) -> float:
+    sub_vec_a: np.ndarray = np.subtract(vec_a, vec_d)
+    sub_vec_b: np.ndarray = np.subtract(vec_b, vec_d)
+    sub_vec_c: np.ndarray = np.subtract(vec_c, vec_d)
+    return scalar_triple_product(sub_vec_a, sub_vec_b, sub_vec_c)
+
+def get_sign(number: float) -> int:
+    if number > 0:
+        return 1
+    elif number < 0:
+        return - 1
+    else:
+        return 0
+
+def swap_vertices_left(triangle: Triangle) -> Triangle:
+    return Triangle(vertices=[
+        triangle.vertices[1],
+        triangle.vertices[2],
+        triangle.vertices[0]
+    ])
+
+def swap_vertices_right(triangle: Triangle) -> Triangle:
+    return Triangle(vertices=[
+        triangle.vertices[2],
+        triangle.vertices[0],
+        triangle.vertices[1]
+    ])
+
+"""Swap the vertices in a triangle so that vertex 0 is the only vertex on it's side of the halfspace"""
+def find_and_swap_vertices(triangle: Triangle, sign_array: list[int]) -> Triangle:
+    if sign_array[0] == sign_array[1]:
+        # if 0 and 1 are the same sign, then 2 needs to be on its own, so permute right
+        triangle = swap_vertices_right(triangle)
+    elif sign_array[0] == sign_array[2]:
+        # if 0 and 2 are on the same side, then 1 needs to be on its own
+        triangle = swap_vertices_left(triangle)
+    elif sign_array[1] != sign_array[2]:
+        # if all three signs are different, need to place vertex 0 on positive side.
+        if sign_array[1] > 0:
+            triangle = swap_vertices_left(triangle)
+        elif sign_array[2] > 0:
+            triangle = swap_vertices_right(triangle)
+
+    return triangle
+
+def make_vertices_positive(triangle_a: Triangle, triangle_b: Triangle) -> Triangle:
+    sign = get_sign(calculate_orientation(triangle_b.vertices[0], triangle_b.vertices[1], triangle_b.vertices[2], triangle_a.vertices[0]))
+    if sign < 0:
+        return Triangle(vertices=[
+            triangle_b.vertices[0],
+            triangle_b.vertices[2],
+            triangle_b.vertices[1]
+        ])
+    else:
+        return Triangle(vertices=[
+            triangle_b.vertices[0],
+            triangle_b.vertices[1],
+            triangle_b.vertices[2]
+        ])
+
 def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle) -> bool:
+    sign_array_a = [
+        get_sign(calculate_orientation(triangle_b.vertices[0], triangle_b.vertices[1], triangle_b.vertices[2], triangle_a.vertices[0])),
+        get_sign(calculate_orientation(triangle_b.vertices[0], triangle_b.vertices[1], triangle_b.vertices[2], triangle_a.vertices[1])),
+        get_sign(calculate_orientation(triangle_b.vertices[0], triangle_b.vertices[1], triangle_b.vertices[2], triangle_a.vertices[2]))
+    ]
+
+    if (sign_array_a[0] == sign_array_a[1]) and (sign_array_a[1] == sign_array_a[2]):
+        # TODO: Check for coplanar intersection
+        return False
+
+    sign_array_b = [
+        get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_a.vertices[2], triangle_b.vertices[0])),
+        get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_a.vertices[2], triangle_b.vertices[1])),
+        get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_a.vertices[2], triangle_b.vertices[2]))
+    ]
+
+    if (sign_array_b[0] == sign_array_b[1]) and (sign_array_b[1] == sign_array_b[2]):
+        return False
+
+    triangle_a = find_and_swap_vertices(triangle_a, sign_array_a)
+    triangle_b = find_and_swap_vertices(triangle_b, sign_array_b)
+
+    triangle_a = make_vertices_positive(triangle_b, triangle_a)
+    triangle_b = make_vertices_positive(triangle_a, triangle_b)
+
+    sign_a = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_b.vertices[0], triangle_b.vertices[1]))
+    if sign_a > 0:
+        return False
+
+    sign_b = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[2], triangle_b.vertices[2], triangle_b.vertices[0]))
+    if sign_b > 0:
+        return False
+
+    # TODO: calculate intersection point.
 
     return True
 
