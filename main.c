@@ -533,28 +533,6 @@ exception run() {
     return SUCCESS;
 }
 
-exception test() {
-    vec3 triangle[] = {
-        {1.0f, 1.0f, 1.0f},
-        {2.0f, 2.0f, 2.0f},
-        {3.0f, 3.0f, 3.0f}
-    };
-
-    for (uint i = 0; i < 3; i++) {
-        printf("{%f %f %f}\n", EXPAND_VEC3(triangle[i]));
-    }
-
-    tekSwapTriangleVertices(triangle, 2);
-
-    printf("After swap:\n");
-
-    for (uint i = 0; i < 3; i++) {
-        printf("{%f %f %f}\n", EXPAND_VEC3(triangle[i]));
-    }
-
-    return SUCCESS;
-}
-
 int main(void) {
     tekInitExceptions();
     tekLog(run());

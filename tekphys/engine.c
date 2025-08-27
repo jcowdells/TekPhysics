@@ -298,53 +298,72 @@ struct TekEngineArgs {
 static ThreadQueue* static_state_queue = NULL; // TODO: remove, for debugging only as well as pushTriangle and pushOBB
 
 exception pushTriangle(vec3 triangle[3]) {
-    if (!static_state_queue) return FAILURE;
-    TekState triangle_state;
-    triangle_state.type = __TRI_BFFR_STATE;
-    triangle_state.object_id = 0;
-    memcpy(triangle_state.data.triangle, triangle, 3 * sizeof(vec3));
-    return pushState(static_state_queue, triangle_state);
+    // if (!static_state_queue) return FAILURE;
+    // TekState triangle_state;
+    // triangle_state.type = __TRI_BFFR_STATE;
+    // triangle_state.object_id = 0;
+    // memcpy(triangle_state.data.triangle, triangle, 3 * sizeof(vec3));
+    // return pushState(static_state_queue, triangle_state);
+
+    // printf("riangle(");
+    // for (uint z = 0; z < 3; z++) {
+    //     if (z != 0) printf(", ");
+    //     printf("(%f, %f, %f)", EXPAND_VEC3(triangle[z]));
+    // }
+    // printf(")\n");
+
+    return SUCCESS;
 }
 
 exception pushOBB(void* obb_ptr) {
-    if (!static_state_queue) return FAILURE;
-    struct OBB* obb = (struct OBB*)obb_ptr;
-    vec3 vertex_buffer[8];
-    for (uint i = 0; i < 2; i++) {
-        for (uint j = 0; j < 2; j++) {
-            for (uint k = 0; k < 2; k++) {
-                glm_vec3_scale(obb->w_axes[0], i ? obb->w_half_extents[0] : -obb->w_half_extents[0], vertex_buffer[i + 2 * j + 4 * k]);
-                glm_vec3_muladds(obb->w_axes[1], j ? obb->w_half_extents[1] : -obb->w_half_extents[1], vertex_buffer[i + 2 * j + 4 * k]);
-                glm_vec3_muladds(obb->w_axes[2], k ? obb->w_half_extents[2] : -obb->w_half_extents[2], vertex_buffer[i + 2 * j + 4 * k]);
-            }
-        }
-    }
-
-    // define the 12 triangles (each group of 3 is one triangle)
-    // the vertices are indexed according to the (i + 2*j + 4*k) formula above:
-    // bit0 = i (x), bit1 = j (y), bit2 = k (z)
-    static const uint tri_indices[12][3] = {
-        // +X face
-        {1, 3, 7}, {1, 7, 5},
-        // -X face
-        {0, 4, 6}, {0, 6, 2},
-        // +Y face
-        {2, 6, 7}, {2, 7, 3},
-        // -Y face
-        {0, 1, 5}, {0, 5, 4},
-        // +Z face
-        {4, 5, 7}, {4, 7, 6},
-        // -Z face
-        {0, 2, 3}, {0, 3, 1}
-    };
-
-    vec3 tri[3];
-    for (uint t = 0; t < 12; t++) {
-        glm_vec3_copy(vertex_buffer[tri_indices[t][0]], tri[0]);
-        glm_vec3_copy(vertex_buffer[tri_indices[t][1]], tri[1]);
-        glm_vec3_copy(vertex_buffer[tri_indices[t][2]], tri[2]);
-        pushTriangle(tri);
-    }
+    // // if (!static_state_queue) return FAILURE;
+    // struct OBB* obb = (struct OBB*)obb_ptr;
+    // vec3 vertex_buffer[8];
+    // for (uint i = 0; i < 2; i++) {
+    //     for (uint j = 0; j < 2; j++) {
+    //         for (uint k = 0; k < 2; k++) {
+    //             glm_vec3_scale(obb->w_axes[0], i ? obb->w_half_extents[0] : -obb->w_half_extents[0], vertex_buffer[i + 2 * j + 4 * k]);
+    //             glm_vec3_muladds(obb->w_axes[1], j ? obb->w_half_extents[1] : -obb->w_half_extents[1], vertex_buffer[i + 2 * j + 4 * k]);
+    //             glm_vec3_muladds(obb->w_axes[2], k ? obb->w_half_extents[2] : -obb->w_half_extents[2], vertex_buffer[i + 2 * j + 4 * k]);
+    //             glm_vec3_add(vertex_buffer[i + 2 * j + 4 * k], obb->w_centre, vertex_buffer[i + 2 * j + 4 * k]);
+    //         }
+    //     }
+    // }
+    //
+    // // define the 12 triangles (each group of 3 is one triangle)
+    // // the vertices are indexed according to the (i + 2*j + 4*k) formula above:
+    // // bit0 = i (x), bit1 = j (y), bit2 = k (z)
+    // static const uint tri_indices[12][3] = {
+    //     // +X face
+    //     {1, 3, 7}, {1, 7, 5},
+    //     // -X face
+    //     {0, 4, 6}, {0, 6, 2},
+    //     // +Y face
+    //     {2, 6, 7}, {2, 7, 3},
+    //     // -Y face
+    //     {0, 1, 5}, {0, 5, 4},
+    //     // +Z face
+    //     {4, 5, 7}, {4, 7, 6},
+    //     // -Z face
+    //     {0, 2, 3}, {0, 3, 1}
+    // };
+    //
+    // vec3 tri[3];
+    // printf("----------------------------------------\n");
+    // for (uint t = 0; t < 12; t++) {
+    //     glm_vec3_copy(vertex_buffer[tri_indices[t][0]], tri[0]);
+    //     glm_vec3_copy(vertex_buffer[tri_indices[t][1]], tri[1]);
+    //     glm_vec3_copy(vertex_buffer[tri_indices[t][2]], tri[2]);
+    //     // if (pushTriangle(tri) != SUCCESS) {
+    //     //     return MEMORY_EXCEPTION;
+    //     // }
+    //     printf("riangle(");
+    //     for (uint z = 0; z < 3; z++) {
+    //         if (z != 0) printf(", ");
+    //         printf("(%f, %f, %f)", EXPAND_VEC3(tri[z]));
+    //     }
+    //     printf(")\n");
+    // }
     return SUCCESS;
 }
 

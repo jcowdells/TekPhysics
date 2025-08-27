@@ -298,10 +298,13 @@ static exception tekCreateOBB(const Vector* triangles, const uint* indices, cons
         const float centre_proj = 0.5f * (max_proj + min_proj);
         glm_vec3_muladds(eigenvectors[i], centre_proj, centre);
         glm_vec3_copy(eigenvectors[i], obb->axes[i]);
+        glm_vec3_copy(eigenvectors[i], obb->w_axes[i]);
         obb->half_extents[i] = half_extent;
+        obb->w_half_extents[i] = half_extent;
     }
 
     glm_vec3_copy(centre, obb->centre);
+    glm_vec3_copy(centre, obb->w_centre);
 
     // TODO: remove this print statement
     printf("Created OBB: %f %f %f\n", EXPAND_VEC3(centre));
@@ -441,17 +444,11 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
                 const float side = glm_vec3_dot(delta, collider_node->obb.axes[i]);
                 if (side < 0) {
                     indices_buffer[num_left] = index;
-                    printf("Writing at %u/%u\n", num_left, num_indices);
                     num_left++;
                 } else {
                     indices_buffer[num_indices - num_right - 1] = index;
-                    printf("Writing at %u/%u\n", num_indices - num_right - 1, num_indices);
                     num_right++;
                 }
-                printf("l:r = %u:%u\n", num_left, num_right);
-            }
-            for (uint j = 0; j < num_indices; j++) {
-                printf("indices_buffer[%u] = %u\n", j, indices_buffer[j]);
             }
             // once a divisible axis is found (e.g. not all on the one side) then stop.
             if ((num_left != 0) && (num_right != 0)) {
@@ -461,7 +458,6 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
         }
         if (axis == 3) {
             // indivisible - overwrite current node to be a leaf
-            printf("Indivisible node with %u triangles, centre=%f,%f,%f.", num_left + num_right, EXPAND_VEC3(collider_node->obb.centre));
             collider_node->type = COLLIDER_LEAF;
             const uint num_indices = collider_node->num_indices;
             const uint num_vertices = num_indices * 3;
@@ -477,14 +473,16 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
             }
             for (uint i = 0; i < num_indices; i++) {
                 const struct Triangle* triangle;
-                vectorGetItemPtr(&triangles, i, &triangle);
+                const uint index = collider_node->indices[i];
+                vectorGetItemPtr(&triangles, index, &triangle);
                 glm_vec3_copy(triangle->vertices[0], vertices[i * 3]);
                 glm_vec3_copy(triangle->vertices[1], vertices[i * 3 + 1]);
                 glm_vec3_copy(triangle->vertices[2], vertices[i * 3 + 2]);
                 for (uint j = 0; j < 3; j++) {
-                    glm_vec3_zero(w_vertices[i * 3 + j]);
+                    glm_vec3_copy(vertices[i * 3 + j], w_vertices[i * 3 + j]);
                 }
             }
+
             collider_node->data.leaf.num_vertices = num_vertices;
             collider_node->data.leaf.vertices = vertices;
             collider_node->data.leaf.w_vertices = w_vertices;
@@ -497,6 +495,7 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
                 tekChainThrowThen(tekCreateColliderNode(COLLIDER_NODE, node_id++, &triangles, indices, num_indices, &new_collider_node), {
                     tekColliderCleanup();
                 });
+
                 if (right) {
                     collider_node->data.node.right = new_collider_node;
                 } else {
@@ -575,49 +574,80 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     // based on Gottschalk et al., "OBBTree" (1996) https://www.cs.unc.edu/techreports/96-013.pdf
     // also described in Ericson, "Real-Time Collision Detection", Ch. 4
 
-    // some buffers to store some precalculated data that is reused throughout.
-    float dots[3][3];
-    float abs_dots[3][3];
-
-    for (uint i = 0; i < 3; i++) {
-        for (uint j = 0; j < 3; j++) {
-            dots[i][j] = glm_vec3_dot(obb_a->w_axes[i], obb_b->w_axes[j]);
-            abs_dots[i][j] = fabsf(dots[i][j]) + FLT_EPSILON;
-        }
-    }
+    // algorithm based on https://jkh.me/files/tutorials/Separating%20Axis%20Theorem%20for%20Oriented%20Bounding%20Boxes.pdf
+    // see section "Optimized Computation of OBBs Intersections"
 
     // find the vector between the centres
     vec3 translate;
     glm_vec3_sub(obb_b->w_centre, obb_a->w_centre, translate);
 
-    // find the projections of this vector on each axis. (forms the basis of checks)
-    float projections[3];
+    // some buffers to store some precalculated data that is reused throughout.
+    float t_array[3];
+    float dot_matrix[3][3];
+
     for (uint i = 0; i < 3; i++) {
-        projections[i] = glm_vec3_dot(translate, obb_a->w_axes[i]);
+        t_array[i] = glm_vec3_dot(translate, obb_a->w_axes[i]);
+        for (uint j = 0; j < 3; j++) {
+            dot_matrix[i][j] = glm_vec3_dot(obb_a->w_axes[i], obb_b->w_axes[j]) + EPSILON;
+        }
     }
 
     // simple cases - check axes aligned with faces of the first obb.
     for (uint i = 0; i < 3; i++) {
-        const float proj_a = obb_a->w_half_extents[i];
-        const float proj_b = obb_b->w_half_extents[0] * abs_dots[i][0] + obb_b->w_half_extents[1] * abs_dots[i][1] + obb_b->w_half_extents[2] * abs_dots[i][2];
-        if (fabsf(projections[i]) > proj_a + proj_b) return 0;
+        float mag_sum = 0.0f;
+        for (uint j = 0; j < 3; j++) {
+            mag_sum += fabs(obb_b->w_half_extents[i] * dot_matrix[i][j]);
+        }
+        if (fabs(t_array[i] > obb_a->w_half_extents[i] + mag_sum)) {
+            return 0;
+        }
     }
 
     // medium cases - check axes aligned with the faces of the second obb.
     for (uint i = 0; i < 3; i++) {
-        const float proj_a = obb_a->w_half_extents[0] * abs_dots[0][i] + obb_a->w_half_extents[1] * abs_dots[1][i] + obb_a->w_half_extents[2] * abs_dots[2][i];
-        const float proj_b = obb_b->w_half_extents[i];
-        const float proj_total = fabsf(projections[0] * dots[0][i] + projections[1] * dots[1][i] + projections[2] * dots[2][i]);
-        if (proj_total > proj_a + proj_b) return 0;
+        float mag_sum = 0.0f;
+        for (uint j = 0; j < 3; j++) {
+            mag_sum += fabs(obb_a->w_half_extents[i] * dot_matrix[j][i]);
+        }
+        const float projection = fabs(glm_vec3_dot(translate, obb_b->w_axes[i]));
+        if (projection > obb_b->w_half_extents[i] + mag_sum) {
+            return 0;
+        }
     }
+
+    // store indices of t_array to access depending on iteration count
+    const uint multis_indices[3][2] = {
+        {2, 1},
+        {0, 2},
+        {1, 0}
+    };
+
+    // store indices for direction (W, H or D) for inner and outer loop cycles
+    const uint cyc_indices[3][2] = {
+        {1, 2},
+        {0, 2},
+        {0, 1}
+    };
 
     // tricky tricky cases - check axes aligned with the edges and corners of both - cross products of the axes from before.
     for (uint i = 0; i < 3; i++) {
         for (uint j = 0; j < 3; j++) {
-            const float proj_a = obb_a->w_half_extents[(i + 1) % 3] * abs_dots[(i + 2) % 3][j] + obb_a->w_half_extents[(i + 2) % 3] * abs_dots[(i + 1) % 3][j];
-            const float proj_b = obb_b->w_half_extents[(j + 1) % 3] * abs_dots[i][(j + 2) % 3] + obb_b->w_half_extents[(j + 2) % 3] * abs_dots[i][(j + 1) % 3];
-            const float proj_total = fabsf(projections[(i + 2) % 3] * dots[(i + 1) % 3][j] - projections[(i + 1) % 3] * dots[(i + 2) % 3][j]);
-            if (proj_total > proj_a + proj_b) return 0;
+            const uint ti_a = multis_indices[i][0], ti_b = multis_indices[i][1];
+            const float cmp_base = t_array[ti_a] * glm_vec3_dot(obb_a->w_axes[ti_b], obb_b->w_axes[j]);
+            const float cmp_subt = t_array[ti_b] * glm_vec3_dot(obb_a->w_axes[ti_a], obb_b->w_axes[j]);
+            const float cmp = fabs(cmp_base - cmp_subt);
+
+            const uint cyc_ll = cyc_indices[i][0], cyc_lh = cyc_indices[i][1];
+            const uint cyc_sl = cyc_indices[j][0], cyc_sh = cyc_indices[j][1];
+            float tst = 0.0f;
+            tst += fabs(obb_a->w_half_extents[cyc_ll] * dot_matrix[cyc_lh][j]);
+            tst += fabs(obb_a->w_half_extents[cyc_lh] * dot_matrix[cyc_ll][j]);
+            tst += fabs(obb_a->w_half_extents[cyc_sl] * dot_matrix[i][cyc_sh]);
+            tst += fabs(obb_a->w_half_extents[cyc_sh] * dot_matrix[i][cyc_sl]);
+
+            if (cmp > tst) {
+                return 0;
+            }
         }
     }
 
@@ -661,20 +691,20 @@ static float tekCalculateOrientationPoints(vec3 point_a, vec3 point_b, vec3 poin
     return scalarTripleProduct(sub_buffer[0], sub_buffer[1], sub_buffer[2]);
 }
 
-void tekSwapTriangleVertices(vec3 vertices[3], const uint swap_index) {
-    vec3 swap_vertex;
-    switch (swap_index) {
-    case 1:
-        glm_vec3_copy(vertices[0], swap_vertex);
-        memmove(&vertices[0], &vertices[1], 2 * sizeof(vec3));
-        glm_vec3_copy(swap_vertex, vertices[2]);
-        return;
-    case 2:
-        glm_vec3_copy(vertices[2], swap_vertex);
-        memmove(&vertices[1], &vertices[0], 2 * sizeof(vec3));
-        glm_vec3_copy(swap_vertex, vertices[0]);
-    default:
-    }
+void tekSwapVerticesRight(vec3 vertices[3]) {
+    vec3 temp;
+    glm_vec3_copy(vertices[0], temp);
+    glm_vec3_copy(vertices[2], vertices[0]);
+    glm_vec3_copy(vertices[1], vertices[2]);
+    glm_vec3_copy(temp, vertices[1]);
+}
+
+void tekSwapVerticesLeft(vec3 vertices[3]) {
+    vec3 temp;
+    glm_vec3_copy(vertices[0], temp);
+    glm_vec3_copy(vertices[1], vertices[0]);
+    glm_vec3_copy(vertices[2], vertices[1]);
+    glm_vec3_copy(temp, vertices[2]);
 }
 
 static void tekCalculateSignArray(vec3 triangle_a[3], vec3 triangle_b[3], int sign_array[3]) {
@@ -683,26 +713,21 @@ static void tekCalculateSignArray(vec3 triangle_a[3], vec3 triangle_b[3], int si
     // the sign represents whether the point is in the positive or negative halfspace represented by the plane formed by the triangle.
     // the two halfspaces are if you imagine the triangle extended to an infinite plane and dividing the universe in **half** on either side of the plane.
     for (uint i = 0; i < 3; i++) {
-        sign_array[i] = getSign(tekCalculateOrientation(triangle_b, triangle_a[i]));
+        sign_array[i] = getSign(tekCalculateOrientation(triangle_a, triangle_b[i]));
     }
-}
-
-static int tekCalculateSignNumber(int sign_array[3]) {
-    // create a unique number for any combination of signs.
-    return 9 * sign_array[0] + 3 * sign_array[1] + sign_array[2];
 }
 
 static void tekFindAndSwapTriangleVertices(vec3 triangle[3], const int sign_array[3]) {
     // get the triangle into a point where there is only one vertex with a negative sign.
     if (sign_array[0] == sign_array[1]) {
-        tekSwapTriangleVertices(triangle, 1);
+        tekSwapVerticesRight(triangle);
     } else if (sign_array[0] == sign_array[2]) {
-        tekSwapTriangleVertices(triangle, 2);
+        tekSwapVerticesLeft(triangle);
     } else if (sign_array[1] != sign_array[2]) {
         if (sign_array[1] > 0) {
-            tekSwapTriangleVertices(triangle, 2);
+            tekSwapVerticesLeft(triangle);
         } else if (sign_array[2] > 0) {
-            tekSwapTriangleVertices(triangle, 1);
+            tekSwapVerticesRight(triangle);
         }
     }
 }
@@ -719,36 +744,28 @@ static void tekSwapToMakePositive(vec3 triangle_a[3], vec3 triangle_b[3]) {
 
 exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision) {
     // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
-    int sign_array[3];
-    tekCalculateSignArray(triangle_a, triangle_b, sign_array);
-    const int cumulative_sign = tekCalculateSignNumber(sign_array);
+    int sign_array_a[3];
+    tekCalculateSignArray(triangle_b, triangle_a, sign_array_a);
 
     // if they're all positive or all negative, this means that all points are on the same side of the plane
     // this means its truly impossible for there to be a collision, there needs to be a point that crosses the plane for an intersection to happen.
-    if ((cumulative_sign == 13) || (cumulative_sign == -13)) {
+    if ((sign_array_a[0] == sign_array_a[1]) && (sign_array_a[0] == sign_array_a[2])) {
         *collision = 0;
         return SUCCESS;
     }
-    // only occurs when all points lie exactly on the plane
-    if (cumulative_sign == 0) {
-        // TODO: triangles occupying the same plane. not necessarily no collision
-        // printf("Flat contact!!\n");
-        *collision = 0;
-        return SUCCESS;
-    }
-
-    // now we need to permute the triangle vertices so that the point at index 0 is alone on it's side of the halfspace.
-    tekFindAndSwapTriangleVertices(triangle_a, sign_array);
 
     // do the same for the other triangle, quitting early if there is a scenario where the planes of triangles have no intersection.
-    tekCalculateSignArray(triangle_b, triangle_a, sign_array);
-    if ((sign_array[0] == sign_array[1]) && (sign_array[0] == sign_array[2])) {
+    int sign_array_b[3];
+    tekCalculateSignArray(triangle_b, triangle_a, sign_array_b);
+    if ((sign_array_b[0] == sign_array_b[1]) && (sign_array_b[0] == sign_array_b[2])) {
         printf("Removed the bogus.\n");
         *collision = 0;
         return SUCCESS;
     }
 
-    tekFindAndSwapTriangleVertices(triangle_b, sign_array);
+    // now we need to permute the triangle vertices so that the point at index 0 is alone on it's side of the halfspace.
+    tekFindAndSwapTriangleVertices(triangle_a, sign_array_a);
+    tekFindAndSwapTriangleVertices(triangle_b, sign_array_b);
 
     tekSwapToMakePositive(triangle_b, triangle_a);
     tekSwapToMakePositive(triangle_a, triangle_b);
@@ -756,36 +773,34 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     const int orient_a = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[0], triangle_b[1]));
     if (orient_a > 0) {
         *collision = 0;
-        printf("Early exit 1\n");
         return SUCCESS;
     }
     const int orient_b = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[2], triangle_b[0]));
     if (orient_b > 0) {
         *collision = 0;
-        printf("Early exit 2\n");
         return SUCCESS;
     }
     *collision = 1;
     const int orient_c = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[1], triangle_b[0]));
     const int orient_d = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[2], triangle_b[0]));
 
-    if (orient_c > 0) {
-        if (orient_d > 0) {
-            // k i l j
-            printf("1 k i l j\n");
-        } else {
-            // k i j l
-            printf("2 k i j l\n");
-        }
-    } else {
-        if (orient_d > 0) {
-            // i k l j
-            printf("3 i k l j\n");
-        } else {
-            // i k j l
-            printf("4 i k j l\n");
-        }
-    }
+    // if (orient_c > 0) {
+    //     if (orient_d > 0) {
+    //         // k i l j
+    //         printf("1 k i l j\n");
+    //     } else {
+    //         // k i j l
+    //         printf("2 k i j l\n");
+    //     }
+    // } else {
+    //     if (orient_d > 0) {
+    //         // i k l j
+    //         printf("3 i k l j\n");
+    //     } else {
+    //         // i k j l
+    //         printf("4 i k j l\n");
+    //     }
+    // }
 
     return SUCCESS;
 }
@@ -817,7 +832,6 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
         {0.0f, 1.0f, 0.0f},
         {0.0f, 0.0f, 1.0f}
     };
-    float dots[3];
 
     // first, test the axis which is the normal of the triangle.
     // dots[0] = the distance of the triangle from the centre of the aabb when projected onto the normal.
@@ -839,14 +853,18 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
     glm_vec3_cross(face_vectors[0], face_vectors[1], face_normal);
     glm_vec3_normalize(face_normal);
     // when testing the face normal axis, all three points of the triangle project to the same point. so just check point 0
-    dots[0] = glm_vec3_dot(triangle[0], face_normal);
-    const float face_projection = half_extents[0] * fabsf(face_normal[0]) + half_extents[1] * fabsf(face_normal[1]) + half_extents[2] * fabsf(face_normal[2]);
-    if (fabsf(dots[0]) > face_projection) {
-        printf("Failure 1\n");
+
+    const float tst = fabs(glm_vec3_dot(triangle[0], face_normal));
+    float cmp = 0.0f;
+    for (uint i = 0; i < 3; i++) {
+        cmp += half_extents[i] * fabs(face_normal[i]);
+    }
+    if (tst > cmp) {
         return 0;
     }
 
     // testing against the 3 axes of the AABB, which are by definition the X, Y and Z axes.
+    float dots[3];
     for (uint i = 0; i < 3; i++) {
         for (uint j = 0; j < 3; j++) {
             dots[j] = glm_vec3_dot(triangle[j], xyz_axes[i]);
@@ -860,7 +878,6 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
         const float tri_min = fminf(dots[0], fminf(dots[1], dots[2]));
         const float tri_max = fmaxf(dots[0], fmaxf(dots[1], dots[2]));
         if (tri_min >  half_extents[i] || tri_max < -half_extents[i]) {
-            printf("Failure 2\n");
             return 0;
         }
     }
@@ -879,7 +896,6 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
             const float tri_min = fminf(dots[0], fminf(dots[1], dots[2]));
             const float tri_max = fmaxf(dots[0], fmaxf(dots[1], dots[2]));
             if (tri_min >  projection || tri_max < -projection) {
-                printf("Failure 3\n");
                 return 0;
             }
         }
@@ -899,7 +915,7 @@ static flag tekCheckOBBTriangleCollision(const struct OBB* obb, const vec3 trian
         glm_mat4_mulv3(transform, triangle[i], 1.0f, transformed_triangle[i]);
     }
 
-    return tekCheckAABBTriangleCollision(obb, transformed_triangle);
+    return tekCheckAABBTriangleCollision(obb->w_half_extents, transformed_triangle);
 }
 
 static flag tekCheckOBBTrianglesCollision(const struct OBB* obb, const vec3* triangles, const uint num_triangles) {
@@ -959,12 +975,8 @@ exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
                     sub_collision = tekCheckOBBCollision(&node_a->obb, &node_b->obb);
                 } else if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_LEAF)) {
                     sub_collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
-                    if (sub_collision) printf("OBB Triangle\n");
-                    pushOBB(&node_a->obb);
-                    pushTriangle(node_b->data.leaf.w_vertices);
                 } else if ((node_a->type == COLLIDER_LEAF) && (node_b->type == COLLIDER_NODE)) {
                     sub_collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
-                    if (sub_collision) printf("OBB Triangle\n");
                 } else {
                     tekUpdateLeaf(node_a, a->transform);
                     tekUpdateLeaf(node_b, b->transform);
@@ -976,19 +988,6 @@ exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
                     if (sub_collision) {
                         sub_collision = 0;
                         *collision = 1;
-                        printf("Yes\n");
-                    } else {
-                        printf("riangle(");
-                        for (uint z = 0; z < 3; z++) {
-                            if (z != 0) printf(", ");
-                            printf("(%f, %f, %f)", EXPAND_VEC3(node_a->data.leaf.w_vertices[z]));
-                        }
-                        printf(")\nriangle(");
-                        for (uint z = 0; z < 3; z++) {
-                            if (z != 0) printf(", ");
-                            printf("(%f, %f, %f)", EXPAND_VEC3(node_b->data.leaf.w_vertices[z]));
-                        }
-                        printf(")\n");
                     }
                 }
 
