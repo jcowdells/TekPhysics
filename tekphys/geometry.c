@@ -207,3 +207,16 @@ float scalarTripleProduct(vec3 vector_a, vec3 vector_b, vec3 vector_c) {
     glm_vec3_cross(vector_b, vector_c, cross_product);
     return glm_vec3_dot(vector_a, cross_product);
 }
+
+/**
+ * Get the normal vector given the three points of a triangle.
+ * @param triangle[in] An array of 3 vec3s representing the triangle.
+ * @param normal[out] The normalised normal vector of this triangle.
+ */
+void triangleNormal(vec3 triangle[3], vec3 normal) {
+    vec3 vec_ab, vec_ac;
+    glm_vec3_sub(triangle[0], triangle[1], vec_ab);
+    glm_vec3_sub(triangle[0], triangle[2], vec_ac);
+    glm_vec3_cross(vec_ab, vec_ac, normal);
+    glm_vec3_normalize(normal);
+}

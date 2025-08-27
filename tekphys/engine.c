@@ -385,6 +385,9 @@ static void tekEngine(void* args) {
     Vector bodies = {};
     threadChainThrow(vectorCreate(0, sizeof(TekBody), &bodies));
 
+    Vector contact_buffer = {};
+    threadChainThrow(vectorCreate(0, sizeof(TekCollisionManifold), &contact_buffer));
+
     Queue unused_ids = {};
     queueCreate(&unused_ids);
 
@@ -517,8 +520,13 @@ static void tekEngine(void* args) {
                 threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
                 printf("Testing body %u against body %u\n", i, j);
                 flag is_collision = 0;
-                threadChainThrow(tekTestForCollisions(body_i, body_j, &is_collision))
+                threadChainThrow(tekTestForCollisions(body_i, body_j, &is_collision, &contact_buffer))
                 printf("%s between some triangles\n", is_collision ? "collision" : "no collision");
+                for (uint i = 0; i < contact_buffer.length; i++) {
+                    vec3 contact_point;
+                    vectorGetItem(&contact_buffer, i, &contact_point);
+                    printf("    @ %f %f %f\n", EXPAND_VEC3(contact_point));
+                }
             }
         }
 
@@ -544,7 +552,7 @@ static void tekEngine(void* args) {
             memcpy(swap_buffer, triangles_vertices, 6 * sizeof(vec3));
 
             flag collision;
-            threadChainThrow(tekCheckTriangleCollision(swap_buffer, swap_buffer + 3, &collision));
+            //threadChainThrow(tekCheckTriangleCollision(swap_buffer, swap_buffer + 3, &collision));
             triangle_state.data.triangle_pair.collision = collision;
 
             pushState(state_queue, triangle_state);

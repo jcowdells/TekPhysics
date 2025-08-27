@@ -2,6 +2,7 @@
 
 #include "../tekgl.h"
 #include "../core/exception.h"
+#include "../core/vector.h"
 
 #include <cglm/vec3.h>
 
@@ -42,9 +43,14 @@ typedef struct TekColliderNode {
 
 typedef TekColliderNode* TekCollider;
 
+typedef struct TekCollisionManifold {
+    vec3 contact_point;
+    vec3 contact_normal;
+} TekCollisionManifold;
+
 exception tekCreateCollider(const TekBody* body, TekCollider* collider);
 void tekDeleteCollider(TekCollider* collider);
-exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision);
+exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision, Vector* contact_points);
 flag testCollision(TekBody* a, TekBody* b);
 void tekSwapTriangleVertices(vec3 vertices[3], uint swap_index);
-exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision);
+exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, Vector* contact_points);

@@ -9,7 +9,6 @@
 #include "geometry.h"
 #include "body.h"
 #include "engine.h"
-#include "../core/vector.h"
 #include "../tekgl/manager.h"
 
 #define EPSILON 1e-6
@@ -21,15 +20,26 @@
 #define DE_INITIALISED  2
 
 static Vector collider_buffer = {};
+static Vector collision_data_buffer = {};
 static flag collider_init = NOT_INITIALISED;
+
+struct CollisionData {
+    vec3 r_a;
+    vec3 r_b;
+    vec3 impulse;
+};
 
 void tekColliderDelete() {
     collider_init = DE_INITIALISED;
     vectorDelete(&collider_buffer);
+    vectorDelete(&collision_data_buffer);
 }
 
 tek_init TekColliderInit() {
     exception tek_exception = vectorCreate(16, 2 * sizeof(TekColliderNode*), &collider_buffer);
+    if (tek_exception != SUCCESS) return;
+
+    tek_exception = vectorCreate(8, sizeof(struct CollisionData), &collision_data_buffer);
     if (tek_exception != SUCCESS) return;
 
     tek_exception = tekAddDeleteFunc(tekColliderDelete);
@@ -54,13 +64,27 @@ tek_init TekColliderInit() {
 extern void ssyev_(char* jobz, char* uplo, int* n, float* a, int* lda, float* w, float* work, float* lwork, int* info);
 
 /**
+ * Single-precision compute solution to a real system of linear equations.
+ * @param n[in] The number of linear equations.
+ * @param nrhs[in] The number of right hand sides.
+ * @param a[in,out] The NxN coefficient matrix A.
+ * @param lda[in] The leading dimension of the array A.
+ * @param ipiv[out] The pivot indices that define the permutation matrix P.
+ * @param b[in,out] The NxNRHS matrix B. Also outputs the NxNRHS solution matrix X.
+ * @param ldb[in] The leading dimension of the array B.
+ * @param info[out] The output of the function, 0 on success, <0 on error, >0 on no solution.
+ * @note External function, interfaces Fortran subprocedure in LAPACK.
+ */
+extern void sgesv_(int* n, int* nrhs, float* a, int* lda, int* ipiv, float* b, int* ldb, int* info);
+
+/**
  * Compute the eigenvectors and eigenvalues of a symmetric matrix.
  * @param[in] matrix The matrix to compute.
  * @param[in/out] eigenvectors An empty but already allocated array of 3*sizeof(vec3) that will store the eigenvectors.
  * @param[in/out] eigenvalues An empty but already allocated array of 3*sizeof(float) that will store the eigenvalues.
  * @note Uses LAPACK / ssyev_(...) internally.
  */
-static exception symmetricMatrixCalculateEigenvectors(mat3 matrix, vec3* eigenvectors, float* eigenvalues) {
+static exception symmetricMatrixCalculateEigenvectors(mat3 matrix, vec3 eigenvectors[3], float eigenvalues[3]) {
     // create copy of matrix as LAPACKE will destroy the input.
     mat3 matrix_copy;
     glm_mat3_copy(matrix, matrix_copy);
@@ -82,7 +106,32 @@ static exception symmetricMatrixCalculateEigenvectors(mat3 matrix, vec3* eigenve
     // now, copy eigenvalues into output array.
     for (uint i = 0; i < 3; i++) {
         glm_vec3_copy(matrix_copy[i], eigenvectors[i]);
+        eigenvalues[i] = w[i];
     }
+    return SUCCESS;
+}
+
+static exception solveSimultaneous3Vec3(vec3 lhs_vectors[3], vec3 rhs_vector, vec3 result) {
+    // copy lhs and rhs vectors into a buffer so it doesn't get overwritten by LAPACK
+    vec3 lhs_buffer[3];
+    memcpy(lhs_buffer, lhs_vectors, 3 * sizeof(vec3));
+    vec3 rhs_buffer;
+    glm_vec3_copy(rhs_vector, rhs_buffer);
+
+    int n = 3; // 3 lhs vectors
+    int nrhs = 1; // 1 rhs vector
+    int lda = 3; // 3 components in lhs vectors
+    int ldb = 3; // 3 components in rhs vector
+    int info; // return value
+    int ipiv[3]; // ???
+
+    sgesv_(&n, &nrhs, lhs_buffer, &lda, &ipiv, rhs_buffer, &ldb, &info);
+    if (info)
+        tekThrow(FAILURE, "Failed to solve simultaneous equation system.");
+
+    // result should now be stored in the rhs buffer, return the answer
+    glm_vec3_copy(rhs_buffer, result);
+
     return SUCCESS;
 }
 
@@ -742,7 +791,54 @@ static void tekSwapToMakePositive(vec3 triangle_a[3], vec3 triangle_b[3]) {
     }
 }
 
-exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision) {
+/**
+ * Calculate the point of intersection between a line (defined by point_a and point_b) with a plane (defined by point_p and the normal)
+ * @param point_a[in] The first point defining a line
+ * @param point_b[in] The second point defining a line
+ * @param point_p[in] Any point that lies on the plane
+ * @param plane_normal[in] The normal of the plane, orthogonal to the surface of the plane.
+ * @param intersection[out] The intersection point.
+ */
+static void tekGetPlaneIntersection(vec3 point_a, vec3 point_b, vec3 point_p, vec3 plane_normal, vec3 intersection) {
+    vec3 vec_ab, vec_pa;
+    // vector that represents direction of the line
+    glm_vec3_sub(point_b, point_a, vec_ab);
+    // vector that represents direction from the point on the plane to the start of the line
+    glm_vec3_sub(point_a, point_p, vec_pa);
+    const float
+        dot_ab = glm_vec3_dot(plane_normal, vec_ab), // projection of line direction onto normal
+        dot_pa = glm_vec3_dot(plane_normal, vec_pa); // projection of vector from plane to point
+
+    if (fabsf(dot_ab) <= EPSILON) {
+        if (fabsf(dot_pa) <= EPSILON) {
+            glm_vec3_copy(point_a, intersection);
+        }
+        return;
+    }
+
+    glm_vec3_scale(vec_ab, -dot_pa / dot_ab, vec_ab); // scale by negative ratio between projections to get the vector
+    glm_vec3_add(point_a, vec_ab, intersection);
+}
+
+/**
+ * Get the contact normal of two triangles, assuming they have an edge-edge contact.
+ * @param triangle_a The first triangle involved in the collision.
+ * @param triangle_b The second triangle involved in the collision.
+ * @param manifold_a The first manifold to update with the collision normal.
+ * @param manifold_b The second manifold to update with the collision normal.
+ */
+static void tekGetTriangleEdgeContactNormal(vec3 triangle_a[3], triangle_b[3], TekCollisionManifold manifold_a, TekCollisionManifold manifold_b) {
+    vec3 edge_a, edge_b;
+    glm_vec3_sub(triangle_a[2], triangle_a[1], edge_a);
+    glm_vec3_sub(triangle_b[2], triangle_b[1], edge_b);
+    vec3 contact_normal;
+    glm_vec3_cross(edge_a, edge_b, contact_normal);
+    glm_vec3_normalize(contact_normal);
+    glm_vec3_copy(contact_normal, manifold_a.contact_normal);
+    glm_vec3_copy(contact_normal, manifold_b.contact_normal);
+}
+
+exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, Vector* contact_points) {
     // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
     int sign_array_a[3];
     tekCalculateSignArray(triangle_b, triangle_a, sign_array_a);
@@ -784,33 +880,54 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     const int orient_c = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[1], triangle_b[0]));
     const int orient_d = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[2], triangle_b[0]));
 
-    // if (orient_c > 0) {
-    //     if (orient_d > 0) {
-    //         // k i l j
-    //         printf("1 k i l j\n");
-    //     } else {
-    //         // k i j l
-    //         printf("2 k i j l\n");
-    //     }
-    // } else {
-    //     if (orient_d > 0) {
-    //         // i k l j
-    //         printf("3 i k l j\n");
-    //     } else {
-    //         // i k j l
-    //         printf("4 i k j l\n");
-    //     }
-    // }
+    vec3 normal_a, normal_b;
+    triangleNormal(triangle_a, normal_a);
+    triangleNormal(triangle_b, normal_b);
+
+    TekCollisionManifold manifold_a, manifold_b;
+
+    if (orient_c > 0) {
+        if (orient_d > 0) {
+            // edge of triangle a vs edge of triangle b
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold_a.contact_point);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold_b.contact_point);
+            glm_vec3_negate_to(normal_a, manifold_a.contact_normal);
+            glm_vec3_negate_to(normal_a, manifold_b.contact_normal);
+        } else {
+            // vertex of triangle a vs face of triangle b
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold_a.contact_point);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold_b.contact_point);
+            tekGetTriangleEdgeContactNormal(triangle_a, triangle_b, manifold_a, manifold_b);
+        }
+    } else {
+        if (orient_d > 0) {
+            // face of triangle a vs vertex of triangle b
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold_a.contact_point);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold_b.contact_point);
+            tekGetTriangleEdgeContactNormal(triangle_a, triangle_b, manifold_a, manifold_b);
+        } else {
+            // edge of triangle a vs edge of triangle b
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold_a.contact_point);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold_b.contact_point);
+            glm_vec3_copy(normal_b, manifold_a.contact_normal);
+            glm_vec3_copy(normal_b, manifold_b.contact_normal);
+        }
+    }
+
+    tekChainThrow(vectorAddItem(contact_points, &manifold_a));
+    if (glm_vec3_distance2(manifold_a.contact_point, manifold_b.contact_point) >= EPSILON) {
+        tekChainThrow(vectorAddItem(contact_points, &manifold_b));
+    }
 
     return SUCCESS;
 }
 
-static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_triangles_a, vec3* triangles_b, const uint num_triangles_b, flag* collision) {
+static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_triangles_a, vec3* triangles_b, const uint num_triangles_b, flag* collision, Vector* contact_points) {
     flag sub_collision = 0;
     *collision = 0;
     for (uint i = 0; i < num_triangles_a; i++) {
         for (uint j = 0; j < num_triangles_b; j++) {
-            tekChainThrow(tekCheckTriangleCollision(triangles_a + i * 3, triangles_b + j * 3, &sub_collision));
+            tekChainThrow(tekCheckTriangleCollision(triangles_a + i * 3, triangles_b + j * 3, &sub_collision, contact_points));
             if (sub_collision) *collision = 1;
         }
     }
@@ -944,9 +1061,12 @@ static void tekUpdateLeaf(TekColliderNode* leaf, mat4 transform) {
 
 #define getChild(collider_node, i) (i == LEFT) ? collider_node->data.node.left : collider_node->data.node.right
 
-exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
+exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision, Vector* contact_points) {
     if (collider_init == DE_INITIALISED) return SUCCESS;
     if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
+
+    contact_points->length = 0;
+
     *collision = 0;
     collider_buffer.length = 0;
     TekColliderNode* pair[2] = {
@@ -980,10 +1100,11 @@ exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
                 } else {
                     tekUpdateLeaf(node_a, a->transform);
                     tekUpdateLeaf(node_b, b->transform);
-                    tekChainThrow(tekCheckTriangleCollision(
-                        node_a->data.leaf.w_vertices, //node_a->data.leaf.num_vertices / 3,
-                        node_b->data.leaf.w_vertices, //node_b->data.leaf.num_vertices / 3,
-                        &sub_collision
+                    tekChainThrow(tekCheckTrianglesCollision(
+                        node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3,
+                        node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3,
+                        &sub_collision,
+                        contact_points
                         ));
                     if (sub_collision) {
                         sub_collision = 0;
@@ -999,6 +1120,28 @@ exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision) {
             }
         }
     }
+    return SUCCESS;
+}
+
+exception tekApplyCollision(TekBody* a, TekBody* b, const Vector* contact_points) {
+    if (collider_init == DE_INITIALISED) return SUCCESS;
+    if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
+
+    collision_data_buffer.length = 0;
+
+    for (uint i = 0; i < contact_points->length; i++) {
+        TekCollisionManifold* manifold;
+        vectorGetItemPtr(contact_points, i, &manifold);
+
+        struct CollisionData collision_data = {};
+        glm_vec3_sub(manifold->contact_point, a->position, collision_data.r_a);
+        glm_vec3_sub(manifold->contact_point, b->position, collision_data.r_b);
+
+        vec3 rp_a, rp_b;
+
+
+    }
+
     return SUCCESS;
 }
 

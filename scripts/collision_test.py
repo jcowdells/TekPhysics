@@ -323,6 +323,20 @@ def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle
 
     # TODO: calculate intersection point.
 
+    sign_c = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[2], triangle_b.vertices[1], triangle_b.vertices[0]))
+    sign_d = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_b.vertices[2], triangle_b.vertices[0]))
+
+    if sign_c > 0:
+        if sign_d > 0:
+            print("Edge 1")
+        else:
+            print("Vertex 1")
+    else:
+        if sign_d > 0:
+            print("Vertex 2")
+        else:
+            print("Edge 2")
+
     return True
 
 class SphereControllerEntity(Entity):
