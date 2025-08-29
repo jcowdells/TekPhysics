@@ -827,15 +827,11 @@ static void tekGetPlaneIntersection(vec3 point_a, vec3 point_b, vec3 point_p, ve
  * @param manifold_a The first manifold to update with the collision normal.
  * @param manifold_b The second manifold to update with the collision normal.
  */
-static void tekGetTriangleEdgeContactNormal(vec3 triangle_a[3], triangle_b[3], TekCollisionManifold manifold_a, TekCollisionManifold manifold_b) {
-    vec3 edge_a, edge_b;
-    glm_vec3_sub(triangle_a[2], triangle_a[1], edge_a);
-    glm_vec3_sub(triangle_b[2], triangle_b[1], edge_b);
+static void tekGetTriangleEdgeContactNormal(vec3 edge_a, vec3 edge_b, TekCollisionManifold manifold) {
     vec3 contact_normal;
     glm_vec3_cross(edge_a, edge_b, contact_normal);
     glm_vec3_normalize(contact_normal);
-    glm_vec3_copy(contact_normal, manifold_a.contact_normal);
-    glm_vec3_copy(contact_normal, manifold_b.contact_normal);
+    glm_vec3_copy(contact_normal, manifold.contact_normal);
 }
 
 exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, Vector* contact_points) {
@@ -884,40 +880,52 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     triangleNormal(triangle_a, normal_a);
     triangleNormal(triangle_b, normal_b);
 
-    TekCollisionManifold manifold_a, manifold_b;
+    TekCollisionManifold manifold;
 
     if (orient_c > 0) {
         if (orient_d > 0) {
             // edge of triangle a vs edge of triangle b
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold_a.contact_point);
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold_b.contact_point);
-            glm_vec3_negate_to(normal_a, manifold_a.contact_normal);
-            glm_vec3_negate_to(normal_a, manifold_b.contact_normal);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold.contact_points[0]);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold.contact_points[1]);
+            vec3 edge_a, edge_b;
+            glm_vec3_sub(triangle_a[0], triangle_a[2], edge_a);
+            glm_vec3_sub(triangle_b[0], triangle_b[2], edge_b);
+            tekGetTriangleEdgeContactNormal(edge_b, edge_a, manifold);
         } else {
             // vertex of triangle a vs face of triangle b
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold_a.contact_point);
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold_b.contact_point);
-            tekGetTriangleEdgeContactNormal(triangle_a, triangle_b, manifold_a, manifold_b);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold.contact_points[0]);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold.contact_points[1]);
+            glm_vec3_negate_to(normal_b, manifold.contact_normal);
         }
     } else {
         if (orient_d > 0) {
             // face of triangle a vs vertex of triangle b
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold_a.contact_point);
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold_b.contact_point);
-            tekGetTriangleEdgeContactNormal(triangle_a, triangle_b, manifold_a, manifold_b);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold.contact_points[0]);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold.contact_points[1]);
+            glm_vec3_copy(normal_a, manifold.contact_normal);
         } else {
             // edge of triangle a vs edge of triangle b
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold_a.contact_point);
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold_b.contact_point);
-            glm_vec3_copy(normal_b, manifold_a.contact_normal);
-            glm_vec3_copy(normal_b, manifold_b.contact_normal);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold.contact_points[0]);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold.contact_points[1]);
+            vec3 edge_a, edge_b;
+            glm_vec3_sub(triangle_a[0], triangle_a[1], edge_a);
+            glm_vec3_sub(triangle_b[0], triangle_b[1], edge_b);
+            tekGetTriangleEdgeContactNormal(edge_a, edge_b, manifold);
         }
     }
 
-    tekChainThrow(vectorAddItem(contact_points, &manifold_a));
-    if (glm_vec3_distance2(manifold_a.contact_point, manifold_b.contact_point) >= EPSILON) {
-        tekChainThrow(vectorAddItem(contact_points, &manifold_b));
+    if (manifold.contact_normal[0] >= 0.57735f) { // ~= 1 / sqrt(3)
+        manifold.tangent_vectors[0][0] = manifold.contact_normal[1];
+        manifold.tangent_vectors[0][1] = -manifold.contact_normal[0];
+        manifold.tangent_vectors[0][2] = 0.0f;
+    } else {
+        manifold.tangent_vectors[0][0] = 0.0f;
+        manifold.tangent_vectors[0][1] = manifold.contact_normal[2];
+        manifold.tangent_vectors[0][2] = -manifold.contact_normal[1];
     }
+
+    glm_vec3_normalize(manifold.tangent_vectors[0]);
+    glm_vec3_cross(manifold.contact_normal, manifold.tangent_vectors[0], manifold.tangent_vectors[1]);
 
     return SUCCESS;
 }

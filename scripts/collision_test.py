@@ -59,7 +59,7 @@ def create_obb_mesh(obb: OBB) -> Mesh:
     obb_mesh.generate()
     return obb_mesh
 
-def create_triangle_mesh(triangle: Triangle):
+def create_triangle_mesh(triangle: Triangle) -> Mesh:
     vertices: list[np.ndarray] = list()
     for i in range(3):
         vertices.append(triangle.vertices[i].tolist())
@@ -74,6 +74,50 @@ def create_triangle_mesh(triangle: Triangle):
     triangle_mesh.generate_normals()
     triangle_mesh.generate()
     return triangle_mesh
+
+def create_cylinder_mesh(height: float, radius: float, num_divisions: int) -> Mesh:
+    if num_divisions < 2:
+        raise ValueError(f"Cannot divide less than 2 times! (requested {num_divisions} divisions).")
+
+    num_faces = num_divisions + 1
+    vertices: list[np.ndarray] = list()
+    angular_width = (2 * math.pi) / num_faces
+    curr_angle = 0
+
+    for i in range(num_faces):
+        face_vertices: list[np.ndarray] = list()
+        for j in range(2):
+            angle = curr_angle if j == 0 else curr_angle + angular_width
+            x = radius * math.cos(angle)
+            z = radius * math.sin(angle)
+
+            for k in range(2):
+                y = height / 2 if k == 0 else -height / 2
+                face_vertices.append(np.array([x, y, z]))
+
+        for index in (0, 1, 2):
+            vertices.append(face_vertices[index])
+        for index in (1, 3, 2):
+            vertices.append(face_vertices[index])
+
+        vertices.append(face_vertices[2])
+        vertices.append(np.array([0.0, height / 2, 0.0]))
+        vertices.append(face_vertices[0])
+
+        vertices.append(face_vertices[1])
+        vertices.append(np.array([0.0, -height / 2, 0.0]))
+        vertices.append(face_vertices[3])
+
+        curr_angle += angular_width
+
+    print("Num Vertices:", len(vertices))
+
+    cylinder_mesh = Mesh(
+        vertices=vertices
+    )
+    cylinder_mesh.generate_normals()
+    cylinder_mesh.generate()
+    return cylinder_mesh
 
 def check_obb_obb_collision(obb_a: OBB, obb_b: OBB):
     translate = np.subtract(obb_b.centre, obb_a.centre)
@@ -287,7 +331,7 @@ def make_vertices_positive(triangle_a: Triangle, triangle_b: Triangle) -> Triang
             triangle_b.vertices[2]
         ])
 
-def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle) -> bool:
+def organise_triangles_for_collision(triangle_a: Triangle, triangle_b: Triangle) -> tuple[Triangle, Triangle] | None:
     sign_array_a = [
         get_sign(calculate_orientation(triangle_b.vertices[0], triangle_b.vertices[1], triangle_b.vertices[2], triangle_a.vertices[0])),
         get_sign(calculate_orientation(triangle_b.vertices[0], triangle_b.vertices[1], triangle_b.vertices[2], triangle_a.vertices[1])),
@@ -296,7 +340,7 @@ def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle
 
     if (sign_array_a[0] == sign_array_a[1]) and (sign_array_a[1] == sign_array_a[2]):
         # TODO: Check for coplanar intersection
-        return False
+        return None
 
     sign_array_b = [
         get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_a.vertices[2], triangle_b.vertices[0])),
@@ -305,7 +349,7 @@ def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle
     ]
 
     if (sign_array_b[0] == sign_array_b[1]) and (sign_array_b[1] == sign_array_b[2]):
-        return False
+        return None
 
     triangle_a = find_and_swap_vertices(triangle_a, sign_array_a)
     triangle_b = find_and_swap_vertices(triangle_b, sign_array_b)
@@ -313,6 +357,9 @@ def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle
     triangle_a = make_vertices_positive(triangle_b, triangle_a)
     triangle_b = make_vertices_positive(triangle_a, triangle_b)
 
+    return triangle_a, triangle_b
+
+def check_organised_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle):
     sign_a = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_b.vertices[0], triangle_b.vertices[1]))
     if sign_a > 0:
         return False
@@ -321,24 +368,96 @@ def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle
     if sign_b > 0:
         return False
 
-    # TODO: calculate intersection point.
+    return True
+
+def check_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle) -> bool:
+    triangles = organise_triangles_for_collision(triangle_a, triangle_b)
+    if triangles is None:
+        return False
+
+    triangle_a, triangle_b = triangles
+
+    return check_organised_triangle_triangle_collision(triangle_a, triangle_b)
+
+def get_triangle_normal(triangle: Triangle):
+    edge_a = np.subtract(triangle.vertices[1], triangle.vertices[0])
+    edge_b = np.subtract(triangle.vertices[2], triangle.vertices[0])
+    normal = np.cross(edge_a, edge_b)
+    magnitude = np.linalg.norm(normal)
+    return np.multiply(normal, 1.0 / float(magnitude))
+
+def get_triangle_centroid(triangle: Triangle) -> np.ndarray:
+    sum = np.add(triangle.vertices[0], triangle.vertices[1])
+    sum = np.add(sum, triangle.vertices[2])
+    return np.multiply(sum, 1.0 / 3.0)
+
+def get_triangle_edge_contact_normal(edge_a: np.ndarray, edge_b: np.ndarray) -> np.ndarray:
+
+    contact_normal = np.cross(edge_a, edge_b)
+
+    print(contact_normal)
+
+    contact_magnitude = np.linalg.norm(contact_normal)
+    return np.multiply(contact_normal, 1.0 / contact_magnitude)
+
+def get_triangle_triangle_collision_normal(triangle_a: Triangle, triangle_b: Triangle) -> np.ndarray | None:
+    triangles = organise_triangles_for_collision(triangle_a, triangle_b)
+    if triangles is None:
+        return None
+
+    triangle_a, triangle_b = triangles
+
+    if not check_organised_triangle_triangle_collision(triangle_a, triangle_b):
+        return None
 
     sign_c = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[2], triangle_b.vertices[1], triangle_b.vertices[0]))
     sign_d = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_b.vertices[2], triangle_b.vertices[0]))
 
+    normal_a = get_triangle_normal(triangle_a)
+    normal_b = get_triangle_normal(triangle_b)
+
     if sign_c > 0:
         if sign_d > 0:
-            print("Edge 1")
+            edge_a = np.subtract(triangle_a.vertices[0], triangle_a.vertices[2])
+            edge_b = np.subtract(triangle_b.vertices[0], triangle_b.vertices[2])
+            return get_triangle_edge_contact_normal(edge_b, edge_a)
         else:
-            print("Vertex 1")
+            return np.multiply(normal_b, -1.0)
     else:
         if sign_d > 0:
-            print("Vertex 2")
+            return normal_a
         else:
-            print("Edge 2")
+            edge_a = np.subtract(triangle_a.vertices[0], triangle_a.vertices[1])
+            edge_b = np.subtract(triangle_b.vertices[0], triangle_b.vertices[1])
+            return get_triangle_edge_contact_normal(edge_a, edge_b)
 
-    return True
+class VectorDisplayEntity(Entity):
+    def __update_world_position(self):
+        self.world_position = np.add(self.__position, np.multiply(self.__vector, 0.5))
+        self.look_in_direction(self.__vector, Vec3(0.0, 1.0, 0.0))
 
+    def __init__(self, position: np.ndarray, vector: np.ndarray, tube_radius: float=0.15, colour: Color=rgb(1.0, 1.0, 1.0)):
+        self.__mesh = create_cylinder_mesh(radius=tube_radius, height=1.0, num_divisions=10)
+        super().__init__(model=self.__mesh, scale=1.0, color=colour)
+        self.__vector = vector
+        self.__position = position
+        self.__update_world_position()
+
+    def get_vector(self) -> np.ndarray:
+        return self.__vector
+
+    def set_vector(self, vector: np.ndarray):
+        self.__vector = vector
+        magnitude = np.linalg.norm(self.__vector)
+        self.scale = (1.0, magnitude, 1.0)
+        self.__update_world_position()
+
+    def get_position(self) -> np.ndarray:
+        return self.__position
+
+    def set_position(self, position: np.ndarray):
+        self.__position = position
+        self.__update_world_position()
 class SphereControllerEntity(Entity):
     NORMAL_COLOUR = rgb(0.9, 0.9, 0.9)
     HOVERED_COLOUR = rgb(1.0, 1.0, 1.0)
@@ -606,6 +725,22 @@ class TriangleCollisionTest(Entity):
             self.triangle_a.color_setter(NORMAL_COLOUR)
             self.triangle_b.color_setter(NORMAL_COLOUR)
 
+class TriangleNormalTest(TriangleCollisionTest):
+    def __init__(self, *vertices):
+        super().__init__(*vertices)
+        self.triangle_a.color_setter(color.orange)
+        self.triangle_b.color_setter(color.blue)
+        self.__normal = VectorDisplayEntity(get_triangle_centroid(self.triangle_a.get_triangle()), np.array([0.0, 1.0, 0.0]), tube_radius=0.05)
+
+    def update(self):
+        normal = get_triangle_triangle_collision_normal(self.triangle_a.get_triangle(), self.triangle_b.get_triangle())
+        if normal is None:
+            self.__normal.visible_setter(False)
+        else:
+            self.__normal.visible_setter(True)
+            self.__normal.set_vector(normal)
+            self.__normal.set_position(get_triangle_centroid(self.triangle_a.get_triangle()))
+
 def main():
     app = Ursina()
     sun = DirectionalLight()
@@ -617,7 +752,7 @@ def main():
 
     # collision_test = OBBTriangleCollisionTest(np.array([0, -1, 0]), np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
 
-    collision_test_2 = TriangleCollisionTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
+    collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
 
     EditorCamera()  # add camera controls for orbiting and moving the camera
 

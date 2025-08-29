@@ -44,8 +44,10 @@ typedef struct TekColliderNode {
 typedef TekColliderNode* TekCollider;
 
 typedef struct TekCollisionManifold {
-    vec3 contact_point;
+    vec3 contact_points[2];
     vec3 contact_normal;
+    vec3 tangent_vectors[2];
+    float penetration_depth;
 } TekCollisionManifold;
 
 exception tekCreateCollider(const TekBody* body, TekCollider* collider);
