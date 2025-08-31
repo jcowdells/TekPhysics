@@ -69,6 +69,8 @@ add_executable(
         core/bitset.h
         core/priorityqueue.c
         core/priorityqueue.h
+        tekphys/collisions.c
+        tekphys/collisions.h
 )
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${OpenBLAS_INCLUDE_DIR})

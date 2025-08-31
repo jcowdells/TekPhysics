@@ -21,6 +21,7 @@ typedef struct TekBody {
     float mass;
     float density;
     float volume;
+    float restitution;
     vec3 centre_of_mass;
     vec3 position;
     vec3 velocity;

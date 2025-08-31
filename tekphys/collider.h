@@ -12,6 +12,12 @@
 struct TekBody;
 typedef struct TekBody TekBody;
 
+struct Triangle {
+    vec3 vertices[3];
+    vec3 centroid;
+    float area;
+};
+
 struct OBB {
     vec3 centre;
     vec3 axes[3];
@@ -52,7 +58,6 @@ typedef struct TekCollisionManifold {
 
 exception tekCreateCollider(const TekBody* body, TekCollider* collider);
 void tekDeleteCollider(TekCollider* collider);
-exception tekTestForCollisions(TekBody* a, TekBody* b, flag* collision, Vector* contact_points);
-flag testCollision(TekBody* a, TekBody* b);
-void tekSwapTriangleVertices(vec3 vertices[3], uint swap_index);
-exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, Vector* contact_points);
+
+void tekUpdateOBB(struct OBB* obb, mat4 transform);
+void tekUpdateLeaf(TekColliderNode* leaf, mat4 transform);

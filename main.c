@@ -491,8 +491,8 @@ exception run() {
         glBindVertexArray(cdr_vertex_array);
         const uint n = 1 << depth;
         uint count = (n << 1) - n;
-        if (collider_boxes.length > 0)
-            glDrawArrays(GL_POINTS, (GLint)(n - 1), (GLint)count);
+        // if (collider_boxes.length > 0)
+        //    glDrawArrays(GL_POINTS, (GLint)(n - 1), (GLint)count);
 
         tekBindShaderProgram(shader_program);
         tekChainThrow(tekShaderUniformMat4(shader_program, "projection", camera.projection));

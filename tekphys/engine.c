@@ -15,6 +15,7 @@
 #include "../core/vector.h"
 #include "../core/queue.h"
 #include "GLFW/glfw3.h"
+#include "collisions.h"
 
 #define BILLION 1000000000
 
@@ -520,12 +521,15 @@ static void tekEngine(void* args) {
                 threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
                 printf("Testing body %u against body %u\n", i, j);
                 flag is_collision = 0;
-                threadChainThrow(tekTestForCollisions(body_i, body_j, &is_collision, &contact_buffer))
+                threadChainThrow(tekTestForCollision(body_i, body_j, &is_collision, &contact_buffer))
                 printf("%s between some triangles\n", is_collision ? "collision" : "no collision");
                 for (uint i = 0; i < contact_buffer.length; i++) {
                     vec3 contact_point;
                     vectorGetItem(&contact_buffer, i, &contact_point);
                     printf("    @ %f %f %f\n", EXPAND_VEC3(contact_point));
+                }
+                if (is_collision) {
+                    tekApplyCollision(body_i, body_j, &contact_buffer, (float)phys_period);
                 }
             }
         }

@@ -44,4 +44,6 @@ venv/
 .env/
 
 # Bloat
+/nea/
 /nea/recordings/
+/nea/resources/
