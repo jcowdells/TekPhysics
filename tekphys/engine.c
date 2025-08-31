@@ -513,26 +513,7 @@ static void tekEngine(void* args) {
             cam_pos_changed = 1;
         }
 
-        for (uint i = 0; i < bodies.length; i++) {
-            TekBody* body_i;
-            threadChainThrow(vectorGetItemPtr(&bodies, i, &body_i));
-            for (uint j = 0; j < i; j++) {
-                TekBody* body_j;
-                threadChainThrow(vectorGetItemPtr(&bodies, j, &body_j));
-                printf("Testing body %u against body %u\n", i, j);
-                flag is_collision = 0;
-                threadChainThrow(tekTestForCollision(body_i, body_j, &is_collision, &contact_buffer))
-                printf("%s between some triangles\n", is_collision ? "collision" : "no collision");
-                for (uint i = 0; i < contact_buffer.length; i++) {
-                    vec3 contact_point;
-                    vectorGetItem(&contact_buffer, i, &contact_point);
-                    printf("    @ %f %f %f\n", EXPAND_VEC3(contact_point));
-                }
-                if (is_collision) {
-                    tekApplyCollision(body_i, body_j, &contact_buffer, (float)phys_period);
-                }
-            }
-        }
+        tekSolveCollisions(&bodies, (float)phys_period);
 
         // TODO: remove, as this is a test
         if (q) {

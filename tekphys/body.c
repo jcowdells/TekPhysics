@@ -180,6 +180,7 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     body->num_indices = len_index_array;
     body->density = mass;
     body->restitution = 1.0f; // TODO: make this a real thing.
+    body->friction = 0.5f;
     glm_vec3_copy(position, body->position);
     glm_vec4_copy(rotation, body->rotation);
     glm_vec3_copy(scale, body->scale);

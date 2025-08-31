@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <cglm/cam.h>
 #include <cglm/mat4.h>
 
 #include "body.h"
@@ -9,6 +10,8 @@
 #include "geometry.h"
 #include "../core/vector.h"
 #include "../tekgl/manager.h"
+#include "../core/bitset.h"
+#include "../stb/stb_image.h"
 
 #define NOT_INITIALISED 0
 #define INITIALISED     1
@@ -19,26 +22,30 @@
 #define RIGHT 1
 
 static Vector collider_buffer = {};
-static Vector collision_data_buffer = {};
+static Vector contact_buffer = {};
+static Vector impulse_buffer = {};
+static BitSet contact_matrix = {};
 static flag collider_init = NOT_INITIALISED;
-
-struct CollisionData {
-    vec3 p_a;
-    vec3 p_b;
-    vec3 impulse;
-};
 
 void tekColliderDelete() {
     collider_init = DE_INITIALISED;
     vectorDelete(&collider_buffer);
-    vectorDelete(&collision_data_buffer);
+    vectorDelete(&contact_buffer);
+    vectorDelete(&impulse_buffer);
+    bitsetDelete(&contact_matrix);
 }
 
 tek_init TekColliderInit() {
     exception tek_exception = vectorCreate(16, 2 * sizeof(TekColliderNode*), &collider_buffer);
     if (tek_exception != SUCCESS) return;
 
-    tek_exception = vectorCreate(8, sizeof(struct CollisionData), &collision_data_buffer);
+    tek_exception = vectorCreate(8, sizeof(TekCollisionManifold), &contact_buffer);
+    if (tek_exception != SUCCESS) return;
+
+    tek_exception = vectorCreate(1, NUM_CONSTRAINTS * sizeof(float), &impulse_buffer);
+    if (tek_exception != SUCCESS) return;
+
+    tek_exception = bitsetCreate(1, 1, &contact_matrix);
     if (tek_exception != SUCCESS) return;
 
     tek_exception = tekAddDeleteFunc(tekColliderDelete);
@@ -375,7 +382,7 @@ static void tekGetTriangleEdgeContactNormal(vec3 edge_a, vec3 edge_b, vec3 norma
     glm_vec3_copy(contact_normal, normal);
 }
 
-exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, Vector* contact_manifolds) {
+exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, TekCollisionManifold* manifold) {
     // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
     int sign_array_a[3];
     tekCalculateSignArray(triangle_b, triangle_a, sign_array_a);
@@ -421,65 +428,68 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     triangleNormal(triangle_a, normal_a);
     triangleNormal(triangle_b, normal_b);
 
-    TekCollisionManifold manifold;
-
     if (orient_c > 0) {
         if (orient_d > 0) {
             // edge of triangle a vs edge of triangle b
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold.contact_points[0]);
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold.contact_points[1]);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold->contact_points[0]);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold->contact_points[1]);
             vec3 edge_a, edge_b;
             glm_vec3_sub(triangle_a[0], triangle_a[2], edge_a);
             glm_vec3_sub(triangle_b[0], triangle_b[2], edge_b);
-            tekGetTriangleEdgeContactNormal(edge_b, edge_a, manifold.contact_normal);
+            tekGetTriangleEdgeContactNormal(edge_b, edge_a, manifold->contact_normal);
         } else {
             // vertex of triangle a vs face of triangle b
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold.contact_points[0]);
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold.contact_points[1]);
-            glm_vec3_negate_to(normal_b, manifold.contact_normal);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold->contact_points[0]);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold->contact_points[1]);
+            glm_vec3_negate_to(normal_b, manifold->contact_normal);
         }
     } else {
         if (orient_d > 0) {
             // face of triangle a vs vertex of triangle b
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold.contact_points[0]);
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold.contact_points[1]);
-            glm_vec3_copy(normal_a, manifold.contact_normal);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold->contact_points[0]);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold->contact_points[1]);
+            glm_vec3_copy(normal_a, manifold->contact_normal);
         } else {
             // edge of triangle a vs edge of triangle b
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold.contact_points[0]);
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold.contact_points[1]);
+            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold->contact_points[0]);
+            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold->contact_points[1]);
             vec3 edge_a, edge_b;
             glm_vec3_sub(triangle_a[0], triangle_a[1], edge_a);
             glm_vec3_sub(triangle_b[0], triangle_b[1], edge_b);
-            tekGetTriangleEdgeContactNormal(edge_a, edge_b, manifold.contact_normal);
+            tekGetTriangleEdgeContactNormal(edge_a, edge_b, manifold->contact_normal);
         }
     }
 
-    tekChainThrow(vectorAddItem(contact_manifolds, &manifold));
+    if (manifold->contact_normal[0] >= 0.57735f) { // ~= 1 / sqrt(3)
+        manifold->tangent_vectors[0][0] = manifold->contact_normal[1];
+        manifold->tangent_vectors[0][1] = -manifold->contact_normal[0];
+        manifold->tangent_vectors[0][2] = 0.0f;
+    } else {
+        manifold->tangent_vectors[0][0] = 0.0f;
+        manifold->tangent_vectors[0][1] = manifold->contact_normal[2];
+        manifold->tangent_vectors[0][2] = -manifold->contact_normal[1];
+    }
 
-    // TODO: move to collision response.
-    // if (manifold.contact_normal[0] >= 0.57735f) { // ~= 1 / sqrt(3)
-    //     manifold.tangent_vectors[0][0] = manifold.contact_normal[1];
-    //     manifold.tangent_vectors[0][1] = -manifold.contact_normal[0];
-    //     manifold.tangent_vectors[0][2] = 0.0f;
-    // } else {
-    //     manifold.tangent_vectors[0][0] = 0.0f;
-    //     manifold.tangent_vectors[0][1] = manifold.contact_normal[2];
-    //     manifold.tangent_vectors[0][2] = -manifold.contact_normal[1];
-    // }
-    //
-    // glm_vec3_normalize(manifold.tangent_vectors[0]);
-    // glm_vec3_cross(manifold.contact_normal, manifold.tangent_vectors[0], manifold.tangent_vectors[1]);
+    glm_vec3_normalize(manifold->tangent_vectors[0]);
+    glm_vec3_cross(manifold->contact_normal, manifold->tangent_vectors[0], manifold->tangent_vectors[1]);
+
+    vec3 penetration_vector;
+    glm_vec3_sub(manifold->contact_points[1], manifold->contact_points[0], penetration_vector);
+    manifold->penetration_depth = -glm_vec3_dot(penetration_vector, manifold->contact_normal);
+
+    for (uint i = 0; i < NUM_CONSTRAINTS; i++) {
+        manifold->impulses[i] = 0.0f;
+    }
 
     return SUCCESS;
 }
 
-static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_triangles_a, vec3* triangles_b, const uint num_triangles_b, flag* collision, Vector* contact_manifolds) {
+static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_triangles_a, vec3* triangles_b, const uint num_triangles_b, flag* collision, TekCollisionManifold* manifold) {
     flag sub_collision = 0;
     *collision = 0;
     for (uint i = 0; i < num_triangles_a; i++) {
         for (uint j = 0; j < num_triangles_b; j++) {
-            tekChainThrow(tekCheckTriangleCollision(triangles_a + i * 3, triangles_b + j * 3, &sub_collision, contact_manifolds));
+            tekChainThrow(tekCheckTriangleCollision(triangles_a + i * 3, triangles_b + j * 3, &sub_collision, manifold));
             if (sub_collision) *collision = 1;
         }
     }
@@ -488,26 +498,24 @@ static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_tr
 
 #define getChild(collider_node, i) (i == LEFT) ? collider_node->data.node.left : collider_node->data.node.right
 
-exception tekTestForCollision(TekBody* a, TekBody* b, flag* collision, Vector* contact_manifolds) {
+exception tekGetCollisionManifold(TekBody* body_a, TekBody* body_b, flag* collision, TekCollisionManifold* manifold) {
     if (collider_init == DE_INITIALISED) return SUCCESS;
     if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
-
-    contact_manifolds->length = 0;
 
     *collision = 0;
     collider_buffer.length = 0;
     TekColliderNode* pair[2] = {
-        a->collider, b->collider
+        body_a->collider, body_b->collider
     };
     tekChainThrow(vectorAddItem(&collider_buffer, &pair));
     while (vectorPopItem(&collider_buffer, &pair)) {
         if (pair[LEFT]->type == COLLIDER_NODE) {
-            tekUpdateOBB(&pair[LEFT]->data.node.left->obb, a->transform);
-            tekUpdateOBB(&pair[LEFT]->data.node.right->obb, a->transform);
+            tekUpdateOBB(&pair[LEFT]->data.node.left->obb, body_a->transform);
+            tekUpdateOBB(&pair[LEFT]->data.node.right->obb, body_a->transform);
         }
         if (pair[RIGHT]->type == COLLIDER_NODE) {
-            tekUpdateOBB(&pair[RIGHT]->data.node.left->obb, b->transform);
-            tekUpdateOBB(&pair[RIGHT]->data.node.right->obb, b->transform);
+            tekUpdateOBB(&pair[RIGHT]->data.node.left->obb, body_b->transform);
+            tekUpdateOBB(&pair[RIGHT]->data.node.right->obb, body_b->transform);
         }
 
         TekColliderNode* temp_pair[2];
@@ -525,13 +533,13 @@ exception tekTestForCollision(TekBody* a, TekBody* b, flag* collision, Vector* c
                 } else if ((node_a->type == COLLIDER_LEAF) && (node_b->type == COLLIDER_NODE)) {
                     sub_collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
                 } else {
-                    tekUpdateLeaf(node_a, a->transform);
-                    tekUpdateLeaf(node_b, b->transform);
+                    tekUpdateLeaf(node_a, body_a->transform);
+                    tekUpdateLeaf(node_b, body_b->transform);
                     tekChainThrow(tekCheckTrianglesCollision(
                         node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3,
                         node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3,
                         &sub_collision,
-                        contact_manifolds
+                        manifold
                         ));
                     if (sub_collision) {
                         sub_collision = 0;
@@ -550,53 +558,169 @@ exception tekTestForCollision(TekBody* a, TekBody* b, flag* collision, Vector* c
     return SUCCESS;
 }
 
-exception tekApplyCollision(TekBody* body_a, TekBody* body_b, const Vector* contact_manifolds, const float delta_time) {
+static void tekSetupInvMassMatrix(TekBody* body_a, TekBody* body_b, mat3 inv_mass_matrix[4]) {
+    glm_mat3_identity(inv_mass_matrix[0]);
+    glm_mat3_scale(inv_mass_matrix[0], 1.0f / body_a->mass);
+
+    glm_mat3_identity(inv_mass_matrix[2]);
+    glm_mat3_scale(inv_mass_matrix[2], 1.0f / body_b->mass);
+
+    glm_mat3_copy(body_a->inverse_inertia_tensor, inv_mass_matrix[1]);
+    glm_mat3_copy(body_b->inverse_inertia_tensor, inv_mass_matrix[3]);
+}
+
+exception tekApplyCollision(TekBody* body_a, TekBody* body_b, const Vector* contact_manifolds, const float phys_period) {
+    vec3 constraints[NUM_CONSTRAINTS][4];
+    mat3 inv_mass_matrix[4];
+    tekSetupInvMassMatrix(body_a, body_b, inv_mass_matrix);
+
     for (uint i = 0; i < contact_manifolds->length; i++) {
         TekCollisionManifold* manifold;
         vectorGetItemPtr(contact_manifolds, i, &manifold);
 
-        vec3 r_a, r_b;
-        glm_vec3_sub(manifold->contact_points[0], body_a->position, r_a);
-        glm_vec3_sub(manifold->contact_points[1], body_b->position, r_b);
+        for (uint j = 0; j < NUM_CONSTRAINTS; j++) {
+            manifold->impulses[j] = 0.0f;
+        }
 
-        vec3 v_ab;
-        glm_vec3_sub(body_b->velocity, body_a->velocity, v_ab);
+        const float friction = fmaxf(body_a->friction, body_b->friction);
 
-        vec3 s_v_ab;
-        glm_vec3_scale(v_ab, -(1.0f + fminf(body_a->restitution, body_b->restitution)), s_v_ab);
-        const float numerator = glm_vec3_dot(s_v_ab, manifold->contact_normal);
+        glm_vec3_negate_to(manifold->contact_normal, constraints[NORMAL_CONSTRAINT][0]);
+        glm_vec3_cross(manifold->r_ac, manifold->contact_normal, constraints[NORMAL_CONSTRAINT][1]);
+        glm_vec3_copy(manifold->contact_normal, constraints[NORMAL_CONSTRAINT][2]);
+        glm_vec3_cross(manifold->r_cb, manifold->contact_normal, constraints[NORMAL_CONSTRAINT][3]);
 
-        vec3 r_ap_tmp;
-        glm_vec3_cross(r_a, manifold->contact_normal, r_ap_tmp);
-        glm_mat3_mulv(body_a->inverse_inertia_tensor, r_ap_tmp, r_ap_tmp);
-        glm_vec3_cross(r_ap_tmp, r_a, r_ap_tmp);
+        for (uint j = 0; j < 2; j++) {
+            glm_vec3_negate_to(manifold->tangent_vectors[j], constraints[TANGENT_CONSTRAINT_1 + j][0]);
+            glm_vec3_cross(manifold->r_ac, manifold->tangent_vectors[j], constraints[TANGENT_CONSTRAINT_1 + j][1]);
+            glm_vec3_copy(manifold->tangent_vectors[j], constraints[TANGENT_CONSTRAINT_1 + j][2]);
+            glm_vec3_cross(manifold->r_cb, manifold->tangent_vectors[j], constraints[TANGENT_CONSTRAINT_1 + j][3]);
+        }
 
-        vec3 r_bp_tmp;
-        glm_vec3_cross(r_b, manifold->contact_normal, r_bp_tmp);
-        glm_mat3_mulv(body_b->inverse_inertia_tensor, r_bp_tmp, r_bp_tmp);
-        glm_vec3_cross(r_bp_tmp, r_b, r_bp_tmp);
+        for (uint c = 0; c < NUM_CONSTRAINTS; c++) {
+            float lambda_d = 0.0f; // denominator
+            for (uint j = 0; j < 4; j++) {
+                vec3 constraint;
+                glm_mat3_mulv(inv_mass_matrix[j], constraints[c][j], constraint);
+                lambda_d += glm_vec3_dot(constraints[c][j], constraint);
+            }
 
-        vec3 rot_ab;
-        glm_vec3_add(r_ap_tmp, r_bp_tmp, rot_ab);
+            float lambda_n = 0.0f; // numerator
+            lambda_n -= glm_vec3_dot(constraints[c][0], body_a->velocity);
+            lambda_n -= glm_vec3_dot(constraints[c][1], body_a->angular_velocity);
+            lambda_n -= glm_vec3_dot(constraints[c][2], body_b->velocity);
+            lambda_n -= glm_vec3_dot(constraints[c][3], body_b->angular_velocity);
+            if (c == NORMAL_CONSTRAINT) {
+                lambda_n -= manifold->baumgarte_stabilisation;
+            }
+            float lambda = lambda_n / lambda_d;
 
-        vec3 s_normal;
-        glm_vec3_scale(manifold->contact_normal, 1.0f / body_a->mass + 1.0f / body_b->mass, s_normal);
-        const float denominator = glm_vec3_dot(manifold->contact_normal, s_normal) + glm_vec3_dot(rot_ab, manifold->contact_normal);
+            const float temp = manifold->impulses[c];
+            switch (c) {
+            case NORMAL_CONSTRAINT:
+                manifold->impulses[c] = fmaxf(manifold->impulses[c] + lambda, 0.0f);
+                lambda = manifold->impulses[c] - temp;
+                break;
+            case TANGENT_CONSTRAINT_1:
+            case TANGENT_CONSTRAINT_2:
+                manifold->impulses[c] = glm_clamp(manifold->impulses[c] + lambda, -friction * manifold->impulses[c], friction * manifold->impulses[c]);
+                lambda = manifold->impulses[c] - temp;
+                break;
+            default:
+                break;
+            }
 
-        vec3 impulse;
-        glm_vec3_scale(manifold->contact_normal, numerator / denominator, impulse);
+            vec3 delta_v[4];
+            for (uint j = 0; j < 4; j++) {
+                printf("Constraint = %f %f %f\n", EXPAND_VEC3(constraints[c][j]));
+                glm_mat3_mulv(inv_mass_matrix[j], constraints[c][j], delta_v[j]);
+                glm_vec3_scale(delta_v[j], lambda, delta_v[j]);
+            }
 
-        tekBodyApplyImpulse(body_b, manifold->contact_points[1], impulse, delta_time);
+            for (uint j = 0; j < 4; j++) printf("DeltaV = %f %f %f\n", EXPAND_VEC3(delta_v[j]));
 
-        glm_vec3_negate(impulse);
-        tekBodyApplyImpulse(body_a, manifold->contact_points[0], impulse, delta_time);
+            glm_vec3_add(body_a->velocity, delta_v[0], body_a->velocity);
+            glm_vec3_add(body_a->angular_velocity, delta_v[1], body_a->angular_velocity);
+            glm_vec3_add(body_b->velocity, delta_v[2], body_b->velocity);
+            glm_vec3_add(body_b->angular_velocity, delta_v[3], body_b->angular_velocity);
+        }
     }
 
     return SUCCESS;
 }
 
-flag testCollision(TekBody* a, TekBody* b) {
-    tekUpdateOBB(&a->collider->obb, a->transform);
-    tekUpdateOBB(&b->collider->obb, b->transform);
-    return tekCheckOBBCollision(&a->collider->obb, &b->collider->obb);
+static uint tekGetContactMatrixIndex(const uint index_a, const uint index_b, const uint matrix_size) {
+    if (index_b > index_a) return tekGetContactMatrixIndex(index_b, index_a, matrix_size);
+    return index_a + index_b * (2 * matrix_size - index_b - 1) / 2;
+}
+
+static exception tekContactMatrixSet(const uint index_a, const uint index_b, const uint matrix_size) {
+    tekChainThrow(bitsetSet(&contact_matrix, tekGetContactMatrixIndex(index_a, index_b, matrix_size)));
+    return SUCCESS;
+}
+
+static exception tekContactMatrixGet(const uint index_a, const uint index_b, const uint matrix_size, flag* contact) {
+    tekChainThrow(bitsetGet(&contact_matrix, tekGetContactMatrixIndex(index_a, index_b, matrix_size), contact));
+    return SUCCESS;
+}
+
+exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
+    if (collider_init == DE_INITIALISED) return SUCCESS;
+    if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Contact buffer was never initialised.");
+
+    contact_buffer.length = 0;
+
+    for (uint i = 0; i < bodies->length; i++) {
+        TekBody* body_i;
+        tekChainThrow(vectorGetItemPtr(bodies, i, &body_i));
+        for (uint j = 0; j < i; j++) {
+            TekBody* body_j;
+            tekChainThrow(vectorGetItemPtr(bodies, j, &body_j));
+
+            flag is_collision = 0;
+            TekCollisionManifold manifold;
+            tekChainThrow(tekGetCollisionManifold(body_i, body_j, &is_collision, &manifold))
+            if (!is_collision) continue;
+
+            tekContactMatrixSet(i, j, bodies->length);
+            manifold.baumgarte_stabilisation = -(BAUMGARTE_BETA / phys_period) * manifold.penetration_depth;
+            float restitution = fminf(body_i->restitution, body_j->restitution);
+
+            glm_vec3_sub(manifold.contact_points[0], body_i->centre_of_mass, manifold.r_ac);
+            glm_vec3_sub(body_j->centre_of_mass, manifold.contact_points[1], manifold.r_cb);
+
+            vec3 delta_v;
+            glm_vec3_sub(body_j->velocity, body_i->velocity, delta_v);
+
+            vec3 rw_a, rw_b;
+            glm_vec3_cross(body_i->angular_velocity, manifold.r_ac, rw_a);
+            glm_vec3_cross(body_j->angular_velocity, manifold.r_cb, rw_b);
+
+            vec3 restitution_vector;
+            glm_vec3_add(rw_a, rw_b, restitution_vector);
+            glm_vec3_add(restitution_vector, delta_v, restitution_vector);
+            restitution *= glm_vec3_dot(restitution_vector, manifold.contact_normal);
+            manifold.baumgarte_stabilisation += restitution;
+
+            tekChainThrow(vectorAddItem(&contact_buffer, &manifold));
+        }
+    }
+
+    for (uint s = 0; s < NUM_ITERATIONS; s++) {
+        for (uint i = 0; i < bodies->length; i++) {
+            for (uint j = 0; j < i; j++) {
+                flag collision;
+                tekChainThrow(tekContactMatrixGet(i, j, bodies->length, &collision));
+                if (!collision) continue;
+
+                TekBody* body_i, * body_j;
+                tekChainThrow(vectorGetItemPtr(bodies, i, &body_i));
+                tekChainThrow(vectorGetItemPtr(bodies, j, &body_j));
+
+                tekApplyCollision(body_i, body_j, &contact_buffer, phys_period);
+            }
+        }
+    }
+    printf("\n");
+
+    return SUCCESS;
 }

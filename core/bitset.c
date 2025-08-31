@@ -153,3 +153,11 @@ exception bitsetGet(const BitSet* bitset, const uint index, flag* value) {
     *value = (bitset->bitset[array_index] & (1ull << bit_index)) ? 1 : 0;
     return SUCCESS;
 }
+
+/**
+ * Set all bits to zero.
+ * @param bitset The bitset to operate on.
+ */
+void bitsetClear(const BitSet* bitset) {
+    memset(bitset->bitset, 0, bitset->size * sizeof(uint64_t));
+}
