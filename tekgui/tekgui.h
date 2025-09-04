@@ -1,31 +1,17 @@
 #pragma once
 
+#include <cglm/vec4.h>
 #include "../tekgl.h"
+#include "../core/exception.h"
 
-#define hasFlag(f, m) (f & m) == m
+struct TekGuiWindowDefaults {
+    uint x_pos;
+    uint y_pos;
+    uint width;
+    uint height;
+    vec4 colour;
+};
 
-#define CONTAINER_PTR 0x00
+#define tekGuiLog(...) printf("[INFO] TekGui: "); printf(__VA_ARGS__)
 
-typedef struct TekGuiBbox {
-    float min_x, min_y, max_x, max_y;
-} TekGuiBbox;
-
-struct TekGuiObject;
-
-typedef float (*TekGuiGetSizeFunc)(struct TekGuiObject* gui_object);
-typedef void (*TekGuiGetBboxFunc)(struct TekGuiObject* gui_object, TekGuiBbox* bbox);
-
-typedef struct TekGuiInterface {
-    flag type;
-    TekGuiGetSizeFunc tekGuiGetWidth;
-    TekGuiGetSizeFunc tekGuiGetHeight;
-    TekGuiGetSizeFunc tekGuiGetUsableWidth;
-    TekGuiGetSizeFunc tekGuiGetUsableHeight;
-    TekGuiGetBboxFunc tekGuiGetBbox;
-} TekGuiInterface;
-
-typedef struct TekGuiObject {
-    const TekGuiInterface* interface;
-    struct TekGuiObject* parent;
-    void* ptr;
-} TekGuiObject;
+exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults);

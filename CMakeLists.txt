@@ -71,6 +71,9 @@ add_executable(
         core/priorityqueue.h
         tekphys/collisions.c
         tekphys/collisions.h
+        tekgui/window.c
+        tekgui/window.h
+        tekgui/tekgui.c
 )
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${OpenBLAS_INCLUDE_DIR})

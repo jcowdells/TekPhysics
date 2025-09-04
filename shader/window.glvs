@@ -1,0 +1,27 @@
+#version 330 core
+
+layout (location = 0) in vec2 position;
+layout (location = 1) in vec2 size;
+layout (location = 2) in vec4 colour;
+
+uniform vec2 window_size;
+
+out VS_OUT {
+    vec2 position;
+    vec2 size;
+    vec4 colour;
+} vs_out;
+
+float remap(float value, float max_value) {
+    return value / max_value * 2.0f - 1.0f;
+}
+
+void main() {
+    vs_out.position = vec2(remap(position.x, window_size.x), remap(position.y, window_size.y));
+
+    float new_width = remap(position.x + size.x, window_size.x) - vs_out.position.x;
+    float new_height = remap(position.y + size.y, window_size.y) - vs_out.position.y;
+    vs_out.size = vec2(new_width, new_height);
+
+    vs_out.colour = colour;
+}

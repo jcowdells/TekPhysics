@@ -1,0 +1,37 @@
+#version 330 core
+
+layout (points) in;
+layout (triangle_strip, max_vertices = 6) out;
+
+in VS_OUT {
+    vec2 position;
+    vec2 size;
+    vec4 colour;
+} vs_out;
+
+out vec4 g_colour;
+
+void emitTriangle(vec2 vertices[4], int a, int b, int c) {
+    gl_Position = vec4(vertices[a], 0.0f, 1.0f);
+    EmitVertex();
+    gl_Position = vec4(vertices[b], 0.0f, 1.0f);
+    EmitVertex();
+    gl_Position = vec4(vertices[c], 0.0f, 1.0f);
+    EmitVertex();
+    EndPrimitive();
+}
+
+void main() {
+    vec2 vertices[4];
+
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            vertices[i + 2 * j] = vec2(position.x + i * size.x, position.y * j * size.y);
+        }
+    }
+
+    colour = vs_out.colour;
+
+    emitTriangle(vertices, 0, 1, 2);
+    emitTriangle(vertices, 0, 2, 3);
+}

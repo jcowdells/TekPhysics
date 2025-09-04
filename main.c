@@ -32,6 +32,8 @@
 #include "tekphys/body.h"
 #include "tekphys/collider.h"
 
+#include "tekgui/tekgui.h"
+
 #define printException(x) tekLog(x)
 
 float width, height;
@@ -533,8 +535,17 @@ exception run() {
     return SUCCESS;
 }
 
+exception test() {
+    struct TekGuiWindowDefaults defaults = {};
+    tekChainThrow(tekGuiGetWindowDefaults(&defaults));
+
+    printf("%u %u %u %u %f %f %f %f", defaults.x_pos, defaults.y_pos, defaults.width, defaults.height, EXPAND_VEC4(defaults.colour));
+
+    return SUCCESS;
+}
+
 int main(void) {
     tekInitExceptions();
-    tekLog(run());
+    tekLog(test());
     tekCloseExceptions();
 }

@@ -1,0 +1,8 @@
+#version 330 core
+
+in vec4 g_colour;
+out vec4 color;
+
+void main() {
+    color = g_colour;
+}
