@@ -10,6 +10,7 @@
 
 typedef void(*TekFramebufferCallback)(int framebuffer_width, int framebuffer_height);
 typedef void(*TekDeleteFunc)(void);
+typedef exception(*TekGLLoadFunc)(void);
 typedef void(*TekKeyCallback)(int key, int scancode, int action, int mods);
 typedef void(*TekMousePosCallback)(double x, double y);
 
@@ -25,4 +26,5 @@ void tekSetMouseMode(flag mouse_mode);
 exception tekAddFramebufferCallback(TekFramebufferCallback callback);
 exception tekAddKeyCallback(TekKeyCallback callback);
 exception tekAddDeleteFunc(TekDeleteFunc delete_func);
+exception tekAddGLLoadFunc(TekGLLoadFunc gl_load_func);
 exception tekAddMousePosCallback(TekMousePosCallback callback);

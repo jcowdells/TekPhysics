@@ -33,6 +33,7 @@
 #include "tekphys/collider.h"
 
 #include "tekgui/tekgui.h"
+#include "tekgui/window.h"
 
 #define printException(x) tekLog(x)
 
@@ -207,6 +208,9 @@ exception run() {
     text_init = 1;
     updateDepthMessage();
 
+    TekText version_text;
+    tekCreateText("TekPhysics v1.0 Alpha", 16, &depth_font, &version_text);
+
     Vector entities = {};
     tekChainThrow(vectorCreate(0, sizeof(TekEntity), &entities));
 
@@ -221,7 +225,7 @@ exception run() {
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    //glEnable(GL_CULL_FACE);
+    glEnable(GL_CULL_FACE);
 
     vec3 camera_position = {0.0f, 0.0f, 0.0f};
     vec3 camera_rotation = {0.0f, 0.0f, 0.0f};
@@ -249,7 +253,7 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    tekSetMouseMode(MOUSE_MODE_CAMERA);
+    // tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     TekEntity sphere;
     tekChainThrow(tekCreateEntity("../res/rad1.tmsh", "../res/translucent.tmat", (vec3){0.0f, 0.0f, 0.0f}, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, (vec3){1.0f, 1.0f, 1.0f}, &sphere));
@@ -312,6 +316,9 @@ exception run() {
 
     Vector triangle_display_buffer;
     tekChainThrow(vectorCreate(1, 6 * sizeof(vec3), &triangle_display_buffer));
+
+    TekGuiWindow window = {};
+    tekGuiCreateWindow(&window);
 
     while (tekRunning()) {
         while (recvState(&state_queue, &state) == SUCCESS) {
@@ -508,9 +515,15 @@ exception run() {
         glDrawArrays(GL_TRIANGLES, 0, (int)(triangle_display_buffer.length * 3));
 
         tekNotifyEntityMaterialChange();
+        glPolygonMode(GL_FRONT, GL_FILL);
+        tekChainThrow(tekGuiDrawWindow(&window));
 
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         tekChainThrow(tekDrawText(&depth_text, 10, 10));
+
+        int window_width, window_height;
+        tekGetWindowSize(&window_width, &window_height);
+        tekChainThrow(tekDrawText(&version_text, (float)(window_width - 170), 8.0f));
 
         // tekChainThrow(tekBindMaterial(&material));
         // tekChainThrow(tekBindMaterialMatrix(&material, camera.projection, PROJECTION_MATRIX_DATA));
@@ -546,6 +559,6 @@ exception test() {
 
 int main(void) {
     tekInitExceptions();
-    tekLog(test());
+    tekLog(run());
     tekCloseExceptions();
 }

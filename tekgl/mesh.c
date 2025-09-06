@@ -73,7 +73,7 @@ exception tekCreateMesh(const float* vertices, const long len_vertices, const ui
             tekThrow(OPENGL_EXCEPTION, "Cannot have layout of size 0.");
         glVertexAttribPointer(i, layout[i], GL_FLOAT, GL_FALSE, layout_size, (void*)(prev_layout * sizeof(float)));
         glEnableVertexAttribArray(i);
-        prev_layout = layout[i];
+        prev_layout += layout[i];
     }
 
     // keep track of how many elements are in element buffer - we need this to draw later on

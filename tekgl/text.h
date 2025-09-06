@@ -10,8 +10,6 @@ typedef struct TekText {
     TekBitmapFont* font;
 } TekText;
 
-exception tekInitTextEngine();
-void tekDeleteTextEngine();
 exception tekCreateText(const char* text, uint size, TekBitmapFont* font, TekText* tek_text);
 exception tekDrawText(const TekText* tek_text, float x, float y);
 void tekDeleteText(const TekText* tek_text);

@@ -16,7 +16,7 @@ void tekTextFramebufferCallback(const int width, const int height) {
     glm_ortho(0.0f, (float)width, 0.0f, (float)height, -1.0f, 1.0f, text_projection);
 }
 
-exception tekInitTextEngine() {
+exception tekGLLoadTextEngine() {
     // if already initialised, don't do it again ;D
     if (text_shader_program_id) return SUCCESS;
 
@@ -41,6 +41,11 @@ void tekDeleteTextEngine() {
         tekDeleteShaderProgram(text_shader_program_id);
         text_shader_program_id = 0;
     }
+}
+
+tek_init tekInitTextEngine() {
+    tekAddGLLoadFunc(tekGLLoadTextEngine);
+    tekAddDeleteFunc(tekDeleteTextEngine);
 }
 
 exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, TekText* tek_text) {

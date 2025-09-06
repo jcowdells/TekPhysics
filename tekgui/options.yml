@@ -1,10 +1,10 @@
 window_defaults:
-  x_pos: 1
-  y_pos: 2
-  width: 3
-  height: 4
+  x_pos: 200
+  y_pos: 200
+  width: 150
+  height: 100
   colour:
-    r: 1.1
-    g: 1.2
-    b: 1.3
-    a: 1.4
+    r: 1.0
+    g: 0.0
+    b: 0.0
+    a: 0.5

@@ -16,7 +16,7 @@ void tekPrimitiveFramebufferCallback(const int window_width, const int window_he
     glm_ortho(0.0f, (float)pwidth, 0.0f, (float)pheight, -1.0f, 1.0f, projection);
 }
 
-exception tekInitPrimitives() {
+exception tekGLLoadPrimitives() { // TODO: apparently i wanted to delete this, might just delete this whole file as it was only for testing anyway.
     tekChainThrow(tekCreateShaderProgramVF("../shader/line_vertex.glvs", "../shader/line_fragment.glfs", &line_shader_program));
     tekChainThrow(tekCreateShaderProgramVF("../shader/oval_vertex.glvs", "../shader/oval_fragment.glfs", &oval_shader_program));
     int window_width, window_height;
@@ -26,6 +26,10 @@ exception tekInitPrimitives() {
     pheight = (float)window_height;
     glm_ortho(0.0f, (float)pwidth, 0.0f, (float)pheight, -1.0f, 1.0f, projection);
     return SUCCESS;
+}
+
+tek_init tekInitPrimitives() {
+    tekAddGLLoadFunc(tekGLLoadPrimitives);
 }
 
 exception tekCreateLine(vec2 point_a, vec2 point_b, const float thickness, vec4 color, TekGuiLine* line) {

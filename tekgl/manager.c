@@ -15,6 +15,7 @@ static int tek_window_height  = 0;
 
 static List tek_fb_funcs = {0, 0};
 static List tek_delete_funcs = {0, 0};
+static List tek_gl_load_funcs = {0, 0};
 static List tek_key_funcs = {0, 0};
 static List tek_mmove_funcs = {0, 0};
 
@@ -27,8 +28,11 @@ exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
     return SUCCESS;
 }
 
-void tekManagerFramebufferCallback(const GLFWwindow* window, const int width, const int height) {
+void tekManagerFramebufferCallback(GLFWwindow* window, const int width, const int height) {
     if (window != tek_window) return;
+
+    tek_window_width = width;
+    tek_window_height = height;
 
     // update the size of the viewport
     glViewport(0, 0, width, height);
@@ -49,7 +53,16 @@ exception tekAddDeleteFunc(const TekDeleteFunc delete_func) {
     return SUCCESS;
 }
 
-void tekManagerKeyCallback(const GLFWwindow* window, const int key, const int scancode, const int action, const int mods) {
+exception tekAddGLLoadFunc(const TekGLLoadFunc gl_load_func) {
+    if (!tek_gl_load_funcs.length)
+        listCreate(&tek_gl_load_funcs);
+
+    // add gl load func to a list that we can iterate over on cleanup
+    tekChainThrow(listAddItem(&tek_gl_load_funcs, gl_load_func));
+    return SUCCESS;
+}
+
+void tekManagerKeyCallback(GLFWwindow* window, const int key, const int scancode, const int action, const int mods) {
     if (window != tek_window) return;
     const ListItem* item = 0;
     foreach(item, (&tek_key_funcs), {
@@ -58,7 +71,7 @@ void tekManagerKeyCallback(const GLFWwindow* window, const int key, const int sc
     });
 }
 
-static void tekManagerMouseMoveCallback(const GLFWwindow* window, const double x, const double y) {
+static void tekManagerMouseMoveCallback(GLFWwindow* window, const double x, const double y) {
     if (window != tek_window) return;
     const ListItem* item = 0;
     foreach(item, (&tek_mmove_funcs), {
@@ -106,10 +119,12 @@ exception tekInit(const char* window_name, const int window_width, const int win
     glfwSetKeyCallback(tek_window, tekManagerKeyCallback);
     glfwSetCursorPosCallback(tek_window, tekManagerMouseMoveCallback);
 
-    // init different areas of tekgl
-    tekChainThrow(tekInitTextEngine());
-    //tekGuiInitSizeManager();
-    tekChainThrow(tekInitPrimitives());
+    // run all the callbacks for when opengl loaded.
+    const ListItem* item;
+    foreach(item, (&tek_gl_load_funcs), {
+        const TekGLLoadFunc gl_load_func = (TekGLLoadFunc)item->data;
+        tekChainThrow(gl_load_func());
+    });
 
     tekManagerFramebufferCallback(tek_window, window_width, window_height);
 
@@ -135,9 +150,6 @@ exception tekUpdate() {
 }
 
 exception tekDelete() {
-    // clean up TekGL things we initialised
-    tekDeleteTextEngine();
-
     // run all cleanup functions
     const ListItem* item = 0;
     foreach(item, (&tek_delete_funcs), {
@@ -148,6 +160,7 @@ exception tekDelete() {
     // clean up memory allocated by callback functions
     listDelete(&tek_fb_funcs);
     listDelete(&tek_delete_funcs);
+    listDelete(&tek_gl_load_funcs);
     listDelete(&tek_key_funcs);
     listDelete(&tek_mmove_funcs);
 
