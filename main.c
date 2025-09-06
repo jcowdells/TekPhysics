@@ -552,8 +552,6 @@ exception test() {
     struct TekGuiWindowDefaults defaults = {};
     tekChainThrow(tekGuiGetWindowDefaults(&defaults));
 
-    printf("%u %u %u %u %f %f %f %f", defaults.x_pos, defaults.y_pos, defaults.width, defaults.height, EXPAND_VEC4(defaults.colour));
-
     return SUCCESS;
 }
 

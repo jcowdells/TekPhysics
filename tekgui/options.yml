@@ -3,8 +3,15 @@ window_defaults:
   y_pos: 200
   width: 150
   height: 100
-  colour:
+  title_width: 18
+  border_width: 3
+  background_colour:
     r: 1.0
     g: 0.0
     b: 0.0
     a: 0.5
+  border_colour:
+    r: 1.0
+    g: 1.0
+    b: 1.0
+    a: 1.0

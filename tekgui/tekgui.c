@@ -1,6 +1,7 @@
 #include "tekgui.h"
 
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "window.h"
 #include "../tekgl/manager.h"
@@ -42,6 +43,8 @@ tek_init tekGuiInit() {
 }
 
 exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults) {
+    if (tek_gui_init != INITIALISED) tekThrow(FAILURE, "TekGui not initialised.");
+
     YmlData* yml_data;
 
     const exception tek_exception = ymlGet(&options_yml, &yml_data, "window_defaults");
@@ -51,7 +54,10 @@ exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults) {
         defaults->y_pos = 0;
         defaults->width = 0;
         defaults->height = 0;
-        glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->colour);
+        defaults->title_width = 0;
+        defaults->border_width = 0;
+        glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->background_colour);
+        glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->border_colour);
         return SUCCESS;
     }
 
@@ -73,25 +79,52 @@ exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults) {
     ymlDataToInteger(yml_data, &yml_integer);
     defaults->height = (uint)yml_integer;
 
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "title_width"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->title_width = (uint)yml_integer;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_width"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->border_width = (uint)yml_integer;
+
     double yml_float;
     vec4 yml_colour;
 
-    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "colour", "r"));
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "r"));
     ymlDataToFloat(yml_data, &yml_float);
     yml_colour[0] = (float)yml_float;
 
-    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "colour", "g"));
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "g"));
     ymlDataToFloat(yml_data, &yml_float);
     yml_colour[1] = (float)yml_float;
 
-    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "colour", "b"));
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "b"));
     ymlDataToFloat(yml_data, &yml_float);
     yml_colour[2] = (float)yml_float;
 
-    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "colour", "a"));
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "a"));
     ymlDataToFloat(yml_data, &yml_float);
     yml_colour[3] = (float)yml_float;
 
-    glm_vec4_copy(yml_colour, defaults->colour);
+    glm_vec4_copy(yml_colour, defaults->background_colour);
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "r"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[0] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "g"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[1] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "b"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[2] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "a"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[3] = (float)yml_float;
+
+    glm_vec4_copy(yml_colour, defaults->border_colour);
+
     return SUCCESS;
 }

@@ -36,7 +36,7 @@ static exception tekGuiWindowGLLoad() {
     glBindBuffer(GL_ARRAY_BUFFER, window_vbo);
 
     const int layout[] = {
-        2, 2, 4
+        2, 2, 2, 2, 4, 4
     };
     const uint len_layout = sizeof(layout) / sizeof(int);
 
@@ -130,7 +130,10 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     window->y_pos = defaults.y_pos;
     window->width = defaults.width;
     window->height = defaults.height;
-    glm_vec4_copy(defaults.colour, window->background_colour);
+    window->title_width = defaults.title_width;
+    window->border_width = defaults.border_width;
+    glm_vec4_copy(defaults.background_colour, window->background_colour);
+    glm_vec4_copy(defaults.border_colour, window->border_colour);
 
     TekGuiWindowData window_data = {};
     tekGuiGetWindowData(window, &window_data);
@@ -170,5 +173,8 @@ void tekGuiDeleteWindow(TekGuiWindow* window) {
 void tekGuiGetWindowData(const TekGuiWindow* window, TekGuiWindowData* window_data) {
     glm_vec2_copy((vec2){(float)window->x_pos, (float)(window->width + window->x_pos)}, window_data->minmax_x);
     glm_vec2_copy((vec2){(float)window->y_pos, (float)(window->height + window->y_pos)}, window_data->minmax_y);
-    memcpy(window_data->colour, window->background_colour, sizeof(vec4));
+    glm_vec2_copy((vec2){(float)(window->x_pos + window->border_width), (float)(window->x_pos + window->width - window->border_width)}, window_data->minmax_ix);
+    glm_vec2_copy((vec2){(float)(window->y_pos + window->border_width), (float)(window->y_pos + window->height - window->title_width)}, window_data->minmax_iy);
+    memcpy(window_data->background_colour, window->background_colour, sizeof(vec4));
+    memcpy(window_data->border_colour, window->border_colour, sizeof(vec4));
 }

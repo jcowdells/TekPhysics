@@ -6,17 +6,28 @@ layout (triangle_strip, max_vertices = 6) out;
 in VS_OUT {
     vec2 minmax_x;
     vec2 minmax_y;
-    vec4 colour;
+    vec2 minmax_ix;
+    vec2 minmax_iy;
+    vec4 bg_colour;
+    vec4 bd_colour;
 } vs_out[];
 
-out vec4 g_colour;
+out vec4 bg_colour;
+out vec4 bd_colour;
+
+out vec2 minmax_ix;
+out vec2 minmax_iy;
+out vec2 frag_pos;
 
 void emitTriangle(vec2 vertices[4], int a, int b, int c) {
     gl_Position = vec4(vertices[a], 0.0f, 1.0f);
+    frag_pos = vertices[a];
     EmitVertex();
     gl_Position = vec4(vertices[b], 0.0f, 1.0f);
+    frag_pos = vertices[b];
     EmitVertex();
     gl_Position = vec4(vertices[c], 0.0f, 1.0f);
+    frag_pos = vertices[c];
     EmitVertex();
     EndPrimitive();
 }
@@ -39,7 +50,11 @@ void main() {
         }
     }
 
-    g_colour = vs_out[0].colour;
+    bg_colour = vs_out[0].bg_colour;
+    bd_colour = vs_out[0].bd_colour;
+
+    minmax_ix = vs_out[0].minmax_ix;
+    minmax_iy = vs_out[0].minmax_iy;
 
     emitTriangle(vertices, 0, 1, 2);
     emitTriangle(vertices, 1, 3, 2);

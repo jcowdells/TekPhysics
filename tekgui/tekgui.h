@@ -9,7 +9,10 @@ struct TekGuiWindowDefaults {
     uint y_pos;
     uint width;
     uint height;
-    vec4 colour;
+    uint title_width;
+    uint border_width;
+    vec4 background_colour;
+    vec4 border_colour;
 };
 
 #define tekGuiLog(...) printf("[INFO] TekGui: "); printf(__VA_ARGS__)

@@ -1,8 +1,18 @@
 #version 330 core
 
-in vec4 g_colour;
-out vec4 color;
+in vec4 bg_colour;
+in vec4 bd_colour;
+
+in vec2 minmax_ix;
+in vec2 minmax_iy;
+in vec2 frag_pos;
+
+out vec4 colour;
 
 void main() {
-    color = g_colour;
+    if (frag_pos.x > minmax_ix.x && frag_pos.x < minmax_ix.y && frag_pos.y > minmax_iy.x && frag_pos.y < minmax_iy.y) {
+        colour = bd_colour;
+    } else {
+        colour = bg_colour;
+    }
 }

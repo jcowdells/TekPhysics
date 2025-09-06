@@ -14,14 +14,20 @@ typedef struct TekGuiWindow {
     uint y_pos;
     uint width;
     uint height;
+    uint title_width;
+    uint border_width;
     vec4 background_colour;
+    vec4 border_colour;
     uint mesh_index;
 } TekGuiWindow;
 
 typedef struct TekGuiWindowData {
     vec2 minmax_x;
     vec2 minmax_y;
-    vec4 colour;
+    vec2 minmax_ix;
+    vec2 minmax_iy;
+    vec4 background_colour;
+    vec4 border_colour;
 } TekGuiWindowData;
 
 exception tekGuiCreateWindow(TekGuiWindow* window);
