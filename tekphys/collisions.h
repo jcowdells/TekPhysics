@@ -28,6 +28,7 @@ typedef struct TekCollisionManifold {
     float impulses[NUM_CONSTRAINTS];
 } TekCollisionManifold;
 
-exception tekGetCollisionManifold(TekBody* body_a, TekBody* body_b, flag* collision, Vector* manifold_vector);
+exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, TekCollisionManifold* manifold);
+exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* collision, Vector* manifold_vector);
 exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifold* manifold);
 exception tekSolveCollisions(const Vector* bodies, float phys_period);

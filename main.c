@@ -31,6 +31,7 @@
 #include "tekphys/engine.h"
 #include "tekphys/body.h"
 #include "tekphys/collider.h"
+#include "tekphys/collisions.h"
 
 #include "tekgui/tekgui.h"
 #include "tekgui/window.h"
@@ -253,7 +254,7 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    // tekSetMouseMode(MOUSE_MODE_CAMERA);
+    tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     TekEntity sphere;
     tekChainThrow(tekCreateEntity("../res/rad1.tmsh", "../res/translucent.tmat", (vec3){0.0f, 0.0f, 0.0f}, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, (vec3){1.0f, 1.0f, 1.0f}, &sphere));
@@ -467,7 +468,7 @@ exception run() {
             }
         }
 
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         for (uint i = 0; i < entities.length; i++) {
             TekEntity* entity;
             tekChainThrow(vectorGetItemPtr(&entities, i, &entity));
@@ -500,8 +501,8 @@ exception run() {
         glBindVertexArray(cdr_vertex_array);
         const uint n = 1 << depth;
         uint count = (n << 1) - n;
-        // if (collider_boxes.length > 0)
-        //    glDrawArrays(GL_POINTS, (GLint)(n - 1), (GLint)count);
+        if (collider_boxes.length > 0)
+           glDrawArrays(GL_POINTS, (GLint)(n - 1), (GLint)count);
 
         tekBindShaderProgram(shader_program);
         tekChainThrow(tekShaderUniformMat4(shader_program, "projection", camera.projection));
@@ -515,10 +516,10 @@ exception run() {
         glDrawArrays(GL_TRIANGLES, 0, (int)(triangle_display_buffer.length * 3));
 
         tekNotifyEntityMaterialChange();
-        glPolygonMode(GL_FRONT, GL_FILL);
-        tekChainThrow(tekGuiDrawWindow(&window));
+        //glPolygonMode(GL_FRONT, GL_FILL);
+        //tekChainThrow(tekGuiDrawWindow(&window));
 
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         tekChainThrow(tekDrawText(&depth_text, 10, 10));
 
         int window_width, window_height;
@@ -549,8 +550,25 @@ exception run() {
 }
 
 exception test() {
-    struct TekGuiWindowDefaults defaults = {};
-    tekChainThrow(tekGuiGetWindowDefaults(&defaults));
+    TekCollisionManifold manifold = {};
+
+    vec3 triangle_a[] = {
+        -3.899999f, 1.000000f, 0.400000f,
+        -3.899999f, -1.000000f, -1.600000f,
+        -3.899999f, -1.000000f, 0.400000f
+    };
+
+    vec3 triangle_b[] = {
+        1.000000f, -1.000000f, 1.000000f,
+        -1.000000f, -1.000000f, 1.000000f,
+        1.000000f, -1.000000f, -1.000000f
+    };
+
+    flag collision = 0;
+
+    tekCheckTriangleCollision(triangle_a, triangle_b, &collision, &manifold);
+
+    printf("Collision: %s", collision ? "True" : "False");
 
     return SUCCESS;
 }

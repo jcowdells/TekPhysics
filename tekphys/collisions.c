@@ -17,7 +17,7 @@
 #define INITIALISED     1
 #define DE_INITIALISED  2
 
-#define EPSILON 1e-6
+#define EPSILON 1e-6f
 #define LEFT  0
 #define RIGHT 1
 
@@ -54,6 +54,14 @@ tek_init TekColliderInit() {
     collider_init = INITIALISED;
 }
 
+static void tekPrintOBB(const struct OBB* obb) {
+    printf("%f, %f, %f\n", EXPAND_VEC3(obb->w_centre));
+    printf("%f, %f, %f\n", EXPAND_VEC3(obb->w_half_extents));
+    for (uint i = 0; i < 3; i++) {
+        printf("%f, %f, %f\n", EXPAND_VEC3(obb->w_axes[i]));
+    }
+}
+
 /**
  * Check whether there is a collision between two OBBs using the separating axis theorem.
  * @param obb_a The first obb.
@@ -68,6 +76,12 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     // see section "Optimized Computation of OBBs Intersections"
 
     // find the vector between the centres
+
+    printf("=====================\n");
+    tekPrintOBB(obb_a);
+    printf("\n");
+    tekPrintOBB(obb_b);
+
     vec3 translate;
     glm_vec3_sub(obb_b->w_centre, obb_a->w_centre, translate);
 
@@ -86,9 +100,9 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     for (uint i = 0; i < 3; i++) {
         float mag_sum = 0.0f;
         for (uint j = 0; j < 3; j++) {
-            mag_sum += fabs(obb_b->w_half_extents[i] * dot_matrix[i][j]);
+            mag_sum += fabsf(obb_b->w_half_extents[j] * dot_matrix[i][j]);
         }
-        if (fabs(t_array[i] > obb_a->w_half_extents[i] + mag_sum)) {
+        if (fabsf(t_array[i]) > obb_a->w_half_extents[i] + mag_sum) {
             return 0;
         }
     }
@@ -97,9 +111,9 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     for (uint i = 0; i < 3; i++) {
         float mag_sum = 0.0f;
         for (uint j = 0; j < 3; j++) {
-            mag_sum += fabs(obb_a->w_half_extents[i] * dot_matrix[j][i]);
+            mag_sum += fabsf(obb_a->w_half_extents[j] * dot_matrix[j][i]);
         }
-        const float projection = fabs(glm_vec3_dot(translate, obb_b->w_axes[i]));
+        const float projection = fabsf(glm_vec3_dot(translate, obb_b->w_axes[i]));
         if (projection > obb_b->w_half_extents[i] + mag_sum) {
             return 0;
         }
@@ -125,15 +139,15 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
             const uint ti_a = multis_indices[i][0], ti_b = multis_indices[i][1];
             const float cmp_base = t_array[ti_a] * glm_vec3_dot(obb_a->w_axes[ti_b], obb_b->w_axes[j]);
             const float cmp_subt = t_array[ti_b] * glm_vec3_dot(obb_a->w_axes[ti_a], obb_b->w_axes[j]);
-            const float cmp = fabs(cmp_base - cmp_subt);
+            const float cmp = fabsf(cmp_base - cmp_subt);
 
             const uint cyc_ll = cyc_indices[i][0], cyc_lh = cyc_indices[i][1];
             const uint cyc_sl = cyc_indices[j][0], cyc_sh = cyc_indices[j][1];
             float tst = 0.0f;
-            tst += fabs(obb_a->w_half_extents[cyc_ll] * dot_matrix[cyc_lh][j]);
-            tst += fabs(obb_a->w_half_extents[cyc_lh] * dot_matrix[cyc_ll][j]);
-            tst += fabs(obb_a->w_half_extents[cyc_sl] * dot_matrix[i][cyc_sh]);
-            tst += fabs(obb_a->w_half_extents[cyc_sh] * dot_matrix[i][cyc_sl]);
+            tst += fabsf(obb_a->w_half_extents[cyc_ll] * dot_matrix[cyc_lh][j]);
+            tst += fabsf(obb_a->w_half_extents[cyc_lh] * dot_matrix[cyc_ll][j]);
+            tst += fabsf(obb_b->w_half_extents[cyc_sl] * dot_matrix[i][cyc_sh]);
+            tst += fabsf(obb_b->w_half_extents[cyc_sh] * dot_matrix[i][cyc_sl]);
 
             if (cmp > tst) {
                 return 0;
@@ -192,10 +206,10 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
     glm_vec3_normalize(face_normal);
     // when testing the face normal axis, all three points of the triangle project to the same point. so just check point 0
 
-    const float tst = fabs(glm_vec3_dot(triangle[0], face_normal));
+    const float tst = fabsf(glm_vec3_dot(triangle[0], face_normal));
     float cmp = 0.0f;
     for (uint i = 0; i < 3; i++) {
-        cmp += half_extents[i] * fabs(face_normal[i]);
+        cmp += half_extents[i] * fabsf(face_normal[i]);
     }
     if (tst > cmp) {
         return 0;
@@ -215,7 +229,7 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
 
         const float tri_min = fminf(dots[0], fminf(dots[1], dots[2]));
         const float tri_max = fmaxf(dots[0], fmaxf(dots[1], dots[2]));
-        if (tri_min >  half_extents[i] || tri_max < -half_extents[i]) {
+        if (tri_min > half_extents[i] || tri_max < -half_extents[i]) {
             return 0;
         }
     }
@@ -243,7 +257,7 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
     return 1;
 }
 
-static flag tekCheckOBBTriangleCollision(const struct OBB* obb, const vec3 triangle[3]) {
+static flag tekCheckOBBTriangleCollision(const struct OBB* obb, vec3 triangle[3]) {
     mat4 transform;
     tekCreateOBBTransform(obb, transform);
 
@@ -256,7 +270,7 @@ static flag tekCheckOBBTriangleCollision(const struct OBB* obb, const vec3 trian
     return tekCheckAABBTriangleCollision(obb->w_half_extents, transformed_triangle);
 }
 
-static flag tekCheckOBBTrianglesCollision(const struct OBB* obb, const vec3* triangles, const uint num_triangles) {
+static flag tekCheckOBBTrianglesCollision(const struct OBB* obb, vec3* triangles, const uint num_triangles) {
     for (uint i = 0; i < num_triangles; i ++) {
         if (tekCheckOBBTriangleCollision(obb, triangles + i * 3)) return 1;
     }
@@ -383,6 +397,18 @@ static void tekGetTriangleEdgeContactNormal(vec3 edge_a, vec3 edge_b, vec3 norma
 }
 
 exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, TekCollisionManifold* manifold) {
+    *collision = 0;
+
+    // printf("============================\n");
+    //
+    // for (uint i = 0; i < 3; i++) {
+    //     printf("%f, %f, %f\n", EXPAND_VEC3(triangle_a[i]));
+    // }
+    // printf("\n");
+    // for (uint i = 0; i < 3; i++) {
+    //     printf("%f, %f, %f\n", EXPAND_VEC3(triangle_b[i]));
+    // }
+
     // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
     int sign_array_a[3];
     tekCalculateSignArray(triangle_b, triangle_a, sign_array_a);
@@ -391,17 +417,20 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     // this means its truly impossible for there to be a collision, there needs to be a point that crosses the plane for an intersection to happen.
     if ((sign_array_a[0] == sign_array_a[1]) && (sign_array_a[0] == sign_array_a[2])) {
         *collision = 0;
+        // printf("Failed Case 1.\n");
         return SUCCESS;
     }
+    // printf("Passed Case 1.\n");
 
     // do the same for the other triangle, quitting early if there is a scenario where the planes of triangles have no intersection.
     int sign_array_b[3];
-    tekCalculateSignArray(triangle_b, triangle_a, sign_array_b);
+    tekCalculateSignArray(triangle_a, triangle_b, sign_array_b);
     if ((sign_array_b[0] == sign_array_b[1]) && (sign_array_b[0] == sign_array_b[2])) {
-        printf("Removed the bogus.\n");
         *collision = 0;
+        // printf("Failed case 2.\n");
         return SUCCESS;
     }
+    // printf("Passed Case 2.\n");
 
     // now we need to permute the triangle vertices so that the point at index 0 is alone on it's side of the halfspace.
     tekFindAndSwapTriangleVertices(triangle_a, sign_array_a);
@@ -413,14 +442,19 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     const int orient_a = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[0], triangle_b[1]));
     if (orient_a > 0) {
         *collision = 0;
+        // printf("Failed case 3.\n");
         return SUCCESS;
     }
+    // printf("Passed Case 3.\n");
     const int orient_b = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[2], triangle_b[0]));
     if (orient_b > 0) {
         *collision = 0;
+        // printf("Failed case 4.\n");
         return SUCCESS;
     }
+    // printf("Passed Case 4.\n");
     *collision = 1;
+
     const int orient_c = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[1], triangle_b[0]));
     const int orient_d = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[2], triangle_b[0]));
 
@@ -431,6 +465,7 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     if (orient_c > 0) {
         if (orient_d > 0) {
             // edge of triangle a vs edge of triangle b
+            printf("Case 1\n");
             tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold->contact_points[0]);
             tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold->contact_points[1]);
             vec3 edge_a, edge_b;
@@ -439,6 +474,7 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
             tekGetTriangleEdgeContactNormal(edge_b, edge_a, manifold->contact_normal);
         } else {
             // vertex of triangle a vs face of triangle b
+            printf("Case 2\n");
             tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold->contact_points[0]);
             tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold->contact_points[1]);
             glm_vec3_negate_to(normal_b, manifold->contact_normal);
@@ -446,11 +482,13 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     } else {
         if (orient_d > 0) {
             // face of triangle a vs vertex of triangle b
+            printf("Case 3\n");
             tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold->contact_points[0]);
             tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold->contact_points[1]);
             glm_vec3_copy(normal_a, manifold->contact_normal);
         } else {
             // edge of triangle a vs edge of triangle b
+            printf("Case 4\n");
             tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold->contact_points[0]);
             tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold->contact_points[1]);
             vec3 edge_a, edge_b;
@@ -490,6 +528,7 @@ static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_tr
     for (uint i = 0; i < num_triangles_a; i++) {
         for (uint j = 0; j < num_triangles_b; j++) {
             tekChainThrow(tekCheckTriangleCollision(triangles_a + i * 3, triangles_b + j * 3, &sub_collision, manifold));
+
             if (sub_collision) *collision = 1;
         }
     }
@@ -498,7 +537,7 @@ static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_tr
 
 #define getChild(collider_node, i) (i == LEFT) ? collider_node->data.node.left : collider_node->data.node.right
 
-exception tekGetCollisionManifold(TekBody* body_a, TekBody* body_b, flag* collision, Vector* manifold_vector) {
+exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* collision, Vector* manifold_vector) {
     if (collider_init == DE_INITIALISED) return SUCCESS;
     if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
 
@@ -543,9 +582,31 @@ exception tekGetCollisionManifold(TekBody* body_a, TekBody* body_b, flag* collis
                         &manifold
                         ));
                     if (sub_collision) {
+                        printf("Sub Collision: %d\n", sub_collision);
                         sub_collision = 0;
                         manifold.bodies[0] = body_a;
                         manifold.bodies[1] = body_b;
+
+                        printf("NODE A: \n");
+                        for (uint z = 0; z < node_a->data.leaf.num_vertices; z++) {
+                            printf("(%f, %f, %f)", EXPAND_VEC3(node_a->data.leaf.w_vertices[z]));
+                            if ((z + 1) % 3 == 0) {
+                                printf("\n");
+                            } else {
+                                printf(", ");
+                            }
+                        }
+
+                        printf("NODE B: \n");
+                        for (uint z = 0; z < node_a->data.leaf.num_vertices; z++) {
+                            printf("(%f, %f, %f)", EXPAND_VEC3(node_b->data.leaf.w_vertices[z]));
+                            if ((z + 1) % 3 == 0) {
+                                printf("\n");
+                            } else {
+                                printf(", ");
+                            }
+                        }
+
                         tekChainThrow(vectorAddItem(manifold_vector, &manifold));
                         *collision = 1;
                     }
@@ -664,6 +725,8 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
 
     contact_buffer.length = 0;
 
+    printf("------------------------------------\n");
+
     for (uint i = 0; i < bodies->length; i++) {
         TekBody* body_i;
         tekChainThrow(vectorGetItemPtr(bodies, i, &body_i));
@@ -672,7 +735,7 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
             tekChainThrow(vectorGetItemPtr(bodies, j, &body_j));
 
             flag is_collision = 0;
-            tekChainThrow(tekGetCollisionManifold(body_i, body_j, &is_collision, &contact_buffer))
+            tekChainThrow(tekGetCollisionManifolds(body_i, body_j, &is_collision, &contact_buffer))
             if (!is_collision) continue;
 
             printf("Collision!\n");
@@ -689,7 +752,7 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
         TekBody* body_a = manifold->bodies[0], * body_b = manifold->bodies[1];
 
         manifold->baumgarte_stabilisation = -BAUMGARTE_BETA / phys_period * manifold->penetration_depth;
-        float restitution = 0.0f; //fminf(body_i->restitution, body_j->restitution);
+        float restitution = fminf(body_a->restitution, body_b->restitution);
 
         glm_vec3_sub(manifold->contact_points[0], body_a->centre_of_mass, manifold->r_ac);
         glm_vec3_sub(manifold->contact_points[1], body_b->centre_of_mass, manifold->r_bc);

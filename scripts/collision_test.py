@@ -17,6 +17,45 @@ class OBB:
 class Triangle:
     vertices: list[np.ndarray]
 
+def get_vector_from_string(vector_str: str) -> np.ndarray:
+    split_str = vector_str.split(",")
+    number_list: list[float] = list()
+    for string in split_str:
+        number_list.append(float(string))
+    return np.array(number_list)
+
+def read_log_file(log_file: str) -> list[tuple[Triangle, Triangle]]:
+    with open(log_file) as f:
+        log_data = f.read()
+    line_number_list: list[int] = list()
+    triangle_a_list: list[Triangle] = list()
+    triangle_b_list: list[Triangle] = list()
+    build_list: list[np.ndarray] = list()
+    i = 0
+    for line_num, line in enumerate(log_data.split("\n")):
+        if len(line) == 0:
+            continue
+        if line[0] in ("P", "F", "\n", "="):
+            continue
+        if i == 0:
+            line_number_list.append(line_num + 1)
+            pass
+        elif i % 6 == 0:
+            triangle_b_list.append(Triangle(
+                vertices=deepcopy(build_list)
+            ))
+            line_number_list.append(line_num + 1)
+            build_list.clear()
+        elif i % 3 == 0:
+            triangle_a_list.append(Triangle(
+                vertices=deepcopy(build_list)
+            ))
+            build_list.clear()
+        build_list.append(get_vector_from_string(line))
+        i += 1
+
+    return list(zip(triangle_a_list, triangle_b_list, line_number_list))
+
 def create_obb_mesh(obb: OBB) -> Mesh:
     # cheeky function to map 0 => 1, 1 => -1
     sign = lambda x: (-1) ** x
@@ -340,6 +379,7 @@ def organise_triangles_for_collision(triangle_a: Triangle, triangle_b: Triangle)
 
     if (sign_array_a[0] == sign_array_a[1]) and (sign_array_a[1] == sign_array_a[2]):
         # TODO: Check for coplanar intersection
+        # print("Coplanar exit 1")
         return None
 
     sign_array_b = [
@@ -349,6 +389,7 @@ def organise_triangles_for_collision(triangle_a: Triangle, triangle_b: Triangle)
     ]
 
     if (sign_array_b[0] == sign_array_b[1]) and (sign_array_b[1] == sign_array_b[2]):
+        # print("Coplanar exit 2")
         return None
 
     triangle_a = find_and_swap_vertices(triangle_a, sign_array_a)
@@ -362,10 +403,12 @@ def organise_triangles_for_collision(triangle_a: Triangle, triangle_b: Triangle)
 def check_organised_triangle_triangle_collision(triangle_a: Triangle, triangle_b: Triangle):
     sign_a = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[1], triangle_b.vertices[0], triangle_b.vertices[1]))
     if sign_a > 0:
+        # print("Sign exit 1")
         return False
 
     sign_b = get_sign(calculate_orientation(triangle_a.vertices[0], triangle_a.vertices[2], triangle_b.vertices[2], triangle_b.vertices[0]))
     if sign_b > 0:
+        # print("Sign exit 2")
         return False
 
     return True
@@ -458,6 +501,7 @@ class VectorDisplayEntity(Entity):
     def set_position(self, position: np.ndarray):
         self.__position = position
         self.__update_world_position()
+
 class SphereControllerEntity(Entity):
     NORMAL_COLOUR = rgb(0.9, 0.9, 0.9)
     HOVERED_COLOUR = rgb(1.0, 1.0, 1.0)
@@ -524,6 +568,9 @@ class SphereController:
 
     def is_selected(self) -> bool:
         return self.__entity.selected
+
+    def visible_setter(self, value):
+        self.__entity.visible_setter(value)
 
 class OBBController:
     def __init__(self, centre: np.ndarray, radius: float=0.25):
@@ -622,6 +669,10 @@ class TriangleController:
             vertices=vertices
         )
 
+    def visible_setter(self, value):
+        for vertex in self.__vertices:
+            vertex.visible_setter(value)
+
 class InteractiveTriangle(Entity):
     def __init__(self, vertex_a: np.ndarray, vertex_b: np.ndarray, vertex_c: np.ndarray):
         self.__triangle_controller: TriangleController = TriangleController(vertex_a, vertex_b, vertex_c, radius=0.25)
@@ -636,6 +687,11 @@ class InteractiveTriangle(Entity):
 
     def get_triangle(self) -> Triangle:
         return self.__triangle
+
+    def visible_setter(self, value):
+        super().visible_setter(value)
+        self.__triangle_controller.visible_setter(value)
+
 
 NORMAL_COLOUR = rgb(0.0, 0.9, 0.0)
 TOUCH_COLOUR  = rgb(0.9, 0.0, 0.0)
@@ -725,6 +781,10 @@ class TriangleCollisionTest(Entity):
             self.triangle_a.color_setter(NORMAL_COLOUR)
             self.triangle_b.color_setter(NORMAL_COLOUR)
 
+    def set_visibility(self, visibility: bool):
+        self.triangle_a.visible_setter(visibility)
+        self.triangle_b.visible_setter(visibility)
+
 class TriangleNormalTest(TriangleCollisionTest):
     def __init__(self, *vertices):
         super().__init__(*vertices)
@@ -741,18 +801,52 @@ class TriangleNormalTest(TriangleCollisionTest):
             self.__normal.set_vector(normal)
             self.__normal.set_position(get_triangle_centroid(self.triangle_a.get_triangle()))
 
+triangle_index = 0
+num_triangles = 0
+collision_tests: list[TriangleCollisionTest] = list()
+
+def input(key):
+    global triangle_index, num_triangles, collision_tests
+    collision_tests[triangle_index].set_visibility(False)
+    if key == "up arrow up":
+        triangle_index = triangle_index + 1 if triangle_index + 1 < num_triangles else triangle_index
+    if key == "down arrow up":
+        triangle_index = triangle_index - 1 if triangle_index > 0 else triangle_index
+    collision_tests[triangle_index].set_visibility(True)
+
 def main():
+    global triangle_index, num_triangles, collision_tests
     app = Ursina()
     sun = DirectionalLight()
     sun.look_at(Vec3(0, -1, 0.7))
     Sky()
+
+    # testing - these were printed out during a triangle collision in the real code, supposedly no collision.
+
+    test_log = read_log_file("/home/legendmixer/CLionProjects/TekPhysics/scripts/collision_log.txt")
+    for triangle_a, triangle_b, line_num in test_log:
+        collision_tests.append(TriangleCollisionTest(
+            *triangle_a.vertices,
+            *triangle_b.vertices
+        ))
+        collision_tests[-1].set_visibility(False)
+
+    num_triangles = len(collision_tests)
+    collision_tests[0].set_visibility(True)
 
     # obb_test = InteractiveOBB(centre=np.array([0, 0 ,0]))
     # triangle_test = InteractiveTriangle(np.array([0, 0, 0]), np.array([1, 0, 0]), np.array([0, 0, 1]))
 
     # collision_test = OBBTriangleCollisionTest(np.array([0, -1, 0]), np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
 
-    collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
+    # collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
+    #
+    # collision_test_3 = TriangleCollisionTest(np.array([-3.899999, 1.000000, 0.400000]),
+    #                                          np.array([-3.899999, -1.000000, -1.600000]),
+    #                                          np.array([-3.899999, -1.000000, 0.400000]),
+    #                                          np.array([1.000000, -1.000000, 1.000000]),
+    #                                          np.array([-1.000000, -1.000000, 1.000000]),
+    #                                          np.array([1.000000, -1.000000, -1.000000]))
 
     EditorCamera()  # add camera controls for orbiting and moving the camera
 

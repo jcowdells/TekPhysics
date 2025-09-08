@@ -444,7 +444,7 @@ static void tekEngine(void* args) {
                 if ((event.data.key_input.key == GLFW_KEY_E) && (event.data.key_input.action == GLFW_RELEASE)) {
                     vec4 cube_rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
                     vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
-                    threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/rad1.tmsh", "../res/material.tmat",
+                    threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/cube.tmsh", "../res/material.tmat",
                                                          10.0f, position, cube_rotation, cube_scale, 0));
                 }
                 if ((event.data.key_input.key >= GLFW_KEY_1) && (event.data.key_input.key <= GLFW_KEY_7) && (event.data.key_input.action == GLFW_RELEASE)) {

@@ -215,8 +215,8 @@ float scalarTripleProduct(vec3 vector_a, vec3 vector_b, vec3 vector_c) {
  */
 void triangleNormal(vec3 triangle[3], vec3 normal) {
     vec3 vec_ab, vec_ac;
-    glm_vec3_sub(triangle[0], triangle[1], vec_ab);
-    glm_vec3_sub(triangle[0], triangle[2], vec_ac);
+    glm_vec3_sub(triangle[1], triangle[0], vec_ab);
+    glm_vec3_sub(triangle[2], triangle[0], vec_ac);
     glm_vec3_cross(vec_ab, vec_ac, normal);
     glm_vec3_normalize(normal);
 }
