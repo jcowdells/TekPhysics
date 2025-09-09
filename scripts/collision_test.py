@@ -24,7 +24,19 @@ def get_vector_from_string(vector_str: str) -> np.ndarray:
         number_list.append(float(string))
     return np.array(number_list)
 
-def read_log_file(log_file: str) -> list[tuple[Triangle, Triangle]]:
+def read_log_file_vectors(log_file: str) -> list[tuple[np.ndarray, int]]:
+    with open(log_file) as f:
+        log_data = f.read()
+    vectors: list[tuple[np.ndarray, int]] = list()
+    for line_num, line in enumerate(log_data.split("\n")):
+        if len(line) == 0:
+            continue
+        if line[0] in ("P", "F", "\n", "="):
+            continue
+        vectors.append((get_vector_from_string(line), line_num))
+    return vectors
+
+def read_log_file(log_file: str) -> list[tuple[Triangle, Triangle, int]]:
     with open(log_file) as f:
         log_data = f.read()
     line_number_list: list[int] = list()
@@ -55,6 +67,61 @@ def read_log_file(log_file: str) -> list[tuple[Triangle, Triangle]]:
         i += 1
 
     return list(zip(triangle_a_list, triangle_b_list, line_number_list))
+
+def read_log_file_obb(log_file) -> list[tuple[OBB, OBB, int]]:
+    vectors = read_log_file_vectors(log_file)
+    i = 0
+    build_list = list()
+    obb_as = list()
+    obb_bs = list()
+    line_nums = list()
+    for vector, line_num in vectors:
+        if i == 0:
+            pass
+        elif i % 10 == 0:
+            obb_bs.append(deepcopy(build_list))
+            line_nums.append(line_num)
+            build_list.clear()
+        elif i % 5 == 0:
+            obb_as.append(deepcopy(build_list))
+            build_list.clear()
+        build_list.append(vector)
+        i += 1
+
+    output_list = list()
+    for obb_a_list, obb_b_list, line_num in zip(obb_as, obb_bs, line_nums):
+        output_list.append((
+        OBB(
+            centre=obb_a_list[0],
+            half_extents=[float(obb_a_list[1][0]), float(obb_a_list[1][1]), float(obb_a_list[1][2])],
+            axes=[obb_a_list[2], obb_a_list[3], obb_a_list[4]]
+        ),
+        OBB(
+            centre=obb_b_list[0],
+            half_extents=[float(obb_b_list[1][0]), float(obb_b_list[1][1]), float(obb_b_list[1][2])],
+            axes=[obb_b_list[2], obb_b_list[3], obb_b_list[4]]
+        ),
+        line_num
+        ))
+    return output_list
+
+def read_log_file_obb_triangle(log_file):
+    vectors = read_log_file_vectors(log_file)
+    output_list = list()
+    for i in range(len(vectors) // 8):
+        cur_vectors = [v[0] for v in vectors[i * 8:i * 8 + 8]]
+        output_list.append((
+        OBB(
+            centre=cur_vectors[0],
+            half_extents=[float(cur_vectors[1][0]), float(cur_vectors[1][1]), float(cur_vectors[1][2])],
+            axes=[cur_vectors[2], cur_vectors[3], cur_vectors[4]]
+        ),
+        Triangle(
+            vertices=[cur_vectors[5], cur_vectors[6], cur_vectors[7]]
+        ),
+        vectors[i][1]
+        ))
+    return output_list
 
 def create_obb_mesh(obb: OBB) -> Mesh:
     # cheeky function to map 0 => 1, 1 => -1
@@ -182,7 +249,7 @@ def check_obb_obb_collision(obb_a: OBB, obb_b: OBB):
         mag_y = np.fabs(obb_b.half_extents[1] * dot_matrix[i][1])
         mag_z = np.fabs(obb_b.half_extents[2] * dot_matrix[i][2])
         if np.fabs(t_array[i]) > obb_a.half_extents[i] + mag_x + mag_y + mag_z:
-            print("Early return @ BASIC")
+            print("Early return @ 1")
             return False
 
     # Intermediate cases
@@ -193,7 +260,7 @@ def check_obb_obb_collision(obb_a: OBB, obb_b: OBB):
         mag_z = np.fabs(obb_a.half_extents[2] * dot_matrix[2][i])
         dot_product = np.fabs(np.dot(translate, obb_b.axes[i]))
         if dot_product > obb_b.half_extents[i] + mag_x + mag_y + mag_z:
-            print("Early return @ INTERMEDIATE")
+            print("Early return @ 2")
             return False
 
     # Difficult cases
@@ -234,7 +301,7 @@ def check_obb_obb_collision(obb_a: OBB, obb_b: OBB):
             # print(f"|(T.A{axn[ti_a]})R{axn[ri_a]}{axn[j]}-(T.A{axn[ti_b]})R{axn[ri_b]}{axn[j]}| > |{dep[cyc_ll]}AR{axn[cyc_lh]}{axn[j]}| + |{dep[cyc_lh]}AR{axn[cyc_ll]}{axn[j]}| + |{dep[cyc_sl]}BR{axn[i]}{axn[cyc_sh]}| + |{dep[cyc_sh]}BR{axn[i]}{axn[cyc_sl]}|")
 
             if cmp > tst:
-                print("Early return @ DIFFICULT")
+                print("Early return @ 3")
                 return False
 
     return True
@@ -268,6 +335,7 @@ def check_aabb_triangle_collision(half_extents: list[float], triangle: Triangle)
     for i in range(3):
         cmp += half_extents[i] * np.fabs(face_normal[i])
     if tst > cmp:
+        print("Failed 1")
         return False
 
     for i in range(3):
@@ -279,6 +347,7 @@ def check_aabb_triangle_collision(half_extents: list[float], triangle: Triangle)
         tri_max = max(dots[0], dots[1], dots[2])
 
         if (tri_min > half_extents[i]) or (tri_max < -half_extents[i]):
+            print("Failed 2")
             return False
 
     for i in range(3):
@@ -293,8 +362,10 @@ def check_aabb_triangle_collision(half_extents: list[float], triangle: Triangle)
             tri_min = min(dots[0], dots[1], dots[2])
             tri_max = max(dots[0], dots[1], dots[2])
             if (tri_min > projection) or (tri_max < -projection):
+                print("Failed 3")
                 return False
 
+    print("Passed")
     return True
 
 def check_obb_triangle_collision(obb: OBB, triangle: Triangle) -> bool:
@@ -823,16 +894,28 @@ def main():
 
     # testing - these were printed out during a triangle collision in the real code, supposedly no collision.
 
-    test_log = read_log_file("/home/legendmixer/CLionProjects/TekPhysics/scripts/collision_log.txt")
-    for triangle_a, triangle_b, line_num in test_log:
-        collision_tests.append(TriangleCollisionTest(
-            *triangle_a.vertices,
-            *triangle_b.vertices
-        ))
-        collision_tests[-1].set_visibility(False)
+#    test_log = read_log_file("/home/legendmixer/CLionProjects/TekPhysics/scripts/collision_log.txt")
+#    for triangle_a, triangle_b, line_num in test_log:
+#        collision_tests.append(TriangleCollisionTest(
+#            *triangle_a.vertices,
+#            *triangle_b.vertices
+#        ))
+#        collision_tests[-1].set_visibility(False)
+#
+#    num_triangles = len(collision_tests)
+#    collision_tests[0].set_visibility(True)
 
-    num_triangles = len(collision_tests)
-    collision_tests[0].set_visibility(True)
+    test_log = read_log_file_obb_triangle("/home/legendmixer/CLionProjects/TekPhysics/scripts/collision_log.txt")
+    for obb, triangle, line_num in test_log:
+        if check_obb_triangle_collision(obb, triangle):
+            print(f"Collision @ {line_num}")
+        else:
+            print(f"Nothing @ {line_num}")
+#    for obb_a, obb_b, line_num in test_log:
+#        if check_obb_obb_collision(obb_a, obb_b):
+#            print(f"Collision @ {line_num}")
+#        else:
+#            print(f"Nothing @ {line_num}")
 
     # obb_test = InteractiveOBB(centre=np.array([0, 0 ,0]))
     # triangle_test = InteractiveTriangle(np.array([0, 0, 0]), np.array([1, 0, 0]), np.array([0, 0, 1]))

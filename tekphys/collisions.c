@@ -77,10 +77,10 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
 
     // find the vector between the centres
 
-    printf("=====================\n");
-    tekPrintOBB(obb_a);
-    printf("\n");
-    tekPrintOBB(obb_b);
+//    printf("=====================\n");
+//    tekPrintOBB(obb_a);
+//    printf("\n");
+//    tekPrintOBB(obb_b);
 
     vec3 translate;
     glm_vec3_sub(obb_b->w_centre, obb_a->w_centre, translate);
@@ -156,15 +156,16 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     }
 
     // if no separation is found in any axis, there must be a collision.
+    printf("Passed all steps.");
     return 1;
 }
 
 static void tekCreateOBBTransform(const struct OBB* obb, mat4 transform) {
     mat4 temp_transform = {
-        obb->w_axes[0][0], obb->w_axes[1][0], obb->w_axes[2][0], obb->w_centre[0],
-        obb->w_axes[0][1], obb->w_axes[1][1], obb->w_axes[2][1], obb->w_centre[1],
-        obb->w_axes[0][2], obb->w_axes[1][2], obb->w_axes[2][2], obb->w_centre[2],
-        0.0f, 0.0f, 0.0f, 1.0f
+        obb->w_axes[0][0], obb->w_axes[0][1], obb->w_axes[0][2], 0.0f,
+        obb->w_axes[1][0], obb->w_axes[1][1], obb->w_axes[1][2], 0.0f,
+        obb->w_axes[2][0], obb->w_axes[2][1], obb->w_axes[2][2], 0.0f,
+        obb->w_centre[0], obb->w_centre[1], obb->w_centre[2], 1.0f
     };
     glm_mat4_inv_fast(temp_transform, transform);
 }
@@ -212,6 +213,7 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
         cmp += half_extents[i] * fabsf(face_normal[i]);
     }
     if (tst > cmp) {
+        printf("Failed @ AABB 1\n");
         return 0;
     }
 
@@ -230,6 +232,7 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
         const float tri_min = fminf(dots[0], fminf(dots[1], dots[2]));
         const float tri_max = fmaxf(dots[0], fmaxf(dots[1], dots[2]));
         if (tri_min > half_extents[i] || tri_max < -half_extents[i]) {
+            printf("Failed @ AABB 2\n");
             return 0;
         }
     }
@@ -248,12 +251,14 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
             const float tri_min = fminf(dots[0], fminf(dots[1], dots[2]));
             const float tri_max = fmaxf(dots[0], fmaxf(dots[1], dots[2]));
             if (tri_min >  projection || tri_max < -projection) {
+                printf("Failed @ AABB 3\n");
                 return 0;
             }
         }
     }
 
     // assuming no separation was found in any axis, then there must be a collision.
+    printf("Passed @ AABB 1\n");
     return 1;
 }
 
@@ -263,11 +268,20 @@ static flag tekCheckOBBTriangleCollision(const struct OBB* obb, vec3 triangle[3]
 
     vec3 transformed_triangle[3];
 
+    printf("==========================\n");
+
+    tekPrintOBB(obb);
+    for (uint i = 0; i < 3; i++) {
+        printf("%f, %f, %f\n", EXPAND_VEC3(triangle[i]));
+    }
+
     for (uint i = 0; i < 3; i++) {
         glm_mat4_mulv3(transform, triangle[i], 1.0f, transformed_triangle[i]);
     }
 
-    return tekCheckAABBTriangleCollision(obb->w_half_extents, transformed_triangle);
+    flag collision = tekCheckAABBTriangleCollision(obb->w_half_extents, transformed_triangle);
+    if (collision) printf("== Collision!\n");
+    return collision;
 }
 
 static flag tekCheckOBBTrianglesCollision(const struct OBB* obb, vec3* triangles, const uint num_triangles) {
