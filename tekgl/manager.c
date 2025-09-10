@@ -18,6 +18,7 @@ static List tek_delete_funcs = {0, 0};
 static List tek_gl_load_funcs = {0, 0};
 static List tek_key_funcs = {0, 0};
 static List tek_mmove_funcs = {0, 0};
+static List tek_mbutton_funcs = {0, 0};
 
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
     if (!tek_fb_funcs.length) {
@@ -80,6 +81,20 @@ static void tekManagerMouseMoveCallback(GLFWwindow* window, const double x, cons
     });
 }
 
+static void tekManagerMouseButtonCallback(GLFWwindow* window, const int button, const int action, const int mods) {
+    if (window != tek_window) return;
+
+    printf("----> %d %d %d\n", button, action, mods);
+
+    const ListItem* item = 0;
+    printf("Len list = %u\n", tek_mbutton_funcs.length);
+    foreach(item, (&tek_mbutton_funcs), {
+        const TekMouseButtonCallback callback = (TekMouseButtonCallback)item->data;
+        printf("Calling back..\n");
+        callback(button, action, mods);
+    });
+}
+
 exception tekAddKeyCallback(const TekKeyCallback callback) {
     if (!tek_key_funcs.length)
         listCreate(&tek_key_funcs);
@@ -93,6 +108,15 @@ exception tekAddMousePosCallback(const TekMousePosCallback callback) {
         listCreate(&tek_mmove_funcs);
 
     tekChainThrow(listAddItem(&tek_mmove_funcs, callback));
+    return SUCCESS;
+}
+
+exception tekAddMouseButtonCallback(const TekMouseButtonCallback callback) {
+    printf("Add callbakc\n");
+    if (!tek_mbutton_funcs.length)
+        listCreate(&tek_mbutton_funcs);
+
+    tekChainThrow(listAddItem(&tek_mbutton_funcs, callback));
     return SUCCESS;
 }
 
@@ -118,6 +142,7 @@ exception tekInit(const char* window_name, const int window_width, const int win
     glfwSetFramebufferSizeCallback(tek_window, tekManagerFramebufferCallback);
     glfwSetKeyCallback(tek_window, tekManagerKeyCallback);
     glfwSetCursorPosCallback(tek_window, tekManagerMouseMoveCallback);
+    glfwSetMouseButtonCallback(tek_window, tekManagerMouseButtonCallback);
 
     // run all the callbacks for when opengl loaded.
     const ListItem* item;
@@ -163,6 +188,7 @@ exception tekDelete() {
     listDelete(&tek_gl_load_funcs);
     listDelete(&tek_key_funcs);
     listDelete(&tek_mmove_funcs);
+    listDelete(&tek_mbutton_funcs);
 
     // destroy the glfw window and context
     glfwDestroyWindow(tek_window);

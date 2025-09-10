@@ -13,6 +13,7 @@ typedef void(*TekDeleteFunc)(void);
 typedef exception(*TekGLLoadFunc)(void);
 typedef void(*TekKeyCallback)(int key, int scancode, int action, int mods);
 typedef void(*TekMousePosCallback)(double x, double y);
+typedef void(*TekMouseButtonCallback)(int button, int action, int mods);
 
 exception tekInit(const char* window_name, int window_width, int window_height);
 flag tekRunning();

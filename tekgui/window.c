@@ -7,6 +7,7 @@
 
 #include "../tekgl/manager.h"
 #include "../core/vector.h"
+#include "../core/yml.h"
 #include "glad/glad.h"
 #include "../tekgl/shader.h"
 
@@ -22,6 +23,96 @@ static uint window_vao;
 static uint window_shader;
 static flag window_gl_init = NOT_INITIALISED;
 
+static YmlFile options_yml;
+static struct TekGuiWindowDefaults window_defaults;
+
+static exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults) {
+    if (window_init != INITIALISED) tekThrow(FAILURE, "TekGui not initialised.");
+
+    YmlData* yml_data;
+
+    const exception tek_exception = ymlGet(&options_yml, &yml_data, "window_defaults");
+    if (tek_exception == YML_EXCEPTION) {
+        tekGuiLog("Missing window defaults section in 'options.yml'.");
+        defaults->x_pos = 0;
+        defaults->y_pos = 0;
+        defaults->width = 0;
+        defaults->height = 0;
+        defaults->title_width = 0;
+        defaults->border_width = 0;
+        glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->background_colour);
+        glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->border_colour);
+        return SUCCESS;
+    }
+
+    long yml_integer;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "x_pos"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->x_pos = (uint)yml_integer;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "y_pos"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->y_pos = (uint)yml_integer;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "width"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->width = (uint)yml_integer;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "height"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->height = (uint)yml_integer;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "title_width"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->title_width = (uint)yml_integer;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_width"));
+    ymlDataToInteger(yml_data, &yml_integer);
+    defaults->border_width = (uint)yml_integer;
+
+    double yml_float;
+    vec4 yml_colour;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "r"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[0] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "g"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[1] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "b"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[2] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "background_colour", "a"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[3] = (float)yml_float;
+
+    glm_vec4_copy(yml_colour, defaults->background_colour);
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "r"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[0] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "g"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[1] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "b"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[2] = (float)yml_float;
+
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "window_defaults", "border_colour", "a"));
+    ymlDataToFloat(yml_data, &yml_float);
+    yml_colour[3] = (float)yml_float;
+
+    glm_vec4_copy(yml_colour, defaults->border_colour);
+
+    return SUCCESS;
+}
+
 static void tekGuiWindowDelete() {
     vectorDelete(&window_mesh_buffer);
 
@@ -30,6 +121,8 @@ static void tekGuiWindowDelete() {
 }
 
 static exception tekGuiWindowGLLoad() {
+    tekChainThrow(tekGuiGetWindowDefaults(&window_defaults));
+
     glGenBuffers(1, &window_vbo);
     glGenVertexArrays(1, &window_vao);
     glBindVertexArray(window_vao);
@@ -74,6 +167,9 @@ tek_init tekGuiWindowInit() {
     if (tek_exception) return;
 
     tek_exception = tekAddGLLoadFunc(tekGuiWindowGLLoad);
+    if (tek_exception) return;
+
+    tek_exception = ymlReadFile("../tekgui/options.yml", &options_yml);
     if (tek_exception) return;
 
     window_init = INITIALISED;
@@ -121,20 +217,19 @@ static exception tekGuiWindowUpdateGLMesh(const uint index, TekGuiWindowData* wi
 }
 
 exception tekGuiCreateWindow(TekGuiWindow* window) {
-    struct TekGuiWindowDefaults defaults = {};
-    tekChainThrow(tekGuiGetWindowDefaults(&defaults));
+    if (!window_init) tekThrow(FAILURE, "Attempted to run function before initialised.");
 
     window->type = WINDOW_TYPE_EMPTY;
     window->data = NULL;
-    window->x_pos = defaults.x_pos;
-    window->y_pos = defaults.y_pos;
-    window->width = defaults.width;
-    window->height = defaults.height;
-    window->title_width = defaults.title_width;
-    window->border_width = defaults.border_width;
-    glm_vec4_copy(defaults.background_colour, window->background_colour);
-    glm_vec4_copy(defaults.border_colour, window->border_colour);
-
+    window->x_pos = window_defaults.x_pos;
+    window->y_pos = window_defaults.y_pos;
+    window->width = window_defaults.width;
+    window->height = window_defaults.height;
+    window->title_width = window_defaults.title_width;
+    window->border_width = window_defaults.border_width;
+    glm_vec4_copy(window_defaults.background_colour, window->background_colour);
+    glm_vec4_copy(window_defaults.border_colour, window->border_colour);
+    
     TekGuiWindowData window_data = {};
     tekGuiGetWindowData(window, &window_data);
     tekGuiWindowAddGLMesh(&window_data, &window->mesh_index);
@@ -171,10 +266,10 @@ void tekGuiDeleteWindow(TekGuiWindow* window) {
 }
 
 void tekGuiGetWindowData(const TekGuiWindow* window, TekGuiWindowData* window_data) {
-    glm_vec2_copy((vec2){(float)window->x_pos, (float)(window->width + window->x_pos)}, window_data->minmax_x);
-    glm_vec2_copy((vec2){(float)window->y_pos, (float)(window->height + window->y_pos)}, window_data->minmax_y);
-    glm_vec2_copy((vec2){(float)(window->x_pos + window->border_width), (float)(window->x_pos + window->width - window->border_width)}, window_data->minmax_ix);
-    glm_vec2_copy((vec2){(float)(window->y_pos + window->border_width), (float)(window->y_pos + window->height - window->title_width)}, window_data->minmax_iy);
+    glm_vec2_copy((vec2){(float)window->x_pos - (float)window->border_width, (float)(window->width + window->x_pos + window->border_width)}, window_data->minmax_x);
+    glm_vec2_copy((vec2){(float)window->y_pos - (float)window->title_width, (float)(window->height + window->y_pos + window->border_width)}, window_data->minmax_y);
+    glm_vec2_copy((vec2){(float)window->x_pos, (float)(window->x_pos + window->width)}, window_data->minmax_ix);
+    glm_vec2_copy((vec2){(float)window->y_pos, (float)(window->y_pos + window->height)}, window_data->minmax_iy);
     memcpy(window_data->background_colour, window->background_colour, sizeof(vec4));
     memcpy(window_data->border_colour, window->border_colour, sizeof(vec4));
 }

@@ -19,6 +19,7 @@ typedef struct TekGuiWindow {
     vec4 background_colour;
     vec4 border_colour;
     uint mesh_index;
+    char* title;
 } TekGuiWindow;
 
 typedef struct TekGuiWindowData {
@@ -29,6 +30,17 @@ typedef struct TekGuiWindowData {
     vec4 background_colour;
     vec4 border_colour;
 } TekGuiWindowData;
+
+struct TekGuiWindowDefaults {
+    uint x_pos;
+    uint y_pos;
+    uint width;
+    uint height;
+    uint title_width;
+    uint border_width;
+    vec4 background_colour;
+    vec4 border_colour;
+};
 
 exception tekGuiCreateWindow(TekGuiWindow* window);
 void tekGuiDeleteWindow(TekGuiWindow* window);

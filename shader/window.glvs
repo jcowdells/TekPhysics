@@ -25,10 +25,10 @@ float remap(float value, float max_value) {
 void main() {
     gl_Position = vec4(minmax_x.x, minmax_y.x, 0.0f, 1.0f);
     vs_out.minmax_x = vec2(remap(minmax_x.x, window_size.x), remap(minmax_x.y, window_size.x));
-    vs_out.minmax_y = vec2(remap(minmax_y.x, window_size.y), remap(minmax_y.y, window_size.y));
+    vs_out.minmax_y = vec2(-remap(minmax_y.y, window_size.y), -remap(minmax_y.x, window_size.y));
 
     vs_out.minmax_ix = vec2(remap(minmax_ix.x, window_size.x), remap(minmax_ix.y, window_size.x));
-    vs_out.minmax_iy = vec2(remap(minmax_iy.x, window_size.y), remap(minmax_iy.y, window_size.y));
+    vs_out.minmax_iy = vec2(-remap(minmax_iy.y, window_size.y), -remap(minmax_iy.x, window_size.y));
 
     vs_out.bg_colour = bg_colour;
     vs_out.bd_colour = bd_colour;

@@ -35,6 +35,7 @@
 
 #include "tekgui/tekgui.h"
 #include "tekgui/window.h"
+#include "tekgui/button.h"
 
 #define printException(x) tekLog(x)
 
@@ -254,7 +255,7 @@ exception run() {
     mat4 model;
     glm_mat4_identity(model);
 
-    tekSetMouseMode(MOUSE_MODE_CAMERA);
+    // tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     TekEntity sphere;
     tekChainThrow(tekCreateEntity("../res/rad1.tmsh", "../res/translucent.tmat", (vec3){0.0f, 0.0f, 0.0f}, (vec4){0.0f, 0.0f, 0.0f, 1.0f}, (vec3){1.0f, 1.0f, 1.0f}, &sphere));
@@ -320,6 +321,9 @@ exception run() {
 
     TekGuiWindow window = {};
     tekGuiCreateWindow(&window);
+
+    TekGuiButton button = {};
+    tekGuiCreateButton(&button, 200, 200, 320, 180);
 
     while (tekRunning()) {
         while (recvState(&state_queue, &state) == SUCCESS) {
@@ -517,7 +521,7 @@ exception run() {
 
         tekNotifyEntityMaterialChange();
         //glPolygonMode(GL_FRONT, GL_FILL);
-        //tekChainThrow(tekGuiDrawWindow(&window));
+        tekChainThrow(tekGuiDrawWindow(&window));
 
         // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         tekChainThrow(tekDrawText(&depth_text, 10, 10));

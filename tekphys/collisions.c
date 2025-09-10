@@ -739,8 +739,6 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
 
     contact_buffer.length = 0;
 
-    printf("------------------------------------\n");
-
     for (uint i = 0; i < bodies->length; i++) {
         TekBody* body_i;
         tekChainThrow(vectorGetItemPtr(bodies, i, &body_i));
