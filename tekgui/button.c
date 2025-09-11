@@ -3,6 +3,7 @@
 #include "../tekgl/manager.h"
 #include <GLFW/glfw3.h>
 #include "../core/list.h"
+#include <string.h>
 
 #define NOT_INITIALISED 0
 #define INITIALISED 1
@@ -14,6 +15,7 @@ static uint mouse_y = 0;
 static flag button_init = NOT_INITIALISED;
 
 static List button_list = {0, 0};
+static List button_dehover_list = {0, 0};
 
 static uint tekGuiGetButtonIndex(const TekGuiButton* button) {
     const ListItem* item = 0;
@@ -36,8 +38,6 @@ static int tekGuiCheckButtonHitbox(const TekGuiButton* button, uint check_x, uin
 }
 
 static void tekGuiButtonMouseButtonCallback(int button, int action, int mods) {
-    if (button != GLFW_MOUSE_BUTTON_LEFT) return;
-
     const ListItem* item = 0;
     const TekGuiButton* clicked_button = 0;
     foreach(item, (&button_list), {
@@ -49,12 +49,55 @@ static void tekGuiButtonMouseButtonCallback(int button, int action, int mods) {
     });
     if (!clicked_button) return;
 
-    printf("Clicked button @ %u %u (=%p)\n", mouse_x, mouse_y, clicked_button);
+    if (clicked_button->callback) {
+        TekGuiButtonCallbackData callback_data = {};
+        memset(&callback_data, 0, sizeof(TekGuiButtonCallbackData));
+        callback_data.type = TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK;
+        callback_data.data.mouse_button.button = button;
+        callback_data.data.mouse_button.action = action;
+        callback_data.data.mouse_button.mods   = mods;
+        clicked_button->callback(clicked_button, callback_data);
+    }
 }
 
 static void tekGuiButtonMousePosCallback(double x, double y) {
     mouse_x = (uint)x;
     mouse_y = (uint)y;
+
+    const ListItem* item = 0;
+    TekGuiButtonCallbackData callback_data = {};
+    memset(&callback_data, 0, sizeof(TekGuiButtonCallbackData));
+
+    uint index = 0;
+    foreach(item, (&button_dehover_list), {
+        const TekGuiButton* button = (const TekGuiButton*)item->data;
+        if (!tekGuiCheckButtonHitbox(button, mouse_x, mouse_y)) {
+            callback_data.type = TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK;
+            button->callback(button, callback_data);
+            listRemoveItem(&button_dehover_list, index, NULL);
+        } else {
+            index++;
+        }
+    });
+
+    const TekGuiButton* hovered_button = 0;
+    foreach(item, (&button_list), {
+        const TekGuiButton* button = (const TekGuiButton*)item->data;
+        if (tekGuiCheckButtonHitbox(button, mouse_x, mouse_y)) {
+            hovered_button = button;
+            break;
+        }
+    });
+
+    if (!hovered_button) return;
+
+    foreach(item, (&button_dehover_list), {
+        const TekGuiButton* button = (const TekGuiButton*)item->data;
+        if (button == hovered_button) return;
+    });
+
+    callback_data.type = TEK_GUI_BUTTON_MOUSE_ENTER_CALLBACK;
+    hovered_button->callback(hovered_button, callback_data);
 }
 
 static void tekGuiButtonDelete() {
@@ -73,19 +116,24 @@ tek_init tekGuiButtonInit() {
     if (tek_exception) return;
 
     listCreate(&button_list);
+    listCreate(&button_dehover_list);
 
     button_init = INITIALISED;
 }
 
-exception tekGuiCreateButton(TekGuiButton* button, uint x, uint y, uint width, uint height) {
+exception tekGuiCreateButton(TekGuiButton* button) {
+    tekChainThrow(listAddItem(&button_list, button));
+    return SUCCESS;
+}
+
+void tekGuiSetButtonPosition(TekGuiButton* button, uint x, uint y) {
     button->hitbox_x = x;
     button->hitbox_y = y;
+}
+
+void tekGuiSetButtonSize(TekGuiButton* button, uint width, uint height) {
     button->hitbox_width = width;
     button->hitbox_height = height;
-
-    tekChainThrow(listAddItem(&button_list, button));
-
-    return SUCCESS;
 }
 
 exception tekGuiDeleteButton(const TekGuiButton* button) {

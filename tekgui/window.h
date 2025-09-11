@@ -4,6 +4,7 @@
 #include "../core/exception.h"
 #include <cglm/vec4.h>
 #include "../tekgl/mesh.h"
+#include "button.h"
 
 #define WINDOW_TYPE_EMPTY 0
 
@@ -20,6 +21,7 @@ typedef struct TekGuiWindow {
     vec4 border_colour;
     uint mesh_index;
     char* title;
+    TekGuiButton title_button;
 } TekGuiWindow;
 
 typedef struct TekGuiWindowData {

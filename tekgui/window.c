@@ -15,6 +15,8 @@
 #define INITIALISED 1
 #define DE_INITIALISED 2
 
+#define MAX(a, b) (a > b) ? a : b;
+
 static Vector window_mesh_buffer;
 static flag window_init = NOT_INITIALISED;
 
@@ -216,6 +218,10 @@ static exception tekGuiWindowUpdateGLMesh(const uint index, TekGuiWindowData* wi
     return SUCCESS;
 }
 
+void tekGuiWindowTitleButtonCallback(TekGuiButton* button_ptr, TekGuiButtonCallbackData callback_data) {
+    printf("Got a callback (type=%d).\n", callback_data.type);
+}
+
 exception tekGuiCreateWindow(TekGuiWindow* window) {
     if (!window_init) tekThrow(FAILURE, "Attempted to run function before initialised.");
 
@@ -229,7 +235,15 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     window->border_width = window_defaults.border_width;
     glm_vec4_copy(window_defaults.background_colour, window->background_colour);
     glm_vec4_copy(window_defaults.border_colour, window->border_colour);
-    
+
+    tekGuiCreateButton(&window->title_button);
+    window->title_button.hitbox_x = (uint)MAX(0, (int)window_defaults.x_pos - (int)window_defaults.border_width);
+    window->title_button.hitbox_y = (uint)MAX(0, (int)window_defaults.y_pos - (int)window_defaults.title_width);
+    window->title_button.hitbox_width = window_defaults.width + 2 * window_defaults.border_width;
+    window->title_button.hitbox_height = window_defaults.title_width;
+    window->title_button.data = (void*)window;
+    window->title_button.callback = tekGuiWindowTitleButtonCallback;
+
     TekGuiWindowData window_data = {};
     tekGuiGetWindowData(window, &window_data);
     tekGuiWindowAddGLMesh(&window_data, &window->mesh_index);

@@ -323,7 +323,7 @@ exception run() {
     tekGuiCreateWindow(&window);
 
     TekGuiButton button = {};
-    tekGuiCreateButton(&button, 200, 200, 320, 180);
+    tekGuiCreateButton(&button);
 
     while (tekRunning()) {
         while (recvState(&state_queue, &state) == SUCCESS) {
