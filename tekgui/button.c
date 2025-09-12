@@ -68,36 +68,41 @@ static void tekGuiButtonMousePosCallback(double x, double y) {
     TekGuiButtonCallbackData callback_data = {};
     memset(&callback_data, 0, sizeof(TekGuiButtonCallbackData));
 
+    callback_data.type = TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK;
+
     uint index = 0;
-    foreach(item, (&button_dehover_list), {
+    item = button_dehover_list.data;
+    while (item) {
         const TekGuiButton* button = (const TekGuiButton*)item->data;
-        if (!tekGuiCheckButtonHitbox(button, mouse_x, mouse_y)) {
-            callback_data.type = TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK;
-            button->callback(button, callback_data);
-            listRemoveItem(&button_dehover_list, index, NULL);
-        } else {
+        item = item->next;
+        if (tekGuiCheckButtonHitbox(button, mouse_x, mouse_y)) {
+            button = NULL;
             index++;
+            continue;
         }
-    });
+        button->callback(button, callback_data);
+        listRemoveItem(&button_dehover_list, index, NULL);
+    }
+
+    callback_data.type = TEK_GUI_BUTTON_MOUSE_ENTER_CALLBACK;
 
     const TekGuiButton* hovered_button = 0;
     foreach(item, (&button_list), {
         const TekGuiButton* button = (const TekGuiButton*)item->data;
+
+        const ListItem* inner_item;
+        foreach(inner_item, (&button_dehover_list), {
+            const TekGuiButton* dehover_button = (const TekGuiButton*)inner_item->data;
+            if (button == dehover_button) return;
+        });
+
         if (tekGuiCheckButtonHitbox(button, mouse_x, mouse_y)) {
+            listAddItem(&button_dehover_list, button);
+            button->callback(button, callback_data);
             hovered_button = button;
-            break;
+            return;
         }
     });
-
-    if (!hovered_button) return;
-
-    foreach(item, (&button_dehover_list), {
-        const TekGuiButton* button = (const TekGuiButton*)item->data;
-        if (button == hovered_button) return;
-    });
-
-    callback_data.type = TEK_GUI_BUTTON_MOUSE_ENTER_CALLBACK;
-    hovered_button->callback(hovered_button, callback_data);
 }
 
 static void tekGuiButtonDelete() {
