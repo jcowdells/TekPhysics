@@ -37,4 +37,5 @@ typedef struct TekGuiButton {
 exception tekGuiCreateButton(TekGuiButton* button);
 void tekGuiSetButtonPosition(TekGuiButton* button, uint x, uint y);
 void tekGuiSetButtonSize(TekGuiButton* button, uint width, uint height);
+exception tekGuiBringButtonToFront(const TekGuiButton* button);
 exception tekGuiDeleteButton(const TekGuiButton* button);

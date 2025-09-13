@@ -11,8 +11,8 @@ out vec4 colour;
 
 void main() {
     if (frag_pos.x > minmax_ix.x && frag_pos.x < minmax_ix.y && frag_pos.y > minmax_iy.x && frag_pos.y < minmax_iy.y) {
-        colour = bd_colour;
-    } else {
         colour = bg_colour;
+    } else {
+        colour = bd_colour;
     }
 }

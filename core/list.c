@@ -249,6 +249,70 @@ exception listRemoveItem(List* list, const uint index, void** data) {
 }
 
 /**
+ * Move an item at one index so that it is now stored at a different index.
+ * @param list The list for which to move the items in.
+ * @param old_index The index of the item to be moved.
+ * @param new_index The index which the item should be moved into.
+ * @throws LIST_EXCEPTION if either index is out of range.
+ */
+exception listMoveItem(List* list, const uint old_index, const uint new_index) {
+    // make sure that we actually need to move the item
+    if (old_index == new_index) return SUCCESS;
+
+    if (old_index >= list->length || new_index >= list->length)
+        tekThrow(LIST_EXCEPTION, "List index out of range.");
+
+    // scan the list to find the old item
+    ListItem* item = list->data, * prev = 0;
+    uint index = 0;
+    while (item) {
+        if (index == old_index) break;
+        index++;
+        prev = item;
+        item = item->next;
+    }
+
+    // plug the gap between the two items either side of the moved item.
+    if (old_index == 0) {
+        list->data = item->next;
+    } else {
+        prev->next = item->next;
+    }
+
+    // keep track of what the old item was.
+    ListItem* moved_item = item;
+
+    // if inserting to be the new first item, then need to directly set as the root item.
+    if (new_index == 0) {
+        moved_item->next = list->data;
+        list->data = moved_item;
+        return SUCCESS;
+    }
+
+    // if the old index is greater than the new index, the search should restart from the beginning
+    // if the new index is after the old one, we need not start from the beginning and can just continue from where we got to.
+    if (old_index > new_index || old_index == 0) {
+        prev = 0;
+        item = list->data;
+        index = 0;
+    }
+
+    // iterate to find the new index.
+    while (item) {
+        if (index == new_index) break;
+        index++;
+        prev = item;
+        item = item->next;
+    }
+
+    // insert the item into the new location.
+    prev->next = moved_item;
+    moved_item->next = item;
+
+    return SUCCESS;
+}
+
+/**
  * Print out the data pointer of each item in the list in hexadecimal format.
  * @note Not very useful unless debugging. For more useful output, your own function is needed as the list has no idea what datatype you are storing.
  * @param list The list to print out.

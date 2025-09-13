@@ -150,6 +150,33 @@ flag vectorPopItem(Vector* vector, void* item) {
 }
 
 /**
+ * Insert an item into a vector at a certain index.
+ * @param vector The vector in which to insert the item.
+ * @param index The index at which to insert the new item.
+ * @param item The item which is to be inserted.
+ * @throws VECTOR_EXCEPTION if the index is out of bounds.
+ * @throws MEMORY_EXCEPTION if malloc() failed.
+ */
+exception vectorInsertItem(Vector* vector, const uint index, const void* item) {
+    if (index > vector->length) tekThrow(VECTOR_EXCEPTION, "Attempted to set index out of bounds.");
+    if (index == vector->length) {
+        tekChainThrow(vectorAddItem(vector, item));
+        return SUCCESS;
+    }
+
+    if (vector->length >= vector->internal_size)
+        tekChainThrow(vectorDoubleCapacity(vector));
+
+    void* src = vector->internal + index * vector->element_size;
+    void* dest = src + vector->element_size;
+    const uint size = (vector->length - index) * vector->element_size;
+    memcpy(dest, src, size);
+    vectorWriteItem(vector, index, item);
+    vector->length++;
+    return SUCCESS;
+}
+
+/**
  * Delete a vector, freeing the internal list and zeroing the struct.
  * @param vector The vector to delete.
  */

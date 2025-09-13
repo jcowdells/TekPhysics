@@ -17,4 +17,5 @@ exception vectorGetItem(const Vector* vector, uint index, void* item);
 exception vectorGetItemPtr(const Vector* vector, uint index, void** item);
 exception vectorRemoveItem(Vector* vector, uint index, void* item);
 flag vectorPopItem(Vector* vector, void* item);
+exception vectorInsertItem(Vector* vector, uint index, const void* item);
 void vectorDelete(Vector* vector);

@@ -211,7 +211,7 @@ exception run() {
     updateDepthMessage();
 
     TekText version_text;
-    tekCreateText("TekPhysics v1.0 Alpha", 16, &depth_font, &version_text);
+    tekCreateText("TekPhysics vI.D.K Alpha", 16, &depth_font, &version_text);
 
     Vector entities = {};
     tekChainThrow(vectorCreate(0, sizeof(TekEntity), &entities));
@@ -321,6 +321,8 @@ exception run() {
 
     TekGuiWindow window = {};
     tekGuiCreateWindow(&window);
+    tekGuiSetWindowPosition(&window, 0, 0);
+    tekGuiSetWindowBackgroundColour(&window, (vec4){0.0f, 1.0f, 0.0f, 0.5f});
 
     TekGuiWindow window2 = {};
     tekGuiCreateWindow(&window2);
@@ -524,15 +526,17 @@ exception run() {
 
         tekNotifyEntityMaterialChange();
         //glPolygonMode(GL_FRONT, GL_FILL);
-        tekChainThrow(tekGuiDrawWindow(&window));
-        tekChainThrow(tekGuiDrawWindow(&window2));
+        // tekChainThrow(tekGuiDrawWindow(&window));
+        // tekChainThrow(tekGuiDrawWindow(&window2));
+
+        tekChainThrow(tekGuiDrawAllWindows());
 
         // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         tekChainThrow(tekDrawText(&depth_text, 10, 10));
 
         int window_width, window_height;
         tekGetWindowSize(&window_width, &window_height);
-        tekChainThrow(tekDrawText(&version_text, (float)(window_width - 170), 8.0f));
+        tekChainThrow(tekDrawText(&version_text, (float)(window_width - 185), 8.0f));
 
         // tekChainThrow(tekBindMaterial(&material));
         // tekChainThrow(tekBindMaterialMatrix(&material, camera.projection, PROJECTION_MATRIX_DATA));
@@ -558,25 +562,37 @@ exception run() {
 }
 
 exception test() {
-    TekCollisionManifold manifold = {};
+    Vector list = {};
+    vectorCreate(1, sizeof(char), &list);
 
-    vec3 triangle_a[] = {
-        -3.899999f, 1.000000f, 0.400000f,
-        -3.899999f, -1.000000f, -1.600000f,
-        -3.899999f, -1.000000f, 0.400000f
-    };
+    char item = 'A';
 
-    vec3 triangle_b[] = {
-        1.000000f, -1.000000f, 1.000000f,
-        -1.000000f, -1.000000f, 1.000000f,
-        1.000000f, -1.000000f, -1.000000f
-    };
+    for (uint i = 0; i < 5; i++) {
+        tekChainThrow(vectorAddItem(&list, &item));
+        item++;
 
-    flag collision = 0;
+    }
 
-    tekCheckTriangleCollision(triangle_a, triangle_b, &collision, &manifold);
+    printf("Before inserting:\n[");
+    for (uint i = 0; i < list.length; i++) {
+        vectorGetItem(&list, i, &item);
+        if (i != 0) printf(", ");
+        printf("%c", item);
+    }
+    printf("]\n");
 
-    printf("Collision: %s", collision ? "True" : "False");
+    item = '@';
+    tekChainThrow(vectorInsertItem(&list, 1, &item));
+
+    printf("After inserting:\n[");
+    for (uint i = 0; i < list.length; i++) {
+        vectorGetItem(&list, i, &item);
+        if (i != 0) printf(", ");
+        printf("%c", item);
+    }
+    printf("]\n");
+
+    vectorDelete(&list);
 
     return SUCCESS;
 }

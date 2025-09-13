@@ -153,6 +153,12 @@ void tekGuiSetButtonSize(TekGuiButton* button, uint width, uint height) {
     button->hitbox_height = height;
 }
 
+exception tekGuiBringButtonToFront(const TekGuiButton* button) {
+    const uint index = tekGuiGetButtonIndex(button);
+    tekChainThrow(listMoveItem(&button_list, index, 0));
+    return SUCCESS;
+}
+
 exception tekGuiDeleteButton(const TekGuiButton* button) {
     const uint remove_index = tekGuiGetButtonIndex(button);
     tekChainThrow(listRemoveItem(&button_list, remove_index, NULL));
