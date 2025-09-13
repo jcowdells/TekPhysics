@@ -3,14 +3,17 @@
 #include "../tekgl.h"
 #include "../core/exception.h"
 
-#define TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK 0
-#define TEK_GUI_BUTTON_MOUSE_ENTER_CALLBACK 1
-#define TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK 2
+#define TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK   0
+#define TEK_GUI_BUTTON_MOUSE_ENTER_CALLBACK    1
+#define TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK    2
+#define TEK_GUI_BUTTON_MOUSE_TOUCHING_CALLBACK 3
 
 struct TekGuiButton;
 
 typedef struct TekGuiButtonCallbackData {
     flag type;
+    uint mouse_x;
+    uint mouse_y;
     union {
         struct {
             int button;

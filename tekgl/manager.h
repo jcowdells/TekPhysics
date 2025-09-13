@@ -8,6 +8,9 @@
 #define MOUSE_MODE_NORMAL 0
 #define MOUSE_MODE_CAMERA 1
 
+#define DEFAULT_CURSOR   0
+#define CROSSHAIR_CURSOR 1
+
 typedef void(*TekFramebufferCallback)(int framebuffer_width, int framebuffer_height);
 typedef void(*TekDeleteFunc)(void);
 typedef exception(*TekGLLoadFunc)(void);
@@ -23,9 +26,11 @@ exception tekDelete();
 void tekGetWindowSize(int* window_width, int* window_height);
 
 void tekSetMouseMode(flag mouse_mode);
+void tekSetCursor(flag cursor_mode);
 
 exception tekAddFramebufferCallback(TekFramebufferCallback callback);
 exception tekAddKeyCallback(TekKeyCallback callback);
 exception tekAddDeleteFunc(TekDeleteFunc delete_func);
 exception tekAddGLLoadFunc(TekGLLoadFunc gl_load_func);
 exception tekAddMousePosCallback(TekMousePosCallback callback);
+exception tekAddMouseButtonCallback(TekMouseButtonCallback callback);

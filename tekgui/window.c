@@ -4,11 +4,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <cglm/vec2.h>
+#include "glad/glad.h"
+#include <GLFW/glfw3.h>
 
 #include "../tekgl/manager.h"
 #include "../core/vector.h"
 #include "../core/yml.h"
-#include "glad/glad.h"
 #include "../tekgl/shader.h"
 
 #define NOT_INITIALISED 0
@@ -27,6 +28,7 @@ static flag window_gl_init = NOT_INITIALISED;
 
 static YmlFile options_yml;
 static struct TekGuiWindowDefaults window_defaults;
+static GLFWcursor* move_cursor;
 
 static exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults) {
     if (window_init != INITIALISED) tekThrow(FAILURE, "TekGui not initialised.");
@@ -157,6 +159,8 @@ static exception tekGuiWindowGLLoad() {
 
     tekChainThrow(tekCreateShaderProgramVGF("../shader/window.glvs", "../shader/window.glgs", "../shader/window.glfs", &window_shader));
 
+    move_cursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
+
     window_gl_init = INITIALISED;
     return SUCCESS;
 }
@@ -218,8 +222,52 @@ static exception tekGuiWindowUpdateGLMesh(const uint index, TekGuiWindowData* wi
     return SUCCESS;
 }
 
+static void tekGuiGetWindowData(const TekGuiWindow* window, TekGuiWindowData* window_data) {
+    glm_vec2_copy((vec2){(float)window->x_pos - (float)window->border_width, (float)(window->width + window->x_pos + window->border_width)}, window_data->minmax_x);
+    glm_vec2_copy((vec2){(float)window->y_pos - (float)window->title_width, (float)(window->height + window->y_pos + window->border_width)}, window_data->minmax_y);
+    glm_vec2_copy((vec2){(float)window->x_pos, (float)(window->x_pos + window->width)}, window_data->minmax_ix);
+    glm_vec2_copy((vec2){(float)window->y_pos, (float)(window->y_pos + window->height)}, window_data->minmax_iy);
+    memcpy(window_data->background_colour, window->background_colour, sizeof(vec4));
+    memcpy(window_data->border_colour, window->border_colour, sizeof(vec4));
+}
+
+static void tekGuiWindowUpdateButtonHitbox(TekGuiWindow* window) {
+    window->title_button.hitbox_x = (uint)MAX(0, window->x_pos - (int)window_defaults.border_width);
+    window->title_button.hitbox_y = (uint)MAX(0, window->y_pos - (int)window_defaults.title_width);
+}
+
 void tekGuiWindowTitleButtonCallback(TekGuiButton* button_ptr, TekGuiButtonCallbackData callback_data) {
-    printf("Got a callback (type=%d).\n", callback_data.type);
+    TekGuiWindow* window = (TekGuiWindow*)button_ptr->data;
+    switch (callback_data.type) {
+    case TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK:
+        if (callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT) break;
+        if (callback_data.data.mouse_button.action == GLFW_PRESS) {
+            window->being_dragged = 1;
+            window->x_delta = window->x_pos - (int)callback_data.mouse_x;
+            window->y_delta = window->y_pos - (int)callback_data.mouse_y;
+            tekSetCursor(CROSSHAIR_CURSOR);
+        } else if (callback_data.data.mouse_button.action == GLFW_RELEASE) {
+            window->being_dragged = 0;
+            tekSetCursor(DEFAULT_CURSOR);
+        }
+        break;
+    case TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK:
+        window->being_dragged = 0;
+        tekSetCursor(DEFAULT_CURSOR);
+        break;
+    case TEK_GUI_BUTTON_MOUSE_TOUCHING_CALLBACK:
+        if (window->being_dragged) {
+            window->x_pos = (int)callback_data.mouse_x + window->x_delta;
+            window->y_pos = (int)callback_data.mouse_y + window->y_delta;
+            TekGuiWindowData window_data;
+            tekGuiGetWindowData(window, &window_data);
+            tekGuiWindowUpdateButtonHitbox(window);
+            tekGuiWindowUpdateGLMesh(window->mesh_index, &window_data);
+        }
+        break;
+    default:
+        break;
+    }
 }
 
 exception tekGuiCreateWindow(TekGuiWindow* window) {
@@ -227,8 +275,8 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
 
     window->type = WINDOW_TYPE_EMPTY;
     window->data = NULL;
-    window->x_pos = window_defaults.x_pos;
-    window->y_pos = window_defaults.y_pos;
+    window->x_pos = (int)window_defaults.x_pos;
+    window->y_pos = (int)window_defaults.y_pos;
     window->width = window_defaults.width;
     window->height = window_defaults.height;
     window->title_width = window_defaults.title_width;
@@ -237,8 +285,7 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     glm_vec4_copy(window_defaults.border_colour, window->border_colour);
 
     tekGuiCreateButton(&window->title_button);
-    window->title_button.hitbox_x = (uint)MAX(0, (int)window_defaults.x_pos - (int)window_defaults.border_width);
-    window->title_button.hitbox_y = (uint)MAX(0, (int)window_defaults.y_pos - (int)window_defaults.title_width);
+    tekGuiWindowUpdateButtonHitbox(window);
     window->title_button.hitbox_width = window_defaults.width + 2 * window_defaults.border_width;
     window->title_button.hitbox_height = window_defaults.title_width;
     window->title_button.data = (void*)window;
@@ -247,6 +294,10 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     TekGuiWindowData window_data = {};
     tekGuiGetWindowData(window, &window_data);
     tekGuiWindowAddGLMesh(&window_data, &window->mesh_index);
+
+    window->being_dragged = 0;
+    window->x_delta = 0;
+    window->y_delta = 0;
 
     return SUCCESS;
 }
@@ -277,13 +328,4 @@ exception tekGuiDrawWindow(const TekGuiWindow* window) {
 
 void tekGuiDeleteWindow(TekGuiWindow* window) {
 
-}
-
-void tekGuiGetWindowData(const TekGuiWindow* window, TekGuiWindowData* window_data) {
-    glm_vec2_copy((vec2){(float)window->x_pos - (float)window->border_width, (float)(window->width + window->x_pos + window->border_width)}, window_data->minmax_x);
-    glm_vec2_copy((vec2){(float)window->y_pos - (float)window->title_width, (float)(window->height + window->y_pos + window->border_width)}, window_data->minmax_y);
-    glm_vec2_copy((vec2){(float)window->x_pos, (float)(window->x_pos + window->width)}, window_data->minmax_ix);
-    glm_vec2_copy((vec2){(float)window->y_pos, (float)(window->y_pos + window->height)}, window_data->minmax_iy);
-    memcpy(window_data->background_colour, window->background_colour, sizeof(vec4));
-    memcpy(window_data->border_colour, window->border_colour, sizeof(vec4));
 }

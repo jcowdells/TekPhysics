@@ -11,8 +11,8 @@
 typedef struct TekGuiWindow {
     flag type;
     void* data;
-    uint x_pos;
-    uint y_pos;
+    int x_pos;
+    int y_pos;
     uint width;
     uint height;
     uint title_width;
@@ -22,6 +22,9 @@ typedef struct TekGuiWindow {
     uint mesh_index;
     char* title;
     TekGuiButton title_button;
+    flag being_dragged;
+    int x_delta;
+    int y_delta;
 } TekGuiWindow;
 
 typedef struct TekGuiWindowData {
@@ -46,6 +49,4 @@ struct TekGuiWindowDefaults {
 
 exception tekGuiCreateWindow(TekGuiWindow* window);
 void tekGuiDeleteWindow(TekGuiWindow* window);
-
-void tekGuiGetWindowData(const TekGuiWindow* window, TekGuiWindowData* window_data);
 exception tekGuiDrawWindow(const TekGuiWindow* window);

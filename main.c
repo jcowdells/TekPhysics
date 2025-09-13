@@ -322,6 +322,9 @@ exception run() {
     TekGuiWindow window = {};
     tekGuiCreateWindow(&window);
 
+    TekGuiWindow window2 = {};
+    tekGuiCreateWindow(&window2);
+
     TekGuiButton button = {};
     tekGuiCreateButton(&button);
 
@@ -522,6 +525,7 @@ exception run() {
         tekNotifyEntityMaterialChange();
         //glPolygonMode(GL_FRONT, GL_FILL);
         tekChainThrow(tekGuiDrawWindow(&window));
+        tekChainThrow(tekGuiDrawWindow(&window2));
 
         // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         tekChainThrow(tekDrawText(&depth_text, 10, 10));

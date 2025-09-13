@@ -19,6 +19,7 @@ static List tek_gl_load_funcs = {0, 0};
 static List tek_key_funcs = {0, 0};
 static List tek_mmove_funcs = {0, 0};
 static List tek_mbutton_funcs = {0, 0};
+static GLFWcursor* crosshair_cursor;
 
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
     if (!tek_fb_funcs.length) {
@@ -120,6 +121,16 @@ exception tekAddMouseButtonCallback(const TekMouseButtonCallback callback) {
     return SUCCESS;
 }
 
+void tekSetCursor(const flag cursor_mode) {
+    switch (cursor_mode) {
+    case CROSSHAIR_CURSOR:
+        glfwSetCursor(tek_window, crosshair_cursor);
+        break;
+    default:
+        glfwSetCursor(tek_window, NULL);
+    }
+}
+
 exception tekInit(const char* window_name, const int window_width, const int window_height) {
     // initialise glfw
     if (!glfwInit()) tekThrow(GLFW_EXCEPTION, "GLFW failed to initialise.");
@@ -143,6 +154,8 @@ exception tekInit(const char* window_name, const int window_width, const int win
     glfwSetKeyCallback(tek_window, tekManagerKeyCallback);
     glfwSetCursorPosCallback(tek_window, tekManagerMouseMoveCallback);
     glfwSetMouseButtonCallback(tek_window, tekManagerMouseButtonCallback);
+
+    crosshair_cursor = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
 
     // run all the callbacks for when opengl loaded.
     const ListItem* item;
@@ -189,6 +202,8 @@ exception tekDelete() {
     listDelete(&tek_key_funcs);
     listDelete(&tek_mmove_funcs);
     listDelete(&tek_mbutton_funcs);
+
+    glfwDestroyCursor(crosshair_cursor);
 
     // destroy the glfw window and context
     glfwDestroyWindow(tek_window);
