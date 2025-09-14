@@ -23,7 +23,7 @@ typedef struct TekGuiButtonCallbackData {
     } data;
 } TekGuiButtonCallbackData;
 
-typedef void(*TekGuiButtonCallback)(struct TekGuiButton* button_ptr, const TekGuiButtonCallbackData callback_data);
+typedef void(*TekGuiButtonCallback)(struct TekGuiButton* button_ptr, TekGuiButtonCallbackData callback_data);
 
 typedef struct TekGuiButton {
     uint hitbox_x;
@@ -38,4 +38,4 @@ exception tekGuiCreateButton(TekGuiButton* button);
 void tekGuiSetButtonPosition(TekGuiButton* button, uint x, uint y);
 void tekGuiSetButtonSize(TekGuiButton* button, uint width, uint height);
 exception tekGuiBringButtonToFront(const TekGuiButton* button);
-exception tekGuiDeleteButton(const TekGuiButton* button);
+void tekGuiDeleteButton(const TekGuiButton* button);

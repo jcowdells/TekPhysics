@@ -76,6 +76,8 @@ add_executable(
         tekgui/tekgui.c
         tekgui/button.c
         tekgui/button.h
+        tekgui/text_button.c
+        tekgui/text_button.h
 )
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${OpenBLAS_INCLUDE_DIR})

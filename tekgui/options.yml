@@ -16,3 +16,25 @@ window_defaults:
     b: 1.0
     a: 1.0
   title: "New Window"
+text_button_defaults:
+  x_pos: 200
+  y_pos: 200
+  width: 200
+  height: 50
+  border_width: 1
+  text_height: 20
+  background_colour:
+    r: 1.0
+    g: 0.0
+    b: 0.0
+    a: 0.5
+  selected_colour:
+    r: 1.0
+    g: 1.0
+    b: 1.0
+    a: 0.5
+  border_colour:
+    r: 1.0
+    g: 1.0
+    b: 1.0
+    a: 1.0

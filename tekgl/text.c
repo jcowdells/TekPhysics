@@ -13,7 +13,7 @@ uint text_shader_program_id = 0;
 
 void tekTextFramebufferCallback(const int width, const int height) {
     // when framebuffer changes size, change our projection matrix to match the new size
-    glm_ortho(0.0f, (float)width, 0.0f, (float)height, -1.0f, 1.0f, text_projection);
+    glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, text_projection);
 }
 
 exception tekGLLoadTextEngine() {
@@ -29,7 +29,7 @@ exception tekGLLoadTextEngine() {
     // create a projection matrix based on current size
     int width, height;
     tekGetWindowSize(&width, &height);
-    glm_ortho(0.0f, (float)width, 0.0f, (float)height, -1.0f, 1.0f, text_projection);
+    glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, text_projection);
 
     return SUCCESS;
 }
@@ -49,6 +49,10 @@ tek_init tekInitTextEngine() {
 }
 
 exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, TekText* tek_text) {
+    // make sure that these values are set to 0, as they are expected to be initialised in other calculations.
+    tek_text->width = 0;
+    tek_text->height = 0;
+
     // find the number of characters of text we are working with
     const size_t len_text = strlen(text);
 
@@ -62,7 +66,7 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
 
     // a pointer to where the glyphs should draw from
     float x = 0;
-    float y = 0;
+    float y = (float)size;
 
     // some constants for when drawing the glyphs; saves recasting and recalculating every time
     const float scale = (float)size / (float)font->original_size;
@@ -71,8 +75,10 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
     // for each character of text
     for (size_t i = 0; i < len_text; i++) {
         if (text[i] == '\n') {
+            tek_text->width = fmaxf(tek_text->width, x);
             x = 0;
-            y -= (float)size;
+            y += (float)size;
+            tek_text->height += (float)size;
             continue;
         }
 
@@ -85,11 +91,11 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
 
         // calculate the x and y position of top-left based on glyph data (some glyphs start in different places, for example 'I' is higher than '.')
         const float x_pos  = x + (float)glyph.bearing_x * scale;
-        const float y_pos  = y - (glyph_height - (float)glyph.bearing_y) * scale;
+        const float y_pos  = y + (glyph_height - (float)glyph.bearing_y) * scale;
 
         // calculate the screen size of the glyph by scaling it
         const float width  = glyph_width * scale;
-        const float height = glyph_height * scale;
+        const float height = -glyph_height * scale;
 
         // get the pixel coordinates of where the glyph can be found in the texture atlas
         const float atlas_x = (float)glyph.atlas_x;
@@ -126,8 +132,11 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
         x += (float)(glyph.advance >> 6) * scale;
     }
 
+    tek_text->width = fmaxf(tek_text->width, x);
+    tek_text->height += (float)size;
+
     // define the vertex data layout: 2 floats for position, 2 floats for texture coordinates
-    const uint layout[] = {2, 2};
+    const int layout[] = {2, 2};
 
     // create a mesh for the glyph quads and texture coordinates
     tekChainThrow(tekCreateMesh(vertices, (long)len_text * 16, indices, (long)len_text * 6, layout, 2, &tek_text->mesh));

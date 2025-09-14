@@ -86,7 +86,7 @@ static void tekGuiButtonMousePosCallback(double x, double y) {
             index++;
             continue;
         }
-        button->callback(button, callback_data);
+        if (button->callback) button->callback(button, callback_data);
         listRemoveItem(&button_dehover_list, index, NULL);
     }
 
@@ -98,7 +98,7 @@ static void tekGuiButtonMousePosCallback(double x, double y) {
 
         if (!top_button_callbacked && hitbox_check) {
             callback_data.type = TEK_GUI_BUTTON_MOUSE_TOUCHING_CALLBACK;
-            button->callback(button, callback_data);
+            if (button->callback) button->callback(button, callback_data);
             top_button_callbacked = 1;
         }
 
@@ -111,7 +111,7 @@ static void tekGuiButtonMousePosCallback(double x, double y) {
         if (hitbox_check) {
             callback_data.type = TEK_GUI_BUTTON_MOUSE_ENTER_CALLBACK;
             listAddItem(&button_dehover_list, button);
-            button->callback(button, callback_data);
+            if (button->callback) button->callback(button, callback_data);
             return;
         }
     });
@@ -159,9 +159,7 @@ exception tekGuiBringButtonToFront(const TekGuiButton* button) {
     return SUCCESS;
 }
 
-exception tekGuiDeleteButton(const TekGuiButton* button) {
+void tekGuiDeleteButton(const TekGuiButton* button) {
     const uint remove_index = tekGuiGetButtonIndex(button);
-    tekChainThrow(listRemoveItem(&button_list, remove_index, NULL));
-
-    return SUCCESS;
+    listRemoveItem(&button_list, remove_index, NULL);
 }

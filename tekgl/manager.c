@@ -157,6 +157,8 @@ exception tekInit(const char* window_name, const int window_width, const int win
 
     crosshair_cursor = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
 
+    tekChainThrow(tekCreateFreeType());
+
     // run all the callbacks for when opengl loaded.
     const ListItem* item;
     foreach(item, (&tek_gl_load_funcs), {
@@ -187,7 +189,7 @@ exception tekUpdate() {
     return SUCCESS;
 }
 
-exception tekDelete() {
+void tekDelete() {
     // run all cleanup functions
     const ListItem* item = 0;
     foreach(item, (&tek_delete_funcs), {
@@ -203,12 +205,13 @@ exception tekDelete() {
     listDelete(&tek_mmove_funcs);
     listDelete(&tek_mbutton_funcs);
 
+    tekDeleteFreeType();
+
     glfwDestroyCursor(crosshair_cursor);
 
     // destroy the glfw window and context
     glfwDestroyWindow(tek_window);
     glfwTerminate();
-    return SUCCESS;
 }
 
 void tekGetWindowSize(int* window_width, int* window_height) {

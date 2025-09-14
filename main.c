@@ -36,6 +36,7 @@
 #include "tekgui/tekgui.h"
 #include "tekgui/window.h"
 #include "tekgui/button.h"
+#include "tekgui/text_button.h"
 
 #define printException(x) tekLog(x)
 
@@ -205,7 +206,6 @@ exception run() {
         threadQueueDelete(&event_queue);
     });
 
-    tekChainThrow(tekCreateFreeType());
     tekChainThrow(tekCreateBitmapFont("../res/verdana_bold.ttf", 0, 64, &depth_font));
     text_init = 1;
     updateDepthMessage();
@@ -329,6 +329,9 @@ exception run() {
 
     TekGuiButton button = {};
     tekGuiCreateButton(&button);
+
+    TekGuiTextButton text_button = {};
+    tekGuiCreateTextButton("H3ll0\nWorld", &text_button);
 
     while (tekRunning()) {
         while (recvState(&state_queue, &state) == SUCCESS) {
@@ -529,14 +532,15 @@ exception run() {
         // tekChainThrow(tekGuiDrawWindow(&window));
         // tekChainThrow(tekGuiDrawWindow(&window2));
 
+        tekChainThrow(tekGuiDrawTextButton(&text_button));
+
         tekChainThrow(tekGuiDrawAllWindows());
 
-        // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         tekChainThrow(tekDrawText(&depth_text, 10, 10));
 
         int window_width, window_height;
         tekGetWindowSize(&window_width, &window_height);
-        tekChainThrow(tekDrawText(&version_text, (float)(window_width - 185), 8.0f));
+        tekChainThrow(tekDrawText(&version_text, (float)(window_width - 185), (float)window_height - 8.0f));
 
         // tekChainThrow(tekBindMaterial(&material));
         // tekChainThrow(tekBindMaterialMatrix(&material, camera.projection, PROJECTION_MATRIX_DATA));
@@ -556,8 +560,7 @@ exception run() {
     vectorDelete(&colliders);
     vectorDelete(&collider_stack);
     tekDeleteMaterial(&translucent);
-    tekDeleteFreeType();
-    tekChainThrow(tekDelete());
+    tekDelete();
     return SUCCESS;
 }
 

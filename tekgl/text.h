@@ -5,7 +5,7 @@
 #include "mesh.h"
 
 typedef struct TekText {
-    double x, y;
+    float width, height;
     TekMesh mesh;
     TekBitmapFont* font;
 } TekText;
