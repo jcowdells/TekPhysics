@@ -357,41 +357,35 @@ exception tekBindMaterial(const TekMaterial* material) {
     return SUCCESS;
 }
 
-//TODO: make a macro for these
-
-exception tekBindMaterialVec3(const TekMaterial* material, vec3 vector, flag vec3_type) {
-    if (vec3_type != CAMERA_POSITION_DATA)
-        tekThrow(FAILURE, "Invalid vec3 type.");
+flag tekMaterialHasUniformType(TekMaterial* material, const flag uniform_type) {
     const TekMaterialUniform* uniform = 0;
     for (uint i = 0; i < material->num_uniforms; i++) {
         const TekMaterialUniform* loop_uniform = material->uniforms[i];
-        if (loop_uniform->type == vec3_type) {
-            uniform = loop_uniform;
-            break;
+        if (loop_uniform->type == uniform_type) {
+            return 1;
         }
     }
-    if (!uniform)
-        tekThrow(FAILURE, "Material does not have such a vec3 uniform.");
-    tekChainThrow(tekShaderUniformVec3(material->shader_program_id, uniform->name, vector));
-    return SUCCESS;
+    return 0;
 }
 
-exception tekBindMaterialMatrix(const TekMaterial* material, mat4 matrix, flag matrix_type) {
-    if ((matrix_type != MODEL_MATRIX_DATA) && (matrix_type != VIEW_MATRIX_DATA) && (matrix_type != PROJECTION_MATRIX_DATA))
-        tekThrow(FAILURE, "Invalid matrix type.");
-    const TekMaterialUniform* uniform = 0;
-    for (uint i = 0; i < material->num_uniforms; i++) {
-        const TekMaterialUniform* loop_uniform = material->uniforms[i];
-        if (loop_uniform->type == matrix_type) {
-            uniform = loop_uniform;
-            break;
-        }
-    }
-    if (!uniform)
-        tekThrow(FAILURE, "Material does not have such a matrix uniform.");
-    tekChainThrow(tekShaderUniformMat4(material->shader_program_id, uniform->name, matrix));
-    return SUCCESS;
-}
+#define MATERIAL_BIND_UNIFORM_FUNC(func_name, uniform_type, bind_func) \
+exception func_name(const TekMaterial* material, uniform_type uniform_data, flag uniform_type) { \
+    const TekMaterialUniform* uniform; \
+    for (uint i = 0; i < material->num_uniforms; i++) { \
+        const TekMaterialUniform* loop_uniform = material->uniforms[i]; \
+        if (loop_uniform->type == uniform_type) { \
+            uniform = loop_uniform; \
+            break; \
+        } \
+    } \
+    if (!uniform) \
+        tekThrow(FAILURE, "Material does not have such a uniform."); \
+    tekChainThrow(bind_func(material->shader_program_id, uniform->name, uniform_data)); \
+    return SUCCESS; \
+} \
+
+MATERIAL_BIND_UNIFORM_FUNC(tekBindMaterialVec3, vec3, tekShaderUniformVec3);
+MATERIAL_BIND_UNIFORM_FUNC(tekBindMaterialMatrix, mat4, tekShaderUniformMat4);
 
 void tekDeleteMaterial(const TekMaterial* material) {
     for (uint i = 0; i < material->num_uniforms; i++)

@@ -168,6 +168,17 @@ exception tekInit(const char* window_name, const int window_width, const int win
 
     tekManagerFramebufferCallback(tek_window, window_width, window_height);
 
+    // dont render stuff that is behind other objects.
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    // dont render stuff that is facing the wrong way
+    glEnable(GL_CULL_FACE);
+
+    // blend translucent colours nicely.
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     return SUCCESS;
 }
 

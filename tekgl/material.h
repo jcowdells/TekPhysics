@@ -24,6 +24,7 @@ typedef struct TekMaterial {
 
 exception tekCreateMaterial(const char* filename, TekMaterial* material);
 exception tekBindMaterial(const TekMaterial* material);
-exception tekBindMaterialVec3(const TekMaterial* material, vec3 vector, flag vec3_type);
-exception tekBindMaterialMatrix(const TekMaterial* material, mat4 matrix, flag matrix_type);
+flag tekMaterialHasUniformType(TekMaterial* material, flag uniform_type);
+exception tekBindMaterialVec3(const TekMaterial* material, vec3 uniform_data, flag uniform_type);
+exception tekBindMaterialMatrix(const TekMaterial* material, mat4 uniform_data, flag uniform_type);
 void tekDeleteMaterial(const TekMaterial* material);

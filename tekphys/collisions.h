@@ -14,7 +14,7 @@
 
 #define NUM_ITERATIONS 32
 
-#define BAUMGARTE_BETA 0.05f
+#define BAUMGARTE_BETA 0.1f
 
 typedef struct TekCollisionManifold {
     TekBody* bodies[2];
