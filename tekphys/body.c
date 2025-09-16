@@ -306,41 +306,6 @@ pair[1] = _temp_node1->data.node.right; \
 tekChainThrow(vectorAddItem(&collision_stack, pair)); \
 
 /**
- * Replace the contents of an existing vector with the contact points between two bodies.
- * @param body_a One of the bodies to test.
- * @param body_b The other body to test.
- * @param contact_points An existing vector which will be used to store the contact points. Anything already in the vector will be overwritten, not appended to.
- * @note Not thread safe.
- */
-exception tekBodyGetContactPoints(const TekBody* body_a, const TekBody* body_b, Vector* contact_points) {
-    // if (!collision_stack_init)
-    //     tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for collision stack.");
-    // collision_stack.length = 0; // reset length so we can restart the collision stack.
-    // TekColliderNode* pair[2];
-    // pair[0] = body_a->collider;
-    // pair[1] = body_b->collider;
-    // tekChainThrow(vectorAddItem(&collision_stack, pair));
-    // while (vectorPopItem(&collision_stack, pair)) {
-    //     vec3 centre_a, centre_b;
-    //     glm_mat4_mulv3(body_a->transform, pair[0]->centre, 1.0f, centre_a);
-    //     glm_mat4_mulv3(body_b->transform, pair[1]->centre, 1.0f, centre_b);
-    //     if (!tekSphereCollision(centre_a, padair[0]->radius, centre_b, pair[1]->radius))
-    //         continue;
-    //
-    //     if ((pair[0]->type == COLLIDER_LEAF) && (pair[1]->type == COLLIDER_LEAF)) {
-    //         // TODO: triangle-triangle collision.
-    //     } else if (pair[0]->type == COLLIDER_LEAF) {
-    //         stackAddLeafPair(1);
-    //     } else if (pair[1]->type == COLLIDER_LEAF) {
-    //         stackAddLeafPair(0);
-    //     } else {
-    //         stackAddNodePair();
-    //     }
-    // }
-    return SUCCESS;
-}
-
-/**
  * @brief Delete a TekBody by freeing the vertices that were allocated.
  * @param body The body to delete.
  */
