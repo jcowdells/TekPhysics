@@ -6,9 +6,10 @@
 #include "../tekgl/entity.h"
 #include "cglm/ivec3.h"
 
-#define QUIT_EVENT      0
-#define KEY_EVENT       1
-#define MOUSE_POS_EVENT 2
+#define QUIT_EVENT        0
+#define KEY_EVENT         1
+#define MOUSE_POS_EVENT   2
+#define MODE_CHANGE_EVENT 3
 
 #define MESSAGE_STATE       0
 #define EXCEPTION_STATE     1
@@ -17,10 +18,6 @@
 #define CAMERA_MOVE_STATE   4
 #define CAMERA_ROTATE_STATE 5
 #define ENTITY_UPDATE_STATE 6
-#define __COLLIDER_STATE    7 //TODO: remove
-#define __TRI_PAIR_STATE    8 //TODO: remove
-#define __TRI_BFFR_STATE    9 // TODO: remove both!!!
-#define __TRI_BCLR_STATE   10
 
 typedef struct TekEvent {
     flag type;
@@ -36,6 +33,7 @@ typedef struct TekEvent {
             double x;
             double y;
         } mouse_move_input;
+        flag mode;
     } data;
 } TekEvent;
 

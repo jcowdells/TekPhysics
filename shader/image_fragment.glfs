@@ -1,0 +1,11 @@
+#version 330 core
+
+in vec2 f_texture_uv;
+
+uniform sampler2D texture_sampler;
+
+out vec4 color;
+
+void main() {
+    color = texture(texture_sampler, f_texture_uv);
+}

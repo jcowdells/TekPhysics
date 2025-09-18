@@ -2,6 +2,7 @@
 
 #include "../core/exception.h"
 #include "../tekgl/mesh.h"
+#include "../tekgl/texture.h"
 #include <cglm/cglm.h>
 
 typedef struct TekGuiLine {
@@ -18,10 +19,19 @@ typedef struct TekGuiOval {
     vec4 color;
 } TekGuiOval;
 
-exception tekCreateLine(vec2 point_a, vec2 point_b, float thickness, vec4 color, TekGuiLine* line);
-exception tekDrawLine(const TekGuiLine* line);
-void tekDeleteLine(const TekGuiLine* line);
+typedef struct TekGuiImage {
+    TekMesh mesh;
+    uint texture_id;
+} TekGuiImage;
 
-exception tekCreateOval(vec2 point_a, vec2 point_b, float thickness, flag fill, vec4 color, TekGuiOval* oval);
-exception tekDrawOval(const TekGuiOval* oval);
-void tekDeleteOval(const TekGuiOval* oval);
+exception tekGuiCreateLine(vec2 point_a, vec2 point_b, float thickness, vec4 color, TekGuiLine* line);
+exception tekGuiDrawLine(const TekGuiLine* line);
+void tekGuiDeleteLine(const TekGuiLine* line);
+
+exception tekGuiCreateOval(vec2 point_a, vec2 point_b, float thickness, flag fill, vec4 color, TekGuiOval* oval);
+exception tekGuiDrawOval(const TekGuiOval* oval);
+void tekGuiDeleteOval(const TekGuiOval* oval);
+
+exception tekGuiCreateImage(vec2 point_a, vec2 point_b, const char* texture_filename, TekGuiImage* image);
+exception tekGuiDrawImage(const TekGuiImage* image);
+void tekGuiDeleteImage(const TekGuiImage* image);

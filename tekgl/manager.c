@@ -12,6 +12,7 @@
 static GLFWwindow* tek_window = 0;
 static int tek_window_width   = 0;
 static int tek_window_height  = 0;
+static vec3 tek_window_colour = { 0.0f, 0.0f, 0.0f };
 
 static List tek_fb_funcs = {0, 0};
 static List tek_delete_funcs = {0, 0};
@@ -131,6 +132,10 @@ void tekSetCursor(const flag cursor_mode) {
     }
 }
 
+void tekSetWindowColour(vec3 colour) {
+    glm_vec3_copy(colour, tek_window_colour);
+}
+
 exception tekInit(const char* window_name, const int window_width, const int window_height) {
     // initialise glfw
     if (!glfwInit()) tekThrow(GLFW_EXCEPTION, "GLFW failed to initialise.");
@@ -196,6 +201,7 @@ exception tekUpdate() {
 
     // clear framebuffer for next draw call
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClearColor(tek_window_colour[0], tek_window_colour[1], tek_window_colour[2], 1.0f);
 
     return SUCCESS;
 }

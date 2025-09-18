@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cglm/ivec3.h>
+
 #include "../tekgl.h"
 #include "../core/exception.h"
 
@@ -27,6 +29,7 @@ void tekGetWindowSize(int* window_width, int* window_height);
 
 void tekSetMouseMode(flag mouse_mode);
 void tekSetCursor(flag cursor_mode);
+void tekSetWindowColour(vec3 colour);
 
 exception tekAddFramebufferCallback(TekFramebufferCallback callback);
 exception tekAddKeyCallback(TekKeyCallback callback);

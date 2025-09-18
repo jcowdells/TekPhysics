@@ -38,9 +38,11 @@
 #include "tekgui/button.h"
 #include "tekgui/text_button.h"
 
-#define MODE_MAIN_MENU 0
-#define MODE_BUILDER   1
-#define MODE_RUNNER    2
+#define WINDOW_WIDTH  640
+#define WINDOW_HEIGHT 480
+
+flag mode = MODE_MAIN_MENU;
+flag next_mode = -1;
 
 float width, height;
 mat4 perp_projection;
@@ -79,15 +81,108 @@ void tekMainMousePosCallback(const double x, const double y) {
     pushEvent(&event_queue, event);
 }
 
+static void tekStartButtonCallback(TekGuiTextButton* button, TekGuiButtonCallbackData callback_data) {
+    if (mode != MODE_MAIN_MENU)
+        return;
+
+    if (callback_data.type != TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK)
+        return;
+
+    if (callback_data.data.mouse_button.action != GLFW_RELEASE || callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT)
+        return;
+
+    mode = MODE_RUNNER;
+}
+
+static exception tekCreateMainMenu(const int window_width, const int window_height, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo) {
+    tekChainThrow(tekGuiCreateTextButton("Start", start_button));
+    tekChainThrow(tekGuiSetTextButtonPosition(start_button, window_width / 2 - 100, window_height / 2 - 50));
+    start_button->text_height = 50;
+    start_button->callback = tekStartButtonCallback;
+    const float centre_x = (float)window_width / 2;
+    const float centre_y = 100.0f;
+    const float half_width = 150;
+    const float half_height = 25;
+    tekChainThrow(tekGuiCreateImage(
+        (vec2){centre_x - half_width, centre_y - half_height},
+        (vec2){centre_x + half_width, centre_y + half_height},
+        "../res/tekphysics.png",
+        tekphysics_logo
+    ));
+    return SUCCESS;
+}
+
+static exception tekDrawMainMenu(const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
+    tekSetWindowColour((vec3){0.3f, 0.3f, 0.3f});
+    tekGuiDrawTextButton(start_button);
+    tekGuiDrawImage(tekphysics_logo);
+    return SUCCESS;
+}
+
+static void tekDeleteMainMenu(const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
+    tekGuiDeleteTextButton(start_button);
+    tekGuiDeleteImage(tekphysics_logo);
+}
+
+static exception tekCreateMenu(TekText* version_text, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo) {
+    // create version font + text.
+    tekChainThrow(tekCreateBitmapFont("../res/verdana_bold.ttf", 0, 64, &depth_font));
+    tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, &depth_font, version_text));
+
+    tekChainThrow(tekCreateMainMenu(WINDOW_WIDTH, WINDOW_HEIGHT, start_button, tekphysics_logo));
+    return SUCCESS;
+}
+
+static exception tekChangeMenuMode(const TekText* version_text, const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
+    TekEvent event = {};
+    event.type = MODE_CHANGE_EVENT;
+    event.data.mode = next_mode;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+
+
+    mode = next_mode;
+    next_mode = -1;
+    return SUCCESS;
+}
+
+static exception tekDrawMenu(const TekText* version_text, const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
+    int window_width, window_height;
+    tekGetWindowSize(&window_width, &window_height);
+
+    if (next_mode != -1) {
+        tekChangeMenuMode(version_text, start_button, tekphysics_logo);
+    }
+
+    switch (mode) {
+    case MODE_MAIN_MENU:
+        tekChainThrow(tekDrawMainMenu(start_button, tekphysics_logo));
+        break;
+    case MODE_RUNNER:
+        break;
+    case MODE_BUILDER:
+        break;
+    default:
+        break;
+    }
+    tekChainThrow(tekDrawText(version_text, (float)window_width - 185.0f, (float)window_height - 20.0f));
+    return SUCCESS;
+}
+
+static void tekDeleteMenu(const TekText* version_text, const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
+    tekDeleteText(version_text);
+    tekDeleteMainMenu(start_button, tekphysics_logo);
+}
+
 #define tekRunCleanup() \
 pushEvent(&event_queue, quit_event); \
+tekDeleteMenu(&version_text, &start_button, &tekphysics_logo); \
 vectorDelete(&entities); \
-tekDeleteText(&version_text); \
 tekDelete() \
 
 exception run() {
     // set up GLFW window and other utilities.
-    tekChainThrow(tekInit("TekPhysics", 640, 480));
+    tekChainThrow(tekInit("TekPhysics", WINDOW_WIDTH, WINDOW_HEIGHT));
 
     // set up callbacks for window.
     tekChainThrowThen(tekAddKeyCallback(tekMainKeyCallback), {
@@ -97,24 +192,13 @@ exception run() {
         tekDelete();
     });
 
-    // create version font + text.
-    tekChainThrowThen(tekCreateBitmapFont("../res/verdana_bold.ttf", 0, 64, &depth_font), {
-        tekDelete();
-    });
-    TekText version_text;
-    tekChainThrowThen(tekCreateText("TekPhysics vI.D.K Alpha", 16, &depth_font, &version_text), {
-        tekDelete();
-    });
-
     // create state queue and thread queue, allow to communicate with thread.
     ThreadQueue state_queue = {};
     tekChainThrowThen(threadQueueCreate(&event_queue, 4096), {
-        tekDeleteText(&version_text);
         tekDelete();
     });
     tekChainThrowThen(threadQueueCreate(&state_queue, 4096), {
         threadQueueDelete(&event_queue);
-        tekDeleteText(&version_text);
         tekDelete();
     });
 
@@ -123,7 +207,6 @@ exception run() {
     tekChainThrowThen(vectorCreate(0, sizeof(TekEntity), &entities), {
         threadQueueDelete(&state_queue);
         threadQueueDelete(&event_queue);
-        tekDeleteText(&version_text);
         tekDelete();
     });
 
@@ -135,7 +218,6 @@ exception run() {
         vectorDelete(&entities);
         threadQueueDelete(&event_queue);
         threadQueueDelete(&state_queue);
-        tekDeleteText(&version_text);
         tekDelete();
     });
 
@@ -145,13 +227,27 @@ exception run() {
     const vec3 light_color = {0.4f, 0.4f, 0.4f};
     const vec3 light_position = {4.0f, 12.0f, 0.0f};
 
+    TekText version_text = {};
+    TekGuiTextButton start_button = {};
+    TekGuiImage tekphysics_logo = {};
+
+    tekChainThrowThen(tekCreateMenu(
+        &version_text,
+        &start_button, &tekphysics_logo
+    ), {
+        vectorDelete(&entities);
+        threadQueueDelete(&event_queue);
+        threadQueueDelete(&state_queue);
+        tekDelete();
+    });
+
     // create the camera struct
     TekCamera camera = {};
     tekChainThrowThen(tekCreateCamera(&camera, camera_position, camera_rotation, 1.2f, 0.1f, 100.0f), {
         tekRunCleanup();
     });
 
-    tekSetMouseMode(MOUSE_MODE_CAMERA);
+    // tekSetMouseMode(MOUSE_MODE_CAMERA);
 
     flag force_exit = 0;
     TekState state = {};
@@ -208,16 +304,29 @@ exception run() {
 
         if (force_exit) break;
 
-        for (uint i = 0; i < entities.length; i++) {
-            TekEntity* entity;
-            tekChainThrow(vectorGetItemPtr(&entities, i, &entity));
-            if (entity->mesh == 0) continue;
-            tekChainThrow(tekDrawEntity(entity, &camera));
+        switch (mode) {
+        case MODE_MAIN_MENU:
+            break;
+        case MODE_RUNNER:
+            for (uint i = 0; i < entities.length; i++) {
+                TekEntity* entity;
+                tekChainThrowThen(vectorGetItemPtr(&entities, i, &entity), { tekRunCleanup(); });
+                if (entity->mesh == 0) continue;
+                tekChainThrowThen(tekDrawEntity(entity, &camera), { tekRunCleanup(); });
+            }
+            break;
+        case MODE_BUILDER:
+            break;
+        default:
+            break;
         }
 
-        int window_width, window_height;
-        tekGetWindowSize(&window_width, &window_height);
-        tekChainThrow(tekDrawText(&version_text, (float)(window_width - 185), (float)window_height - 8.0f));
+        tekChainThrowThen(tekDrawMenu(
+            &version_text,
+            &start_button, &tekphysics_logo
+        ), {
+            tekRunCleanup();
+        });
 
         tekChainThrow(tekUpdate());
     }

@@ -24,15 +24,15 @@ text_button_defaults:
   border_width: 1
   text_height: 20
   background_colour:
-    r: 1.0
-    g: 0.0
-    b: 0.0
-    a: 0.5
+    r: 0.4
+    g: 0.8
+    b: 0.8
+    a: 1.0
   selected_colour:
-    r: 1.0
+    r: 0.8
     g: 1.0
     b: 1.0
-    a: 0.5
+    a: 1.0
   border_colour:
     r: 1.0
     g: 1.0

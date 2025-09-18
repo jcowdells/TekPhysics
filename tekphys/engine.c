@@ -217,11 +217,6 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
         tekEngineCreateBodyCleanup;
     });
 
-    state.type = __COLLIDER_STATE;
-    state.data.collider = body.collider;
-    tprint("Pushing collider: %p\n", body.collider);
-    pushState(state_queue, state);
-
     if (object_id)
         *object_id = state.object_id;
     return SUCCESS;
@@ -327,6 +322,7 @@ static void tekEngine(void* args) {
     clock_gettime(CLOCK_MONOTONIC, &engine_time);
     flag running = 1;
     uint counter = 0;
+    flag mode = 0;
 
     while (running) {
         TekEvent event = {};
@@ -380,6 +376,9 @@ static void tekEngine(void* args) {
                 delta_my = event.data.mouse_move_input.y - prev_my;
 
                 mouse_moving = 1;
+                break;
+            case MODE_CHANGE_EVENT:
+                mode = event.data.mode;
                 break;
             default:
                 break;
