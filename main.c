@@ -38,7 +38,9 @@
 #include "tekgui/button.h"
 #include "tekgui/text_button.h"
 
-#define printException(x) tekLog(x)
+#define MODE_MAIN_MENU 0
+#define MODE_BUILDER   1
+#define MODE_RUNNER    2
 
 float width, height;
 mat4 perp_projection;
@@ -59,21 +61,12 @@ void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
 
 void tekMainKeyCallback(const int key, const int scancode, const int action, const int mods) {
     TekEvent event = {};
-
-    if ((key == GLFW_KEY_EQUAL) && (action == GLFW_RELEASE) && (depth < 100)) {
-        depth++;
-        updateDepthMessage();
-    }
-    if ((key == GLFW_KEY_MINUS) && (action == GLFW_RELEASE) && (depth > 0)) {
-        depth--;
-        updateDepthMessage();
-    }
-
     event.type = KEY_EVENT;
     event.data.key_input.key = key;
     event.data.key_input.scancode = scancode;
     event.data.key_input.action = action;
     event.data.key_input.mods = mods;
+
     pushEvent(&event_queue, event);
 }
 
@@ -82,6 +75,7 @@ void tekMainMousePosCallback(const double x, const double y) {
     event.type = MOUSE_POS_EVENT;
     event.data.mouse_move_input.x = x;
     event.data.mouse_move_input.y = y;
+
     pushEvent(&event_queue, event);
 }
 
@@ -159,6 +153,7 @@ exception run() {
 
     tekSetMouseMode(MOUSE_MODE_CAMERA);
 
+    flag force_exit = 0;
     TekState state = {};
     while (tekRunning()) {
         while (recvState(&state_queue, &state) == SUCCESS) {
@@ -170,6 +165,9 @@ exception run() {
                 }
                 break;
             case EXCEPTION_STATE:
+                threadQueueDelete(&event_queue);
+                threadQueueDelete(&state_queue);
+                force_exit = 1;
                 tekChainThrowThen(state.data.exception, { tekRunCleanup(); });
                 break;
             case ENTITY_CREATE_STATE:
@@ -204,7 +202,11 @@ exception run() {
                 tekSetCameraRotation(&camera, camera_rotation);
                 break;
             }
+
+            if (force_exit) break;
         }
+
+        if (force_exit) break;
 
         for (uint i = 0; i < entities.length; i++) {
             TekEntity* entity;

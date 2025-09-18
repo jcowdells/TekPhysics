@@ -142,9 +142,6 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
     pushState(state_queue, exception_state);
 }
 
-#define threadThrow(exception_code, exception_message) { const exception __thread_exception = exception_code; if (__thread_exception) { tekSetException(__thread_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); threadExcept(state_queue, __thread_exception); return; } }
-#define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); threadExcept(state_queue, __thread_exception); return; } }
-
 #define tekEngineCreateBodyCleanup \
     tekDeleteBody(&body); \
     if (mesh_copy) free(mesh_copy); \
@@ -296,6 +293,9 @@ struct TekEngineArgs {
     double phys_period;
 };
 
+#define threadThrow(exception_code, exception_message) { const exception __thread_exception = exception_code; if (__thread_exception) { tekSetException(__thread_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); threadExcept(state_queue, __thread_exception); goto tek_engine_cleanup; } }
+#define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); threadExcept(state_queue, __thread_exception); goto tek_engine_cleanup; } }
+
 /**
  * @brief The main physics thread procedure, will run in parallel to the graphics thread. Responsible for logic, has a loop running at fixed time interval.
  * @param args Required for use with pthread library. Used to pass TekEngineArgs pointer.
@@ -307,13 +307,8 @@ static void tekEngine(void* args) {
     const double phys_period = engine_args->phys_period;
     free(args);
 
-    tekBodyInit();
-
     Vector bodies = {};
     threadChainThrow(vectorCreate(0, sizeof(TekBody), &bodies));
-
-    Vector contact_buffer = {};
-    threadChainThrow(vectorCreate(0, sizeof(TekCollisionManifold), &contact_buffer));
 
     Queue unused_ids = {};
     queueCreate(&unused_ids);
@@ -332,14 +327,8 @@ static void tekEngine(void* args) {
     clock_gettime(CLOCK_MONOTONIC, &engine_time);
     flag running = 1;
     uint counter = 0;
-    TekState triangle_state = {};
-    triangle_state.type = __TRI_PAIR_STATE;
-    triangle_state.data.triangle_pair.vertices = malloc(6 * sizeof(vec3));
-    vec3* triangles_vertices = (vec3*)triangle_state.data.triangle_pair.vertices;
-    int triangles_index = 0;
+
     while (running) {
-        triangle_state.type = __TRI_BCLR_STATE;
-        threadChainThrow(pushState(state_queue, triangle_state));
         TekEvent event = {};
         while (recvEvent(event_queue, &event) == SUCCESS) {
             switch (event.type) {
@@ -347,7 +336,7 @@ static void tekEngine(void* args) {
                 // end the loop
                 running = 0;
 
-                // free the thread queues, as they wont be needed any more
+                // free the thread queues, as they won't be needed any more
                 threadQueueDelete(event_queue);
                 threadQueueDelete(state_queue);
                 break;
@@ -377,10 +366,6 @@ static void tekEngine(void* args) {
                     vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
                     threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/rad1.tmsh", "../res/material.tmat",
                                                          10.0f, position, cube_rotation, cube_scale, 0));
-                }
-                if ((event.data.key_input.key >= GLFW_KEY_1) && (event.data.key_input.key <= GLFW_KEY_7) && (event.data.key_input.action == GLFW_RELEASE)) {
-                    triangles_index = event.data.key_input.key - GLFW_KEY_1;
-                    triangle_state.object_id = (uint)triangles_index;
                 }
                 break;
             case MOUSE_POS_EVENT:
@@ -462,20 +447,6 @@ static void tekEngine(void* args) {
             }
         }
 
-        if (triangles_index != 6) {
-            triangle_state.type =  __TRI_PAIR_STATE;
-            glm_vec3_sub(position, (vec3){0.0f, 0.1f, 0.0f}, triangles_vertices[triangles_index]);
-
-            vec3 swap_buffer[6];
-            memcpy(swap_buffer, triangles_vertices, 6 * sizeof(vec3));
-
-            flag collision;
-            //threadChainThrow(tekCheckTriangleCollision(swap_buffer, swap_buffer + 3, &collision));
-            triangle_state.data.triangle_pair.collision = collision;
-
-            pushState(state_queue, triangle_state);
-        }
-
         if (cam_pos_changed) {
             threadChainThrow(tekUpdateCamPos(state_queue, position));
             cam_pos_changed = 0;
@@ -492,16 +463,16 @@ static void tekEngine(void* args) {
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &engine_time, NULL);
         counter++;
     }
+
+tek_engine_cleanup:
     for (uint i = 0; i < bodies.length; i++) {
         TekBody* loop_body;
         threadChainThrow(vectorGetItemPtr(&bodies, i, &loop_body));
         tekDeleteBody(loop_body);
     }
-    free(triangle_state.data.triangle_pair.vertices);
+
     vectorDelete(&bodies);
     queueDelete(&unused_ids);
-    tekBodyDelete();
-    printf("thread ended :(\n");
 }
 
 /**

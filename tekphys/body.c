@@ -7,20 +7,6 @@
 #include "../tekgl/manager.h"
 #include "collider.h"
 
-#define COLLISION_STACK_SIZE 128 /// initial size, can grow if needed.
-
-static flag collision_stack_init = 0;
-static Vector collision_stack = {};
-
-void tekBodyDelete() {
-    vectorDelete(&collision_stack);
-    collision_stack_init = 0;
-}
-
-void tekBodyInit() {
-    if (vectorCreate(COLLISION_STACK_SIZE, 2 * sizeof(TekColliderNode*), &collision_stack) == SUCCESS) collision_stack_init = 1;
-}
-
 /// Struct containing the volume and centre of a tetrahedron
 struct TetrahedronData {
     float volume;
@@ -269,41 +255,6 @@ void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse,
     // add change in angular velocity (angular acceleration * Δtime = Δangular velocity)
     glm_vec3_muladds(angular_acceleration, delta_time, body->angular_velocity);
 }
-
-/**
- * Test whether two spheres are colliding (intersecting) given their centres and radii.
- * @param centre_a The centre of the first sphere.
- * @param radius_a The radius of the first sphere.
- * @param centre_b The centre of the second sphere.
- * @param radius_b The radius of the second sphere.
- * @returns 1 if the spheres are intersecting, 0 if they are not.
- */
-static flag tekSphereCollision(vec3 centre_a, const float radius_a, vec3 centre_b, const float radius_b) {
-    // given two spheres, if the distance between the centres is less than the sum of radii, then there must be a collision.
-    // squaring both sides removes the need for a (costly) square root operation.
-    const float sum_radii = radius_a + radius_b;
-    return glm_vec3_distance2(centre_a, centre_b) <= sum_radii * sum_radii ? 1 : 0;
-}
-
-#define stackAddLeafPair(pair_index) \
-TekColliderNode* _temp_node = pair[pair_index]; \
-pair[pair_index] = _temp_node->data.node.left; \
-tekChainThrow(vectorAddItem(&collision_stack, pair)); \
-pair[pair_index] = _temp_node->data.node.right; \
-tekChainThrow(vectorAddItem(&collision_stack, pair)); \
-
-#define stackAddNodePair() \
-TekColliderNode* _temp_node0 = pair[0]; \
-pair[0] = _temp_node0->data.node.left; \
-tekChainThrow(vectorAddItem(&collision_stack, pair)); \
-pair[0] = _temp_node0->data.node.right; \
-tekChainThrow(vectorAddItem(&collision_stack, pair)); \
-pair[0] = _temp_node0; \
-TekColliderNode* _temp_node1 = pair[1]; \
-pair[1] = _temp_node1->data.node.left; \
-tekChainThrow(vectorAddItem(&collision_stack, pair)); \
-pair[1] = _temp_node1->data.node.right; \
-tekChainThrow(vectorAddItem(&collision_stack, pair)); \
 
 /**
  * @brief Delete a TekBody by freeing the vertices that were allocated.

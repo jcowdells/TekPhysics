@@ -39,6 +39,3 @@ void tekBodyAdvanceTime(TekBody* body, float delta_time);
 void tekDeleteBody(const TekBody* body);
 void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse, float delta_time);
 exception tekBodyGetContactPoints(const TekBody* body_a, const TekBody* body_b, Vector* contact_points);
-
-void tekBodyInit();
-void tekBodyDelete();
