@@ -172,33 +172,41 @@ static void tekGuiWindowUpdateButtonHitbox(TekGuiWindow* window) {
     window->title_button.hitbox_y = (uint)MAX(0, window->y_pos - (int)window_defaults.title_width);
 }
 
+static exception tekGuiWindowCreateTitleText(TekGuiWindow* window) {
+    const uint text_size = window->title_width * 4 / 5;
+    tekChainThrow(tekCreateText(window->title, text_size, tekGuiGetDefaultFont(), &window->title_text));
+    return SUCCESS;
+}
+
+static exception tekGuiWindowRecreateTitleText(TekGuiWindow* window) {
+    tekDeleteText(&window->title_text);
+    tekChainThrow(tekGuiWindowCreateTitleText(window));
+    return SUCCESS;
+}
+
 void tekGuiWindowTitleButtonCallback(TekGuiButton* button_ptr, TekGuiButtonCallbackData callback_data) {
     TekGuiWindow* window = (TekGuiWindow*)button_ptr->data;
     switch (callback_data.type) {
     case TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK:
         if (callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT) break;
         if (callback_data.data.mouse_button.action == GLFW_PRESS) {
-            printf("Press\n");
             window->being_dragged = 1;
             window->x_delta = window->x_pos - (int)callback_data.mouse_x;
             window->y_delta = window->y_pos - (int)callback_data.mouse_y;
             tekSetCursor(CROSSHAIR_CURSOR);
             tekGuiBringWindowToFront(window);
-            printf("Window mesh index: %u\n", window->mesh_index);
         } else if (callback_data.data.mouse_button.action == GLFW_RELEASE) {
-            printf("Release\n");
             window->being_dragged = 0;
             tekSetCursor(DEFAULT_CURSOR);
         }
         break;
     case TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK:
-        printf("Leave\n");
         window->being_dragged = 0;
         tekSetCursor(DEFAULT_CURSOR);
         break;
     case TEK_GUI_BUTTON_MOUSE_TOUCHING_CALLBACK:
         if (window->being_dragged) {
-            printf("Drag\n");
+            window->being_dragged = 1;
             window->x_pos = (int)callback_data.mouse_x + window->x_delta;
             window->y_pos = (int)callback_data.mouse_y + window->y_delta;
             tekGuiWindowUpdateButtonHitbox(window);
@@ -208,6 +216,21 @@ void tekGuiWindowTitleButtonCallback(TekGuiButton* button_ptr, TekGuiButtonCallb
     default:
         break;
     }
+}
+
+static exception tekGuiSetWindowTitleBuffer(TekGuiWindow* window, const char* title) {
+    const uint len_title = strlen(window_defaults.title) + 1;
+    window->title = (char*)malloc(len_title * sizeof(char));
+    if (!window->title)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for title.");
+    memcpy(window->title, title, len_title);
+    return SUCCESS;
+}
+
+exception tekGuiSetWindowTitle(TekGuiWindow* window, const char* title) {
+    tekChainThrow(tekGuiSetWindowTitleBuffer(window, title));
+    tekChainThrow(tekGuiWindowRecreateTitleText(window));
+    return SUCCESS;
 }
 
 exception tekGuiCreateWindow(TekGuiWindow* window) {
@@ -223,21 +246,28 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     window->border_width = window_defaults.border_width;
     glm_vec4_copy(window_defaults.background_colour, window->background_colour);
     glm_vec4_copy(window_defaults.border_colour, window->border_colour);
+    glm_vec4_copy(window_defaults.title_colour, window->title_colour);
 
-    tekGuiCreateButton(&window->title_button);
+    // create the window title char buffer and the corresponding text mesh.
+    tekChainThrow(tekGuiSetWindowTitleBuffer(window, window_defaults.title));
+    tekChainThrow(tekGuiWindowCreateTitleText(window));
+
+    tekChainThrow(tekGuiCreateButton(&window->title_button));
     tekGuiWindowUpdateButtonHitbox(window);
     window->title_button.hitbox_width = window_defaults.width + 2 * window_defaults.border_width;
     window->title_button.hitbox_height = window_defaults.title_width;
     window->title_button.data = (void*)window;
     window->title_button.callback = tekGuiWindowTitleButtonCallback;
 
-    tekGuiWindowAddGLMesh(window, &window->mesh_index);
+    tekChainThrow(tekGuiWindowAddGLMesh(window, &window->mesh_index));
 
     window->being_dragged = 0;
     window->x_delta = 0;
     window->y_delta = 0;
 
-    listAddItem(&window_ptr_list, window);
+    tekChainThrow(listAddItem(&window_ptr_list, window));
+
+    window->draw_callback = NULL;
 
     return SUCCESS;
 }
@@ -262,6 +292,13 @@ exception tekGuiDrawWindow(const TekGuiWindow* window) {
     // unbind everything to keep clean.
     glBindVertexArray(0);
     tekBindShaderProgram(0);
+
+    const float x = (float)(window->x_pos + (int)(window->width / 2)) - window->title_text.width / 2.0f;
+    const float y = (float)(window->y_pos - (int)window->title_width);
+    tekChainThrow(tekDrawColouredText(&window->title_text, x, y, window->title_colour));
+
+    if (window->draw_callback)
+        tekChainThrow(window->draw_callback(window));
 
     return SUCCESS;
 }

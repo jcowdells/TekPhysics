@@ -6,16 +6,29 @@ window_defaults:
   title_width: 18
   border_width: 3
   background_colour:
-    r: 1.0
-    g: 0.0
-    b: 0.0
-    a: 0.5
+    r: 0.7
+    g: 0.7
+    b: 0.7
+    a: 0.7
   border_colour:
     r: 1.0
     g: 1.0
     b: 1.0
     a: 1.0
+  title_colour:
+    r: 0.0
+    g: 0.0
+    b: 0.0
+    a: 1.0
   title: "New Window"
+list_window_defaults:
+  text_size: 16
+  text_colour:
+    r: 0.0
+    g: 0.0
+    b: 0.0
+    a: 1.0
+  num_visible: 10
 text_button_defaults:
   x_pos: 200
   y_pos: 200

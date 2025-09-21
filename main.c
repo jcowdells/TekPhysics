@@ -36,6 +36,7 @@
 #include "tekgui/tekgui.h"
 #include "tekgui/window.h"
 #include "tekgui/button.h"
+#include "tekgui/list_window.h"
 #include "tekgui/text_button.h"
 
 #define WINDOW_WIDTH  640
@@ -91,7 +92,7 @@ static void tekStartButtonCallback(TekGuiTextButton* button, TekGuiButtonCallbac
     if (callback_data.data.mouse_button.action != GLFW_RELEASE || callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT)
         return;
 
-    mode = MODE_RUNNER;
+    next_mode = MODE_BUILDER;
 }
 
 static exception tekCreateMainMenu(const int window_width, const int window_height, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo) {
@@ -113,9 +114,14 @@ static exception tekCreateMainMenu(const int window_width, const int window_heig
 }
 
 static exception tekDrawMainMenu(const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
-    tekSetWindowColour((vec3){0.3f, 0.3f, 0.3f});
     tekGuiDrawTextButton(start_button);
     tekGuiDrawImage(tekphysics_logo);
+    return SUCCESS;
+}
+
+static exception tekSwitchToMainMenu(const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
+    tekSetWindowColour((vec3){0.3f, 0.3f, 0.3f});
+    tekGuiBringButtonToFront(&start_button->button);
     return SUCCESS;
 }
 
@@ -124,12 +130,25 @@ static void tekDeleteMainMenu(const TekGuiTextButton* start_button, const TekGui
     tekGuiDeleteImage(tekphysics_logo);
 }
 
-static exception tekCreateMenu(TekText* version_text, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo) {
+static exception tekCreateBuilderMenu(TekGuiWindow* hierarchy_window) {
+    tekChainThrow(tekGuiCreateWindow(hierarchy_window));
+    return SUCCESS;
+}
+
+static exception tekDrawBuilderMenu(const TekGuiWindow* hierarchy_window) {
+    tekChainThrow(tekGuiDrawAllWindows());
+    return SUCCESS;
+}
+
+static exception tekCreateMenu(TekText* version_text, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo, TekGuiWindow* hierarchy_window) {
     // create version font + text.
     tekChainThrow(tekCreateBitmapFont("../res/verdana_bold.ttf", 0, 64, &depth_font));
-    tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, &depth_font, version_text));
+    tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, tekGuiGetDefaultFont(), version_text));
 
     tekChainThrow(tekCreateMainMenu(WINDOW_WIDTH, WINDOW_HEIGHT, start_button, tekphysics_logo));
+    tekChainThrow(tekCreateBuilderMenu(hierarchy_window));
+
+    tekChainThrow(tekSwitchToMainMenu(start_button, tekphysics_logo));
     return SUCCESS;
 }
 
@@ -139,14 +158,25 @@ static exception tekChangeMenuMode(const TekText* version_text, const TekGuiText
     event.data.mode = next_mode;
     tekChainThrow(pushEvent(&event_queue, event));
 
-
+    switch (next_mode) {
+    case MODE_MAIN_MENU:
+        tekChainThrow(tekSwitchToMainMenu(start_button, tekphysics_logo));
+        break;
+    case MODE_BUILDER:
+        break;
+    case MODE_RUNNER:
+        break;
+    default:
+        // if the mode is not recognised, then dont do anything.
+        next_mode = -1;
+        return SUCCESS;
+    }
 
     mode = next_mode;
-    next_mode = -1;
     return SUCCESS;
 }
 
-static exception tekDrawMenu(const TekText* version_text, const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo) {
+static exception tekDrawMenu(const TekText* version_text, const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo, const TekGuiWindow* hierarchy_window) {
     int window_width, window_height;
     tekGetWindowSize(&window_width, &window_height);
 
@@ -161,10 +191,12 @@ static exception tekDrawMenu(const TekText* version_text, const TekGuiTextButton
     case MODE_RUNNER:
         break;
     case MODE_BUILDER:
+        tekChainThrow(tekDrawBuilderMenu(hierarchy_window));
         break;
     default:
         break;
     }
+
     tekChainThrow(tekDrawText(version_text, (float)window_width - 185.0f, (float)window_height - 20.0f));
     return SUCCESS;
 }
@@ -231,9 +263,23 @@ exception run() {
     TekGuiTextButton start_button = {};
     TekGuiImage tekphysics_logo = {};
 
+    TekGuiWindow hierarchy_window = {};
+
+    TekGuiListWindow test_window = {};
+    List test_list = {};
+    tekGuiCreateListWindow(&test_window, &test_list);
+
+    char* items[] = {
+        "item1", "item2", "item3", "item4"
+    };
+
+    listAddItem(&test_list, items[0]);
+    listAddItem(&test_list, items[1]);
+
     tekChainThrowThen(tekCreateMenu(
         &version_text,
-        &start_button, &tekphysics_logo
+        &start_button, &tekphysics_logo,
+        &hierarchy_window
     ), {
         vectorDelete(&entities);
         threadQueueDelete(&event_queue);
@@ -323,7 +369,8 @@ exception run() {
 
         tekChainThrowThen(tekDrawMenu(
             &version_text,
-            &start_button, &tekphysics_logo
+            &start_button, &tekphysics_logo,
+            &hierarchy_window
         ), {
             tekRunCleanup();
         });
@@ -331,6 +378,7 @@ exception run() {
         tekChainThrow(tekUpdate());
     }
 
+    tekGuiDeleteListWindow(&test_window);
     tekRunCleanup();
 
     return SUCCESS;

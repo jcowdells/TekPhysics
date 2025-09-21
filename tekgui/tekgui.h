@@ -2,6 +2,7 @@
 
 #include <cglm/vec4.h>
 #include "../core/exception.h"
+#include "../tekgl/font.h"
 
 struct TekGuiWindowDefaults {
     uint x_pos;
@@ -12,6 +13,14 @@ struct TekGuiWindowDefaults {
     uint border_width;
     vec4 background_colour;
     vec4 border_colour;
+    vec4 title_colour;
+    char* title;
+};
+
+struct TekGuiListWindowDefaults {
+    uint text_size;
+    vec4 text_colour;
+    uint num_visible;
 };
 
 struct TekGuiTextButtonDefaults {
@@ -29,4 +38,6 @@ struct TekGuiTextButtonDefaults {
 #define tekGuiLog(...) printf("[INFO] TekGui: "); printf(__VA_ARGS__)
 
 exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults);
+exception tekGuiGetListWindowDefaults(struct TekGuiListWindowDefaults* defaults);
 exception tekGuiGetTextButtonDefaults(struct TekGuiTextButtonDefaults* defaults);
+TekBitmapFont* tekGuiGetDefaultFont();

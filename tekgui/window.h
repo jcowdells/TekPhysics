@@ -5,8 +5,13 @@
 #include <cglm/vec4.h>
 #include "../tekgl/mesh.h"
 #include "button.h"
+#include "../tekgl/text.h"
 
 #define WINDOW_TYPE_EMPTY 0
+
+struct TekGuiWindow;
+
+typedef exception(*TekGuiWindowDrawCallback)(const struct TekGuiWindow* window);
 
 typedef struct TekGuiWindow {
     flag type;
@@ -19,12 +24,15 @@ typedef struct TekGuiWindow {
     uint border_width;
     vec4 background_colour;
     vec4 border_colour;
+    vec4 title_colour;
     uint mesh_index;
     char* title;
+    TekText title_text;
     TekGuiButton title_button;
     flag being_dragged;
     int x_delta;
     int y_delta;
+    TekGuiWindowDrawCallback draw_callback;
 } TekGuiWindow;
 
 typedef struct TekGuiWindowData {

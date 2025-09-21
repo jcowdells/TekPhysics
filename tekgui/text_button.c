@@ -126,7 +126,7 @@ static exception tekGuiTextButtonUpdateGLMesh(const TekGuiTextButton* text_butto
 }
 
 static exception tekGuiTextButtonCreateText(TekGuiTextButton* button) {
-    tekCreateText(button->text, button->text_height, &text_button_font, &button->tek_text);
+    tekCreateText(button->text, button->text_height, tekGuiGetDefaultFont(), &button->tek_text);
     return SUCCESS;
 }
 

@@ -2,7 +2,6 @@
 
 #include "font.h"
 #include "shader.h"
-#include "glad/glad.h"
 #include <cglm/cam.h>
 
 #include "manager.h"
@@ -151,7 +150,7 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
     return SUCCESS;
 }
 
-exception tekDrawText(const TekText* tek_text, const float x, const float y) {
+exception tekDrawColouredText(const TekText* tek_text, const float x, const float y, const vec4 colour) {
     // make sure that text engine has been initialised, and bind it
     if (!text_shader_program_id) tekThrow(OPENGL_EXCEPTION, "No text shader is available to use.");
     tekBindShaderProgram(text_shader_program_id);
@@ -164,10 +163,16 @@ exception tekDrawText(const TekText* tek_text, const float x, const float y) {
     tekChainThrow(tekShaderUniformInt(text_shader_program_id, "atlas", 0));
     tekChainThrow(tekShaderUniformFloat(text_shader_program_id, "draw_x", x));
     tekChainThrow(tekShaderUniformFloat(text_shader_program_id, "draw_y", y));
+    tekChainThrow(tekShaderUniformVec4(text_shader_program_id, "text_colour", colour));
 
     // draw mesh
     tekDrawMesh(&tek_text->mesh);
 
+    return SUCCESS;
+}
+
+exception tekDrawText(const TekText* tek_text, const float x, const float y) {
+    tekChainThrow(tekDrawColouredText(tek_text, x, y, (vec4){1.0f, 1.0f, 1.0f, 1.0f}));
     return SUCCESS;
 }
 
