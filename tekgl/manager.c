@@ -20,6 +20,7 @@ static List tek_gl_load_funcs = {0, 0};
 static List tek_key_funcs = {0, 0};
 static List tek_mmove_funcs = {0, 0};
 static List tek_mbutton_funcs = {0, 0};
+static List tek_mscroll_funcs = {0, 0};
 static GLFWcursor* crosshair_cursor;
 
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
@@ -86,14 +87,20 @@ static void tekManagerMouseMoveCallback(GLFWwindow* window, const double x, cons
 static void tekManagerMouseButtonCallback(GLFWwindow* window, const int button, const int action, const int mods) {
     if (window != tek_window) return;
 
-    printf("----> %d %d %d\n", button, action, mods);
-
     const ListItem* item = 0;
-    printf("Len list = %u\n", tek_mbutton_funcs.length);
     foreach(item, (&tek_mbutton_funcs), {
         const TekMouseButtonCallback callback = (TekMouseButtonCallback)item->data;
-        printf("Calling back..\n");
         callback(button, action, mods);
+    });
+}
+
+static void tekManagerMouseScrollCallback(GLFWwindow* window, const double x_offset, const double y_offset) {
+    if (window != tek_window) return;
+
+    const ListItem* item = 0;
+    foreach(item, (&tek_mscroll_funcs), {
+        const TekMouseScrollCallback callback = (TekMouseScrollCallback)item->data;
+        callback(x_offset, y_offset);
     });
 }
 
@@ -114,11 +121,18 @@ exception tekAddMousePosCallback(const TekMousePosCallback callback) {
 }
 
 exception tekAddMouseButtonCallback(const TekMouseButtonCallback callback) {
-    printf("Add callbakc\n");
     if (!tek_mbutton_funcs.length)
         listCreate(&tek_mbutton_funcs);
 
     tekChainThrow(listAddItem(&tek_mbutton_funcs, callback));
+    return SUCCESS;
+}
+
+exception tekAddMouseScrollCallback(const TekMouseScrollCallback callback) {
+    if (!tek_mscroll_funcs.length)
+        listCreate(&tek_mscroll_funcs);
+
+    tekChainThrow(listAddItem(&tek_mscroll_funcs, callback));
     return SUCCESS;
 }
 
@@ -159,6 +173,7 @@ exception tekInit(const char* window_name, const int window_width, const int win
     glfwSetKeyCallback(tek_window, tekManagerKeyCallback);
     glfwSetCursorPosCallback(tek_window, tekManagerMouseMoveCallback);
     glfwSetMouseButtonCallback(tek_window, tekManagerMouseButtonCallback);
+    glfwSetScrollCallback(tek_window, tekManagerMouseScrollCallback);
 
     crosshair_cursor = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
 
@@ -221,6 +236,7 @@ void tekDelete() {
     listDelete(&tek_key_funcs);
     listDelete(&tek_mmove_funcs);
     listDelete(&tek_mbutton_funcs);
+    listDelete(&tek_mscroll_funcs);
 
     tekDeleteFreeType();
 

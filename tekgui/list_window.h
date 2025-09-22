@@ -12,6 +12,10 @@ typedef struct TekGuiListWindow {
     uint text_size;
     vec4 text_colour;
     uint num_visible;
+    int draw_index;
+    int hover_index;
+    int select_index;
+    TekGuiButton button;
 } TekGuiListWindow;
 
 exception tekGuiCreateListWindow(TekGuiListWindow* window, List* text_list);

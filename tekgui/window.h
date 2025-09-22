@@ -11,7 +11,7 @@
 
 struct TekGuiWindow;
 
-typedef exception(*TekGuiWindowDrawCallback)(const struct TekGuiWindow* window);
+typedef exception(*TekGuiWindowDrawCallback)(struct TekGuiWindow* window);
 
 typedef struct TekGuiWindow {
     flag type;

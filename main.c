@@ -269,12 +269,13 @@ exception run() {
     List test_list = {};
     tekGuiCreateListWindow(&test_window, &test_list);
 
-    char* items[] = {
-        "item1", "item2", "item3", "item4"
-    };
+    char items[20][6];
 
-    listAddItem(&test_list, items[0]);
-    listAddItem(&test_list, items[1]);
+    for (uint i = 0; i < 20; i++) {
+        memcpy(items[i], "item ", 6);
+        items[i][4] = (char)( (int)'0' + i );
+        listAddItem(&test_list, items[i]);
+    }
 
     tekChainThrowThen(tekCreateMenu(
         &version_text,

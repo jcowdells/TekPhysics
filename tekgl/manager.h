@@ -19,6 +19,7 @@ typedef exception(*TekGLLoadFunc)(void);
 typedef void(*TekKeyCallback)(int key, int scancode, int action, int mods);
 typedef void(*TekMousePosCallback)(double x, double y);
 typedef void(*TekMouseButtonCallback)(int button, int action, int mods);
+typedef void(*TekMouseScrollCallback)(double x_offset, double y_offset);
 
 exception tekInit(const char* window_name, int window_width, int window_height);
 flag tekRunning();
@@ -37,3 +38,4 @@ exception tekAddDeleteFunc(TekDeleteFunc delete_func);
 exception tekAddGLLoadFunc(TekGLLoadFunc gl_load_func);
 exception tekAddMousePosCallback(TekMousePosCallback callback);
 exception tekAddMouseButtonCallback(TekMouseButtonCallback callback);
+exception tekAddMouseScrollCallback(TekMouseScrollCallback callback);

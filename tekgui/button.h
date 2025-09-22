@@ -7,6 +7,7 @@
 #define TEK_GUI_BUTTON_MOUSE_ENTER_CALLBACK    1
 #define TEK_GUI_BUTTON_MOUSE_LEAVE_CALLBACK    2
 #define TEK_GUI_BUTTON_MOUSE_TOUCHING_CALLBACK 3
+#define TEK_GUI_BUTTON_MOUSE_SCROLL_CALLBACK   4
 
 struct TekGuiButton;
 
@@ -20,6 +21,10 @@ typedef struct TekGuiButtonCallbackData {
             int action;
             int mods;
         } mouse_button;
+        struct {
+            double x_offset;
+            double y_offset;
+        } mouse_scroll;
     } data;
 } TekGuiButtonCallbackData;
 

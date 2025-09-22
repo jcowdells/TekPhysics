@@ -117,12 +117,32 @@ static void tekGuiButtonMousePosCallback(double x, double y) {
     });
 }
 
+static void tekGuiButtonMouseScrollCallback(double x_offset, double y_offset) {
+    const ListItem* item = 0;
+    TekGuiButtonCallbackData callback_data = {};
+    memset(&callback_data, 0, sizeof(TekGuiButtonCallbackData));
+
+    callback_data.type = TEK_GUI_BUTTON_MOUSE_SCROLL_CALLBACK;
+    callback_data.mouse_x = mouse_x;
+    callback_data.mouse_y = mouse_y;
+    callback_data.data.mouse_scroll.x_offset = x_offset;
+    callback_data.data.mouse_scroll.y_offset = y_offset;
+
+    foreach(item, (&button_list), {
+        TekGuiButton* button = (TekGuiButton*)item->data;
+        if (tekGuiCheckButtonHitbox(button, mouse_x, mouse_y)) {
+            if (button->callback) button->callback(button, callback_data);
+            return;
+        }
+    });
+}
+
 static void tekGuiButtonDelete() {
     listDelete(&button_list);
+    listDelete(&button_dehover_list);
 }
 
 tek_init tekGuiButtonInit() {
-    printf("TekButton init\n");
     exception tek_exception = tekAddDeleteFunc(tekGuiButtonDelete);
     if (tek_exception) return;
 
@@ -130,6 +150,9 @@ tek_init tekGuiButtonInit() {
     if (tek_exception) return;
 
     tek_exception = tekAddMousePosCallback(tekGuiButtonMousePosCallback);
+    if (tek_exception) return;
+
+    tek_exception = tekAddMouseScrollCallback(tekGuiButtonMouseScrollCallback);
     if (tek_exception) return;
 
     listCreate(&button_list);
