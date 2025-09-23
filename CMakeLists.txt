@@ -31,12 +31,6 @@ add_executable(
         tekgl/text.h
         tekgl/manager.c
         tekgl/manager.h
-#        tekgui/tekgui.c
-#        tekgui/tekgui.h
-#        tekgui/container.c
-#        tekgui/container.h
-#        tekgui/size.c
-#        tekgui/size.h
         tekgui/primitives.c
         tekgui/primitives.h
         tekgl/material.c
@@ -74,12 +68,17 @@ add_executable(
         tekgui/window.c
         tekgui/window.h
         tekgui/tekgui.c
+        tekgui/tekgui.h
         tekgui/button.c
         tekgui/button.h
         tekgui/text_button.c
         tekgui/text_button.h
         tekgui/list_window.c
         tekgui/list_window.h
+        tekgui/text_input.c
+        tekgui/text_input.h
+        tekgui/option_window.c
+        tekgui/option_window.h
 )
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${OpenBLAS_INCLUDE_DIR})
