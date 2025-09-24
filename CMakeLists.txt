@@ -79,6 +79,8 @@ add_executable(
         tekgui/text_input.h
         tekgui/option_window.c
         tekgui/option_window.h
+        tekgui/box_manager.c
+        tekgui/box_manager.h
 )
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${OpenBLAS_INCLUDE_DIR})

@@ -38,6 +38,7 @@
 #include "tekgui/button.h"
 #include "tekgui/list_window.h"
 #include "tekgui/text_button.h"
+#include "tekgui/text_input.h"
 
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT 480
@@ -265,17 +266,8 @@ exception run() {
 
     TekGuiWindow hierarchy_window = {};
 
-    TekGuiListWindow test_window = {};
-    List test_list = {};
-    tekGuiCreateListWindow(&test_window, &test_list);
-
-    char items[20][6];
-
-    for (uint i = 0; i < 20; i++) {
-        memcpy(items[i], "item ", 6);
-        items[i][4] = (char)( (int)'0' + i );
-        listAddItem(&test_list, items[i]);
-    }
+    TekGuiTextInput test_input = {};
+    tekGuiCreateTextInput(&test_input);
 
     tekChainThrowThen(tekCreateMenu(
         &version_text,
@@ -368,6 +360,8 @@ exception run() {
             break;
         }
 
+        tekGuiDrawTextInput(&test_input);
+
         tekChainThrowThen(tekDrawMenu(
             &version_text,
             &start_button, &tekphysics_logo,
@@ -379,7 +373,7 @@ exception run() {
         tekChainThrow(tekUpdate());
     }
 
-    tekGuiDeleteListWindow(&test_window);
+    tekGuiDeleteTextInput(&test_input);
     tekRunCleanup();
 
     return SUCCESS;

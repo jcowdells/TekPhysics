@@ -1,0 +1,35 @@
+#version 330 core
+
+layout (location = 0) in vec2 minmax_x;
+layout (location = 1) in vec2 minmax_y;
+layout (location = 2) in vec2 minmax_ix;
+layout (location = 3) in vec2 minmax_iy;
+
+uniform vec2 window_size;
+uniform vec4 bg_colour;
+uniform vec4 bd_colour;
+
+out VS_OUT {
+    vec2 minmax_x;
+    vec2 minmax_y;
+    vec2 minmax_ix;
+    vec2 minmax_iy;
+    vec4 bg_colour;
+    vec4 bd_colour;
+} vs_out;
+
+float remap(float value, float max_value) {
+    return value / max_value * 2.0f - 1.0f;
+}
+
+void main() {
+    gl_Position = vec4(minmax_x.x, minmax_y.x, 0.0f, 1.0f);
+    vs_out.minmax_x = vec2(remap(minmax_x.x, window_size.x), remap(minmax_x.y, window_size.x));
+    vs_out.minmax_y = vec2(-remap(minmax_y.y, window_size.y), -remap(minmax_y.x, window_size.y));
+
+    vs_out.minmax_ix = vec2(remap(minmax_ix.x, window_size.x), remap(minmax_ix.y, window_size.x));
+    vs_out.minmax_iy = vec2(-remap(minmax_iy.y, window_size.y), -remap(minmax_iy.x, window_size.y));
+
+    vs_out.bg_colour = bg_colour;
+    vs_out.bd_colour = bd_colour;
+}

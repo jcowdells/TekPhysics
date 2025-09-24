@@ -35,9 +35,22 @@ struct TekGuiTextButtonDefaults {
     vec4 border_colour;
 };
 
+struct TekGuiTextInputDefaults {
+    uint x_pos;
+    uint y_pos;
+    uint width;
+    uint height;
+    uint border_width;
+    uint text_height;
+    vec4 background_colour;
+    vec4 border_colour;
+    vec4 text_colour;
+};
+
 #define tekGuiLog(...) printf("[INFO] TekGui: "); printf(__VA_ARGS__)
 
 exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults);
 exception tekGuiGetListWindowDefaults(struct TekGuiListWindowDefaults* defaults);
 exception tekGuiGetTextButtonDefaults(struct TekGuiTextButtonDefaults* defaults);
+exception tekGuiGetTextInputDefaults(struct TekGuiTextInputDefaults* defaults);
 TekBitmapFont* tekGuiGetDefaultFont();

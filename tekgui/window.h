@@ -35,15 +35,6 @@ typedef struct TekGuiWindow {
     TekGuiWindowDrawCallback draw_callback;
 } TekGuiWindow;
 
-typedef struct TekGuiWindowData {
-    vec2 minmax_x;
-    vec2 minmax_y;
-    vec2 minmax_ix;
-    vec2 minmax_iy;
-    vec4 background_colour;
-    vec4 border_colour;
-} TekGuiWindowData;
-
 exception tekGuiCreateWindow(TekGuiWindow* window);
 void tekGuiSetWindowPosition(TekGuiWindow* window, int x_pos, int y_pos);
 void tekGuiSetWindowSize(TekGuiWindow* window, uint width, uint height);

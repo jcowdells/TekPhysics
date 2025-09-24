@@ -3,6 +3,7 @@
 #include "button.h"
 #include <cglm/vec4.h>
 #include "../tekgl/text.h"
+#include "box_manager.h"
 
 struct TekGuiTextButton;
 
@@ -21,13 +22,6 @@ typedef struct TekGuiTextButton {
     flag hovered;
     TekGuiTextButtonCallback callback;
 } TekGuiTextButton;
-
-typedef struct TekGuiTextButtonData {
-    vec2 minmax_x;
-    vec2 minmax_y;
-    vec2 minmax_ix;
-    vec2 minmax_iy;
-} TekGuiTextButtonData;
 
 exception tekGuiCreateTextButton(const char* text, TekGuiTextButton* button);
 exception tekGuiSetTextButtonPosition(TekGuiTextButton* button, uint x_pos, uint y_pos);
