@@ -47,18 +47,23 @@ tek_init tekInitTextEngine() {
     tekAddDeleteFunc(tekDeleteTextEngine);
 }
 
-static exception tekGenerateTextMeshData(const char* text, const uint len_text, const uint size, TekBitmapFont* font, TekText* tek_text, float** vertices, uint** indices) {
+static exception tekGenerateTextMeshData(const char* text, const uint len_text, const uint size, TekBitmapFont* font, TekText* tek_text, float** vertices, uint* len_vertices_ptr, uint** indices, uint* len_indices_ptr) {
     // make sure that these values are set to 0, as they are expected to be initialised in other calculations.
     tek_text->width = 0;
     tek_text->height = 0;
 
     // mallocate some space for vertices of glyphs
-    *vertices = (float*)malloc(16 * len_text * sizeof(float));
+    const uint len_vertices = 16 * len_text;
+    *vertices = (float*)malloc(len_vertices * sizeof(float));
     if (!*vertices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text vertices.");
 
     // mallocate some more space for the indices of vertices
-    *indices = (uint*)malloc(6 * len_text * sizeof(uint));
+    const uint len_indices = 6 * len_text;
+    *indices = (uint*)malloc(len_indices * sizeof(uint));
     if (!*indices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text indices.");
+
+    *len_vertices_ptr = len_vertices;
+    *len_indices_ptr = len_indices;
 
     // a pointer to where the glyphs should draw from
     float x = 0;
@@ -135,19 +140,21 @@ static exception tekGenerateTextMeshData(const char* text, const uint len_text, 
 }
 
 exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, TekText* tek_text) {
-    float* vertices = 0;
-    uint* indices = 0;
+    float* vertices = 0; uint len_vertices = 0;
+    uint* indices = 0; uint len_indices = 0;
 
     // find the number of characters of text we are working with
     const size_t len_text = strlen(text);
 
-    tekChainThrow(tekGenerateTextMeshData(text, len_text, size, font, tek_text, &vertices, &indices));
+    tekChainThrow(tekGenerateTextMeshData(text, len_text, size, font, tek_text, &vertices, &len_vertices, &indices, &len_indices));
+
+    printf("LenS: %u %u vs %lu %lu\n", len_vertices, len_indices, 16 * len_text, 6 * len_text);
 
     // define the vertex data layout: 2 floats for position, 2 floats for texture coordinates
     const int layout[] = {2, 2};
 
     // create a mesh for the glyph quads and texture coordinates
-    tekChainThrow(tekCreateMesh(vertices, (long)len_text * 16, indices, (long)len_text * 6, layout, 2, &tek_text->mesh));
+    tekChainThrow(tekCreateMesh(vertices, len_vertices, indices, len_indices, layout, 2, &tek_text->mesh));
 
     // free mallocated memory
     free(vertices);
@@ -156,6 +163,21 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
     // record the font that this text uses, so that we can equip it when rendering the text
     tek_text->font = font;
 
+    return SUCCESS;
+}
+
+exception tekUpdateText(TekText* tek_text, const char* text, const uint size) {
+    float* vertices = 0; uint len_vertices = 0;
+    uint* indices = 0; uint len_indices = 0;
+
+    // find the number of characters of text we are working with
+    const size_t len_text = strlen(text);
+
+    tekChainThrow(tekGenerateTextMeshData(text, len_text, size, tek_text->font, tek_text, &vertices, &len_vertices, &indices, &len_indices));
+    tekChainThrow(tekRecreateMesh(&tek_text->mesh, vertices, len_vertices, indices, len_indices, 0, 0));
+
+    free(vertices);
+    free(indices);
     return SUCCESS;
 }
 

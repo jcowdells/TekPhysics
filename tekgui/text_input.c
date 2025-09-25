@@ -11,6 +11,8 @@
 #define INITIALISED     1
 #define DE_INITIALISED  2
 
+#define CURSOR '|'
+
 static TekGuiTextInput* selected_input = 0;
 static TekBitmapFont monospace_font = {};
 
@@ -37,12 +39,27 @@ static exception tekGuiTextInputUpdateGLMesh(const TekGuiTextInput* text_input) 
 
 static exception tekGuiTextInputCreateText(TekGuiTextInput* text_input) {
     tekChainThrow(tekCreateText(text_input->text.internal, text_input->text_height, &monospace_font, &text_input->tek_text));
+
+    char temp;
+    tekChainThrow(vectorGetItem(&text_input->text, text_input->cursor_index, &temp));
+    const char cursor = CURSOR;
+    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &cursor));
+    tekChainThrow(tekCreateText(text_input->text.internal, text_input->text_height, &monospace_font, &text_input->tek_text_cursor));
+    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &temp));
+
     return SUCCESS;
 }
 
 static exception tekGuiTextInputRecreateText(TekGuiTextInput* text_input) {
-    tekDeleteText(&text_input->tek_text);
-    tekChainThrow(tekGuiTextInputCreateText(text_input));
+    tekChainThrow(tekUpdateText(&text_input->tek_text, text_input->text.internal, text_input->text_height));
+
+    char temp;
+    tekChainThrow(vectorGetItem(&text_input->text, text_input->cursor_index, &temp));
+    const char cursor = CURSOR;
+    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &cursor));
+    tekChainThrow(tekUpdateText(&text_input->tek_text_cursor, text_input->text.internal, text_input->text_height));
+    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &temp));
+
     return SUCCESS;
 }
 
@@ -57,16 +74,6 @@ static exception tekGuiTextInputRemove(TekGuiTextInput* text_input) {
     if (text_input->cursor_index <= 0) return SUCCESS;
     tekChainThrow(vectorRemoveItem(&text_input->text, text_input->cursor_index - 1, NULL));
     text_input->cursor_index--;
-    return SUCCESS;
-}
-
-static exception tekGuiTextInputGetDisplay(TekGuiTextInput* text_input, char* text) {
-    const clock_t time = clock();
-    flag display_cursor = 0;
-    if (time % CLOCKS_PER_SEC > CLOCKS_PER_SEC / 2) {
-        display_cursor = 1;
-    }
-
     return SUCCESS;
 }
 
@@ -95,7 +102,7 @@ static void tekGuiTextInputKeyCallback(const int key, const int scancode, const 
             selected_input->cursor_index--;
         break;
     case GLFW_KEY_RIGHT:
-        if (selected_input->cursor_index + 1 < selected_input->text.length)
+        if (selected_input->cursor_index + 2 < selected_input->text.length)
             selected_input->cursor_index++;
         break;
     default:
@@ -147,6 +154,7 @@ exception tekGuiCreateTextInput(TekGuiTextInput* text_input) {
     tekChainThrow(vectorCreate(16, sizeof(char), &text_input->text));
     const char zero = 0;
     tekChainThrow(vectorAddItem(&text_input->text, &zero));
+    tekChainThrow(vectorAddItem(&text_input->text, &zero));
     text_input->text_height = defaults.text_height;
     text_input->cursor_index = 0;
     tekChainThrow(tekGuiTextInputCreateText(text_input));
@@ -165,7 +173,18 @@ exception tekGuiDrawTextInput(const TekGuiTextInput* text_input) {
     const float x = (float)(text_input->button.hitbox_x + (int)(text_input->text_height / 2));
     const float y = (float)text_input->button.hitbox_y;
 
-    tekChainThrow(tekDrawColouredText(&text_input->tek_text, x, y, text_input->text_colour));
+    flag display_cursor = 0;
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    if (text_input == selected_input && time.tv_nsec % 1000000000 > 500000000) {
+        display_cursor = 1;
+    }
+
+    if (display_cursor) {
+        tekChainThrow(tekDrawColouredText(&text_input->tek_text_cursor, x, y, text_input->text_colour));
+    } else {
+        tekChainThrow(tekDrawColouredText(&text_input->tek_text, x, y, text_input->text_colour));
+    }
     glDepthFunc(GL_LESS);
 
     return SUCCESS;

@@ -14,6 +14,7 @@ typedef struct TekGuiTextInput {
     vec4 background_colour;
     vec4 border_colour;
     TekText tek_text;
+    TekText tek_text_cursor;
     Vector text;
     uint text_height;
     vec4 text_colour;

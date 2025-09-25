@@ -260,16 +260,17 @@ void tekDrawMesh(const TekMesh* mesh_ptr) {
     glDrawElements(GL_TRIANGLES, mesh_ptr->num_elements, GL_UNSIGNED_INT, 0);
 }
 
-exception tekRecreateMesh(const float* vertices, const long len_vertices, const uint* indices, const long len_indices, const int* layout, const uint len_layout, TekMesh* mesh_ptr) {
+exception tekRecreateMesh(TekMesh* mesh_ptr, const float* vertices, const long len_vertices, const uint* indices, const long len_indices, const int* layout, const uint len_layout) {
     glBindVertexArray(mesh_ptr->vertex_array_id);
     if (vertices) {
         glBindBuffer(GL_ARRAY_BUFFER, mesh_ptr->vertex_buffer_id);
-        glBufferData(GL_ARRAY_BUFFER, len_vertices, vertices, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, (long)(len_vertices * sizeof(float)), vertices, GL_STATIC_DRAW);
     }
 
     if (indices) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ptr->element_buffer_id);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, len_indices, indices, GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, (long)(len_indices * sizeof(uint)), indices, GL_STATIC_DRAW);
+        mesh_ptr->num_elements = (int)len_indices;
     }
 
     if (layout) {
