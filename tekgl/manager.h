@@ -35,6 +35,7 @@ void tekSetWindowColour(vec3 colour);
 
 exception tekAddFramebufferCallback(TekFramebufferCallback callback);
 exception tekAddKeyCallback(TekKeyCallback callback);
+exception tekAddCharCallback(TekCharCallback callback);
 exception tekAddDeleteFunc(TekDeleteFunc delete_func);
 exception tekAddGLLoadFunc(TekGLLoadFunc gl_load_func);
 exception tekAddMousePosCallback(TekMousePosCallback callback);

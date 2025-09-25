@@ -315,9 +315,6 @@ static exception tekCreateOBB(const Vector* triangles, const uint* indices, cons
     glm_vec3_copy(centre, obb->centre);
     glm_vec3_copy(centre, obb->w_centre);
 
-    // TODO: remove this print statement
-    printf("Created OBB: %f %f %f\n", EXPAND_VEC3(centre));
-
     return SUCCESS;
 }
 
@@ -516,8 +513,6 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
             }
         }
     }
-
-    tekPrintCollider(*collider, 0);
 
     return SUCCESS;
 }

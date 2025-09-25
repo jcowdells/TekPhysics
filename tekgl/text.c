@@ -47,21 +47,18 @@ tek_init tekInitTextEngine() {
     tekAddDeleteFunc(tekDeleteTextEngine);
 }
 
-exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, TekText* tek_text) {
+static exception tekGenerateTextMeshData(const char* text, const uint len_text, const uint size, TekBitmapFont* font, TekText* tek_text, float** vertices, uint** indices) {
     // make sure that these values are set to 0, as they are expected to be initialised in other calculations.
     tek_text->width = 0;
     tek_text->height = 0;
 
-    // find the number of characters of text we are working with
-    const size_t len_text = strlen(text);
-
     // mallocate some space for vertices of glyphs
-    float* vertices = (float*)malloc(16 * len_text * sizeof(float));
-    if (!vertices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text vertices.");
+    *vertices = (float*)malloc(16 * len_text * sizeof(float));
+    if (!*vertices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text vertices.");
 
     // mallocate some more space for the indices of vertices
-    uint* indices = (uint*)malloc(6 * len_text * sizeof(uint));
-    if (!indices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text indices.");
+    *indices = (uint*)malloc(6 * len_text * sizeof(uint));
+    if (!*indices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text indices.");
 
     // a pointer to where the glyphs should draw from
     float x = 0;
@@ -113,7 +110,7 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
             x_pos + width, y_pos, tex_u1, tex_v1,
             x_pos + width, y_pos + height, tex_u1, tex_v0
         };
-        memcpy(vertices + i * 16, &vertex_data, sizeof(vertex_data));
+        memcpy(*vertices + i * 16, &vertex_data, sizeof(vertex_data));
 
         // add index data to indices array
         // 0 --- 1   0 -> 1 -> 2 for the first triangle
@@ -125,7 +122,7 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
             i * 4, i * 4 + 1, i * 4 + 2,
             i * 4, i * 4 + 2, i * 4 + 3
         };
-        memcpy(indices + i * 6, &index_data, sizeof(index_data));
+        memcpy(*indices + i * 6, &index_data, sizeof(index_data));
 
         // increment draw pointer
         x += (float)(glyph.advance >> 6) * scale;
@@ -133,6 +130,18 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
 
     tek_text->width = fmaxf(tek_text->width, x);
     tek_text->height += (float)size;
+
+    return SUCCESS;
+}
+
+exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, TekText* tek_text) {
+    float* vertices = 0;
+    uint* indices = 0;
+
+    // find the number of characters of text we are working with
+    const size_t len_text = strlen(text);
+
+    tekChainThrow(tekGenerateTextMeshData(text, len_text, size, font, tek_text, &vertices, &indices));
 
     // define the vertex data layout: 2 floats for position, 2 floats for texture coordinates
     const int layout[] = {2, 2};

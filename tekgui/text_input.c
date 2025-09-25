@@ -5,12 +5,14 @@
 #include "tekgui.h"
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
+#include <time.h>
 
 #define NOT_INITIALISED 0
 #define INITIALISED     1
 #define DE_INITIALISED  2
 
 static TekGuiTextInput* selected_input = 0;
+static TekBitmapFont monospace_font = {};
 
 static void tekGuiGetTextInputData(const TekGuiTextInput* text_input, TekGuiBoxData* box_data) {
     glm_vec2_copy((vec2){(float)text_input->button.hitbox_x, (float)(text_input->button.hitbox_x + text_input->button.hitbox_width)}, box_data->minmax_x);
@@ -34,7 +36,7 @@ static exception tekGuiTextInputUpdateGLMesh(const TekGuiTextInput* text_input) 
 }
 
 static exception tekGuiTextInputCreateText(TekGuiTextInput* text_input) {
-    tekChainThrow(tekCreateText(text_input->text.internal, text_input->text_height, tekGuiGetDefaultFont(), &text_input->tek_text));
+    tekChainThrow(tekCreateText(text_input->text.internal, text_input->text_height, &monospace_font, &text_input->tek_text));
     return SUCCESS;
 }
 
@@ -44,8 +46,8 @@ static exception tekGuiTextInputRecreateText(TekGuiTextInput* text_input) {
     return SUCCESS;
 }
 
-static exception tekGuiTextInputAdd(TekGuiTextInput* text_input, char codepoint) {
-    tekChainThrow(vectorInsertItem(&text_input->text, &codepoint, text_input->cursor_index));
+static exception tekGuiTextInputAdd(TekGuiTextInput* text_input, const char codepoint) {
+    tekChainThrow(vectorInsertItem(&text_input->text, text_input->cursor_index, &codepoint));
     text_input->cursor_index++;
     return SUCCESS;
 }
@@ -54,6 +56,17 @@ static exception tekGuiTextInputRemove(TekGuiTextInput* text_input) {
     if (text_input->text.length <= 1) return SUCCESS;
     if (text_input->cursor_index <= 0) return SUCCESS;
     tekChainThrow(vectorRemoveItem(&text_input->text, text_input->cursor_index - 1, NULL));
+    text_input->cursor_index--;
+    return SUCCESS;
+}
+
+static exception tekGuiTextInputGetDisplay(TekGuiTextInput* text_input, char* text) {
+    const clock_t time = clock();
+    flag display_cursor = 0;
+    if (time % CLOCKS_PER_SEC > CLOCKS_PER_SEC / 2) {
+        display_cursor = 1;
+    }
+
     return SUCCESS;
 }
 
@@ -64,9 +77,9 @@ static void tekGuiTextInputCharCallback(const uint codepoint) {
     printf("%d\n", tekGuiTextInputRecreateText(selected_input));
 }
 
-static void tekGuiTextInputKeyCallback(TekGuiButton* button, const int key, const int scancode, const int action, const int mods) {
+static void tekGuiTextInputKeyCallback(const int key, const int scancode, const int action, const int mods) {
     if (!selected_input) return;
-    if (action != GLFW_RELEASE) return;
+    if (action != GLFW_RELEASE && action != GLFW_REPEAT) return;
 
     TekGuiTextInput* text_input = selected_input;
 
@@ -108,9 +121,15 @@ static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCall
     }
 }
 
+static exception tekGuiTextInputGLLoad() {
+    tekChainThrow(tekCreateBitmapFont("../res/inconsolata.ttf", 0, 64, &monospace_font));
+    return SUCCESS;
+}
+
 tek_init tekGuiTextInputInit() {
     tekAddCharCallback(tekGuiTextInputCharCallback);
     tekAddKeyCallback(tekGuiTextInputKeyCallback);
+    tekAddGLLoadFunc(tekGuiTextInputGLLoad);
 }
 
 exception tekGuiCreateTextInput(TekGuiTextInput* text_input) {

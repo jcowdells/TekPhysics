@@ -37,6 +37,26 @@ exception tekCreateBuffer(const GLenum buffer_type, const void* buffer_data, con
     }
 }
 
+static exception tekGenerateVertexAttributes(const int* layout, const uint len_layout) {
+    // find the total size of each vertex
+    int layout_size = 0;
+    for (uint i = 0; i < len_layout; i++) layout_size += layout[i];
+
+    // convert size to bytes
+    layout_size *= sizeof(float);
+
+    // create attrib pointer for each section of the layout
+    int prev_layout = 0;
+    for (uint i = 0; i < len_layout; i++) {
+        if (layout[i] == 0)
+            tekThrow(OPENGL_EXCEPTION, "Cannot have layout of size 0.");
+        glVertexAttribPointer(i, layout[i], GL_FLOAT, GL_FALSE, layout_size, (void*)(prev_layout * sizeof(float)));
+        glEnableVertexAttribArray(i);
+        prev_layout += layout[i];
+    }
+    return SUCCESS;
+}
+
 exception tekCreateMesh(const float* vertices, const long len_vertices, const uint* indices, const long len_indices, const int* layout, const uint len_layout, TekMesh* mesh_ptr) {
     if (!mesh_ptr) tekThrow(NULL_PTR_EXCEPTION, "Mesh pointer cannot be null.")
 
@@ -59,22 +79,7 @@ exception tekCreateMesh(const float* vertices, const long len_vertices, const ui
         GL_ELEMENT_ARRAY_BUFFER, indices, len_indices * sizeof(uint), GL_STATIC_DRAW, &mesh_ptr->element_buffer_id
         ));
 
-    // find the total size of each vertex
-    int layout_size = 0;
-    for (uint i = 0; i < len_layout; i++) layout_size += layout[i];
-
-    // convert size to bytes
-    layout_size *= sizeof(float);
-
-    // create attrib pointer for each section of the layout
-    int prev_layout = 0;
-    for (uint i = 0; i < len_layout; i++) {
-        if (layout[i] == 0)
-            tekThrow(OPENGL_EXCEPTION, "Cannot have layout of size 0.");
-        glVertexAttribPointer(i, layout[i], GL_FLOAT, GL_FALSE, layout_size, (void*)(prev_layout * sizeof(float)));
-        glEnableVertexAttribArray(i);
-        prev_layout += layout[i];
-    }
+    tekChainThrow(tekGenerateVertexAttributes(layout, len_layout));
 
     // keep track of how many elements are in element buffer - we need this to draw later on
     mesh_ptr->num_elements = (int)len_indices;
@@ -253,6 +258,25 @@ void tekDrawMesh(const TekMesh* mesh_ptr) {
 
     // draw elements as triangles, using the number of elements we tracked before
     glDrawElements(GL_TRIANGLES, mesh_ptr->num_elements, GL_UNSIGNED_INT, 0);
+}
+
+exception tekRecreateMesh(const float* vertices, const long len_vertices, const uint* indices, const long len_indices, const int* layout, const uint len_layout, TekMesh* mesh_ptr) {
+    glBindVertexArray(mesh_ptr->vertex_array_id);
+    if (vertices) {
+        glBindBuffer(GL_ARRAY_BUFFER, mesh_ptr->vertex_buffer_id);
+        glBufferData(GL_ARRAY_BUFFER, len_vertices, vertices, GL_STATIC_DRAW);
+    }
+
+    if (indices) {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ptr->element_buffer_id);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, len_indices, indices, GL_STATIC_DRAW);
+    }
+
+    if (layout) {
+        tekChainThrow(tekGenerateVertexAttributes(layout, len_layout));
+    }
+
+    return SUCCESS;
 }
 
 void tekDeleteMesh(const TekMesh* mesh_ptr) {

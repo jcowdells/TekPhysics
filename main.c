@@ -269,6 +269,20 @@ exception run() {
     TekGuiTextInput test_input = {};
     tekGuiCreateTextInput(&test_input);
 
+    char buffer[128 + 8];
+    char character = 1;
+    for (uint i = 0; i < 17 * 8 - 1; i++) {
+        if (i % 17 == 0)
+            buffer[i] = '\n';
+        else
+            buffer[i] = character++;
+    }
+    buffer[128 + 7] = 0;
+    TekText test_text = {};
+    printf("%s\n", buffer);
+
+    tekChainThrow(tekCreateText(buffer, 20, tekGuiGetDefaultFont(), &test_text));
+
     tekChainThrowThen(tekCreateMenu(
         &version_text,
         &start_button, &tekphysics_logo,
@@ -369,6 +383,8 @@ exception run() {
         ), {
             tekRunCleanup();
         });
+
+        // tekDrawText(&test_text, 10.0f, 10.0f);
 
         tekChainThrow(tekUpdate());
     }
