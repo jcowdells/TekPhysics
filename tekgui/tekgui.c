@@ -131,6 +131,7 @@ static exception tekGuiLoadTextButtonDefaults(struct TekGuiTextButtonDefaults* d
         defaults->width = 0;
         defaults->height = 0;
         defaults->border_width = 0;
+        defaults->text_height = 0;
         glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->background_colour);
         glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->selected_colour);
         glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->border_colour);
@@ -179,7 +180,7 @@ static exception tekGuiLoadTextInputDefaults(struct TekGuiTextInputDefaults* def
         defaults->x_pos = 0;
         defaults->y_pos = 0;
         defaults->width = 0;
-        defaults->height = 0;
+        defaults->text_height = 0;
         defaults->border_width = 0;
         glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->background_colour);
         glm_vec4_copy((vec4){1.0f, 1.0f, 1.0f, 1.0f}, defaults->border_colour);
@@ -201,17 +202,13 @@ static exception tekGuiLoadTextInputDefaults(struct TekGuiTextInputDefaults* def
     tekChainThrow(ymlDataToInteger(yml_data, &yml_integer));
     defaults->width = (uint)yml_integer;
 
-    tekChainThrow(ymlGet(&options_yml, &yml_data, "text_input_defaults", "height"));
+    tekChainThrow(ymlGet(&options_yml, &yml_data, "text_input_defaults", "text_height"));
     tekChainThrow(ymlDataToInteger(yml_data, &yml_integer));
-    defaults->height = (uint)yml_integer;
+    defaults->text_height = (uint)yml_integer;
 
     tekChainThrow(ymlGet(&options_yml, &yml_data, "text_input_defaults", "border_width"));
     tekChainThrow(ymlDataToInteger(yml_data, &yml_integer));
     defaults->border_width = (uint)yml_integer;
-
-    tekChainThrow(ymlGet(&options_yml, &yml_data, "text_input_defaults", "text_height"));
-    tekChainThrow(ymlDataToInteger(yml_data, &yml_integer));
-    defaults->text_height = (uint)yml_integer;
 
     tekChainThrow(tekGuiGetOptionsColour("text_input_defaults", "background_colour", defaults->background_colour));
     tekChainThrow(tekGuiGetOptionsColour("text_input_defaults", "border_colour", defaults->border_colour));

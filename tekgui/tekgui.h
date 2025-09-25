@@ -39,9 +39,8 @@ struct TekGuiTextInputDefaults {
     uint x_pos;
     uint y_pos;
     uint width;
-    uint height;
-    uint border_width;
     uint text_height;
+    uint border_width;
     vec4 background_colour;
     vec4 border_colour;
     vec4 text_colour;

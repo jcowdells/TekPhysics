@@ -55,9 +55,8 @@ text_input_defaults:
   x_pos: 200
   y_pos: 200
   width: 200
-  height: 50
-  border_width: 1
   text_height: 20
+  border_width: 1
   background_colour:
     r: 0.4
     g: 0.8

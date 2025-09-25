@@ -2,6 +2,7 @@
 
 #include "button.h"
 #include "../core/vector.h"
+#include "../tekgl/text.h"
 #include <cglm/vec4.h>
 
 struct TekGuiTextInput;
@@ -10,10 +11,13 @@ typedef void(*TekGuiTextInputCallback)(struct TekGuiTextInput* text_input, const
 
 typedef struct TekGuiTextInput {
     TekGuiButton button;
-    Vector text_data;
     vec4 background_colour;
     vec4 border_colour;
+    TekText tek_text;
+    Vector text;
+    uint text_height;
     vec4 text_colour;
+    uint cursor_index;
     uint border_width;
     uint mesh_index;
     TekGuiTextInputCallback callback;

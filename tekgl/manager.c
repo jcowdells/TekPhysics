@@ -18,6 +18,7 @@ static List tek_fb_funcs = {0, 0};
 static List tek_delete_funcs = {0, 0};
 static List tek_gl_load_funcs = {0, 0};
 static List tek_key_funcs = {0, 0};
+static List tek_char_funcs = {0, 0};
 static List tek_mmove_funcs = {0, 0};
 static List tek_mbutton_funcs = {0, 0};
 static List tek_mscroll_funcs = {0, 0};
@@ -75,6 +76,15 @@ void tekManagerKeyCallback(GLFWwindow* window, const int key, const int scancode
     });
 }
 
+static void tekManagerCharCallback(GLFWwindow* window, uint codepoint) {
+    if (window != tek_window) return;
+    const ListItem* item = 0;
+    foreach(item, (&tek_char_funcs), {
+        const TekCharCallback callback = (TekCharCallback)item->data;
+        callback(codepoint);
+    });
+}
+
 static void tekManagerMouseMoveCallback(GLFWwindow* window, const double x, const double y) {
     if (window != tek_window) return;
     const ListItem* item = 0;
@@ -109,6 +119,14 @@ exception tekAddKeyCallback(const TekKeyCallback callback) {
         listCreate(&tek_key_funcs);
 
     tekChainThrow(listAddItem(&tek_key_funcs, callback));
+    return SUCCESS;
+}
+
+exception tekAddCharCallback(const TekCharCallback callback) {
+    if (!tek_char_funcs.length)
+       listCreate(&tek_char_funcs);
+
+    tekChainThrow(listAddItem(&tek_char_funcs, callback));
     return SUCCESS;
 }
 
@@ -171,6 +189,7 @@ exception tekInit(const char* window_name, const int window_width, const int win
     glfwGetFramebufferSize(tek_window, &tek_window_width, &tek_window_height);
     glfwSetFramebufferSizeCallback(tek_window, tekManagerFramebufferCallback);
     glfwSetKeyCallback(tek_window, tekManagerKeyCallback);
+    glfwSetCharCallback(tek_window, tekManagerCharCallback);
     glfwSetCursorPosCallback(tek_window, tekManagerMouseMoveCallback);
     glfwSetMouseButtonCallback(tek_window, tekManagerMouseButtonCallback);
     glfwSetScrollCallback(tek_window, tekManagerMouseScrollCallback);

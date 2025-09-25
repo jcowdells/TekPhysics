@@ -17,6 +17,7 @@ typedef void(*TekFramebufferCallback)(int framebuffer_width, int framebuffer_hei
 typedef void(*TekDeleteFunc)(void);
 typedef exception(*TekGLLoadFunc)(void);
 typedef void(*TekKeyCallback)(int key, int scancode, int action, int mods);
+typedef void(*TekCharCallback)(uint codepoint);
 typedef void(*TekMousePosCallback)(double x, double y);
 typedef void(*TekMouseButtonCallback)(int button, int action, int mods);
 typedef void(*TekMouseScrollCallback)(double x_offset, double y_offset);
