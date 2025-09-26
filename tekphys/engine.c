@@ -17,8 +17,6 @@
 #include "GLFW/glfw3.h"
 #include "collisions.h"
 
-#define BILLION 1000000000
-
 #define MOUSE_SENSITIVITY 0.005f
 #define MOVE_SPEED        0.1f
 

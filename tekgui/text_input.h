@@ -18,6 +18,8 @@ typedef struct TekGuiTextInput {
     Vector text;
     uint text_height;
     vec4 text_colour;
+    uint text_start_index;
+    int text_max_length;
     uint cursor_index;
     uint border_width;
     uint mesh_index;

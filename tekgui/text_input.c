@@ -23,6 +23,27 @@ static void tekGuiGetTextInputData(const TekGuiTextInput* text_input, TekGuiBoxD
     glm_vec2_copy((vec2){(float)(text_input->button.hitbox_y + text_input->border_width), (float)(text_input->button.hitbox_y + text_input->button.hitbox_height - text_input->border_width)}, box_data->minmax_iy);
 }
 
+static void tekGuiTextInputDecrementCursor(TekGuiTextInput* text_input) {
+    if (text_input->cursor_index > 0)
+        text_input->cursor_index--;
+    else
+        return;
+    if (text_input->cursor_index < text_input->text_start_index)
+        text_input->text_start_index = text_input->cursor_index;
+}
+
+static void tekGuiTextInputIncrementCursor(TekGuiTextInput* text_input) {
+    if (text_input->cursor_index + 2 < text_input->text.length)
+        text_input->cursor_index++;
+    else
+        return;
+    if (text_input->text_max_length <= -1)
+        return;
+    if ((int)text_input->cursor_index + 1 > text_input->text_start_index + text_input->text_max_length) {
+        text_input->text_start_index++;
+    }
+}
+
 static exception tekGuiTextInputAddGLMesh(const TekGuiTextInput* text_input, uint* index) {
     TekGuiBoxData box_data = {};
     tekGuiGetTextInputData(text_input, &box_data);
@@ -37,35 +58,108 @@ static exception tekGuiTextInputUpdateGLMesh(const TekGuiTextInput* text_input) 
     return SUCCESS;
 }
 
+static uint tekGuiGetTextInputTextLength(const TekGuiTextInput* text_input) {
+    if (text_input->text_max_length != -1) {
+        return (uint)text_input->text_max_length;
+    }
+    return text_input->text.length;
+}
+
+static exception tekGuiTextInputGetTextPtr(const TekGuiTextInput* text_input, char** buffer) {
+    const uint length = tekGuiGetTextInputTextLength(text_input);
+    *buffer = (char*)malloc(length * sizeof(char));
+    if (!*buffer)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text buffer.");
+
+    if (text_input->text_max_length != -1) {
+        memcpy(*buffer, (char*)text_input->text.internal + text_input->text_start_index, text_input->text_max_length - 1);
+        buffer[text_input->text_max_length - 1] = 0;
+        return SUCCESS;
+    }
+
+    memcpy(*buffer, text_input->text.internal, length);
+    return SUCCESS;
+}
+
+static exception tekGuiTextInputGetTextPtrSAFE(const TekGuiTextInput* text_input, char** buffer) {
+    const uint length = tekGuiGetTextInputTextLength(text_input);
+    *buffer = (char*)malloc(length * sizeof(char));
+    if (!*buffer)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text buffer.");
+
+    if (text_input->text_max_length != -1) {
+        memcpy(*buffer, (char*)text_input->text.internal + text_input->text_start_index, length);
+        // buffer[text_input->text_max_length - 1] = 0;
+        return SUCCESS;
+    }
+
+    memcpy(*buffer, text_input->text.internal, length);
+    return SUCCESS;
+}
+
 static exception tekGuiTextInputCreateText(TekGuiTextInput* text_input) {
-    tekChainThrow(tekCreateText(text_input->text.internal, text_input->text_height, &monospace_font, &text_input->tek_text));
+    char* text = 0;
 
-    char temp;
-    tekChainThrow(vectorGetItem(&text_input->text, text_input->cursor_index, &temp));
-    const char cursor = CURSOR;
-    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &cursor));
-    tekChainThrow(tekCreateText(text_input->text.internal, text_input->text_height, &monospace_font, &text_input->tek_text_cursor));
-    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &temp));
+    tekChainThrow(tekGuiTextInputGetTextPtr(text_input, &text));
+    tekChainThrow(tekCreateText(text, text_input->text_height, &monospace_font, &text_input->tek_text));
 
+    // const float max_width = (float)text_input->button.hitbox_width - 2 * text_input->tek_text.height;
+    // if (text_input->text_max_length == -1 && text_input->tek_text.width >= max_width) {
+    //     text_input->text_max_length = (int)text_input->text.length - 1;
+    //     tekChainThrow(tekCreateText(text, text_input->text_height, &monospace_font, &text_input->tek_text));
+    // }
+
+    const uint cursor_index = text_input->cursor_index - text_input->text_start_index;
+    text[cursor_index] = CURSOR;
+    tekChainThrow(tekCreateText(text, text_input->text_height, &monospace_font, &text_input->tek_text_cursor));
+
+    free(text);
     return SUCCESS;
 }
 
 static exception tekGuiTextInputRecreateText(TekGuiTextInput* text_input) {
-    tekChainThrow(tekUpdateText(&text_input->tek_text, text_input->text.internal, text_input->text_height));
+    char* text = 0;
 
-    char temp;
-    tekChainThrow(vectorGetItem(&text_input->text, text_input->cursor_index, &temp));
-    const char cursor = CURSOR;
-    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &cursor));
-    tekChainThrow(tekUpdateText(&text_input->tek_text_cursor, text_input->text.internal, text_input->text_height));
-    tekChainThrow(vectorSetItem(&text_input->text, text_input->cursor_index, &temp));
+    tekChainThrow(tekGuiTextInputGetTextPtr(text_input, &text));
+    tekChainThrow(tekUpdateText(&text_input->tek_text, text, text_input->text_height));
 
+    const float max_width = (float)text_input->button.hitbox_width - 2 * text_input->tek_text.height;
+    if (text_input->text_max_length == -1 && text_input->tek_text.width >= max_width) {
+        text_input->text_max_length = (int)text_input->text.length - 1;
+        tekChainThrow(tekUpdateText(&text_input->tek_text, text, text_input->text_height));
+    }
+
+    const uint cursor_index = text_input->cursor_index - text_input->text_start_index;
+    text[cursor_index] = CURSOR;
+    tekChainThrow(tekUpdateText(&text_input->tek_text_cursor, text, text_input->text_height));
+
+    free(text);
+    return SUCCESS;
+}
+
+static exception tekGuiTextInputRecreateTextSAFE(TekGuiTextInput* text_input) {
+    char* text = 0;
+
+    tekChainThrow(tekGuiTextInputGetTextPtrSAFE(text_input, &text));
+    tekChainThrow(tekUpdateText(&text_input->tek_text, text, text_input->text_height));
+
+    const float max_width = (float)text_input->button.hitbox_width - 2 * text_input->tek_text.height;
+    if (text_input->text_max_length == -1 && text_input->tek_text.width >= max_width) {
+         text_input->text_max_length = (int)text_input->text.length - 1;
+         tekChainThrow(tekUpdateText(&text_input->tek_text, text, text_input->text_height));
+    }
+
+    const uint cursor_index = text_input->cursor_index - text_input->text_start_index;
+    text[cursor_index] = CURSOR;
+    tekChainThrow(tekUpdateText(&text_input->tek_text_cursor, text, text_input->text_height));
+
+    free(text);
     return SUCCESS;
 }
 
 static exception tekGuiTextInputAdd(TekGuiTextInput* text_input, const char codepoint) {
     tekChainThrow(vectorInsertItem(&text_input->text, text_input->cursor_index, &codepoint));
-    text_input->cursor_index++;
+    tekGuiTextInputIncrementCursor(text_input);
     return SUCCESS;
 }
 
@@ -73,15 +167,18 @@ static exception tekGuiTextInputRemove(TekGuiTextInput* text_input) {
     if (text_input->text.length <= 1) return SUCCESS;
     if (text_input->cursor_index <= 0) return SUCCESS;
     tekChainThrow(vectorRemoveItem(&text_input->text, text_input->cursor_index - 1, NULL));
-    text_input->cursor_index--;
+    tekGuiTextInputDecrementCursor(text_input);
     return SUCCESS;
 }
 
 static void tekGuiTextInputCharCallback(const uint codepoint) {
     if (!selected_input) return;
-    printf("Char: %c\n", codepoint);
     tekGuiTextInputAdd(selected_input, (char)codepoint);
-    printf("%d\n", tekGuiTextInputRecreateText(selected_input));
+    if (selected_input->text_max_length != -1) {
+        selected_input->text_start_index++;
+    }
+    tekGuiTextInputRecreateText(selected_input);
+    printf("%d %u %u\n", selected_input->text_max_length, selected_input->cursor_index, selected_input->text_start_index);
 }
 
 static void tekGuiTextInputKeyCallback(const int key, const int scancode, const int action, const int mods) {
@@ -98,18 +195,17 @@ static void tekGuiTextInputKeyCallback(const int key, const int scancode, const 
         tekGuiTextInputRemove(selected_input);
         break;
     case GLFW_KEY_LEFT:
-        if (selected_input->cursor_index > 0)
-            selected_input->cursor_index--;
+        tekGuiTextInputDecrementCursor(selected_input);
+        printf("%d %u %u\n", selected_input->text_max_length, selected_input->cursor_index, selected_input->text_start_index);
         break;
     case GLFW_KEY_RIGHT:
-        if (selected_input->cursor_index + 2 < selected_input->text.length)
-            selected_input->cursor_index++;
+        tekGuiTextInputIncrementCursor(selected_input);
         break;
     default:
         return;
     }
 
-    tekGuiTextInputRecreateText(text_input);
+    tekGuiTextInputRecreateTextSAFE(text_input);
 }
 
 static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCallbackData callback_data) {
@@ -157,6 +253,8 @@ exception tekGuiCreateTextInput(TekGuiTextInput* text_input) {
     tekChainThrow(vectorAddItem(&text_input->text, &zero));
     text_input->text_height = defaults.text_height;
     text_input->cursor_index = 0;
+    text_input->text_max_length = -1;
+    text_input->text_start_index = 0;
     tekChainThrow(tekGuiTextInputCreateText(text_input));
 
     text_input->border_width = defaults.border_width;
@@ -176,7 +274,7 @@ exception tekGuiDrawTextInput(const TekGuiTextInput* text_input) {
     flag display_cursor = 0;
     struct timespec time;
     clock_gettime(CLOCK_MONOTONIC, &time);
-    if (text_input == selected_input && time.tv_nsec % 1000000000 > 500000000) {
+    if (text_input == selected_input && time.tv_nsec % BILLION > BILLION / 2) {
         display_cursor = 1;
     }
 
