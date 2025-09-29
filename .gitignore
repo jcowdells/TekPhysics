@@ -40,7 +40,7 @@
 /vcpkg/downloads/
 
 # Python virtualenv
-venv/
+/venv/
 .env/
 
 # Bloat
