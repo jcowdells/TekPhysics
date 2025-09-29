@@ -29,4 +29,7 @@ typedef struct TekGuiTextInput {
 
 exception tekGuiCreateTextInput(TekGuiTextInput* text_input);
 exception tekGuiDrawTextInput(const TekGuiTextInput* text_input);
+exception tekGuiSetTextInputPosition(TekGuiTextInput* text_input, uint x_pos, uint y_pos);
+exception tekGuiSetTextInputSize(TekGuiTextInput* text_input, uint width, uint height);
+exception tekGuiSetTextInputText(TekGuiTextInput* text_input, const char* text);
 void tekGuiDeleteTextInput(TekGuiTextInput* text_input);

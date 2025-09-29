@@ -213,6 +213,11 @@ tekDeleteMenu(&version_text, &start_button, &tekphysics_logo); \
 vectorDelete(&entities); \
 tekDelete() \
 
+static void text_callback(TekGuiTextInput* input, const char* text, uint len_text) {
+    printf("Callback: %s\n", text);
+    tekGuiSetTextInputText(input, "The Input Has Been Changed.");
+}
+
 exception run() {
     // set up GLFW window and other utilities.
     tekChainThrow(tekInit("TekPhysics", WINDOW_WIDTH, WINDOW_HEIGHT));
@@ -268,6 +273,13 @@ exception run() {
 
     TekGuiTextInput test_input = {};
     tekGuiCreateTextInput(&test_input);
+    test_input.callback = text_callback;
+
+    tekGuiSetTextInputPosition(&test_input, 0, 0);
+
+    TekGuiTextInput test_input2 = {};
+    tekGuiCreateTextInput(&test_input2);
+    test_input2.callback = text_callback;
 
     char buffer[128 + 8];
     char character = 1;
@@ -375,6 +387,7 @@ exception run() {
         }
 
         tekGuiDrawTextInput(&test_input);
+        tekGuiDrawTextInput(&test_input2);
 
         tekChainThrowThen(tekDrawMenu(
             &version_text,

@@ -177,6 +177,16 @@ exception vectorInsertItem(Vector* vector, const uint index, const void* item) {
 }
 
 /**
+ * Set all items in the vector to NULL and reset the length to 0.
+ * @param vector The vector to clear out.
+ * @note This will maintain the previous internal capacity of the vector.
+ */
+void vectorClear(Vector* vector) {
+    memset(vector->internal, 0, vector->internal_size * vector->element_size);
+    vector->length = 0;
+}
+
+/**
  * Delete a vector, freeing the internal list and zeroing the struct.
  * @param vector The vector to delete.
  */

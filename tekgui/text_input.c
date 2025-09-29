@@ -147,6 +147,16 @@ static void tekGuiTextInputCharCallback(const uint codepoint) {
     printf("%d %u %u\n", selected_input->text_max_length, selected_input->cursor_index, selected_input->text_start_index);
 }
 
+static exception tekGuiFinishTextInput(TekGuiTextInput* text_input) {
+    selected_input = 0;
+    text_input->cursor_index = 0;
+    text_input->text_start_index = 0;
+    if (text_input->callback)
+        text_input->callback(text_input, text_input->text.internal, text_input->text.length);
+    tekChainThrow(tekGuiTextInputRecreateText(text_input));
+    return SUCCESS;
+}
+
 static void tekGuiTextInputKeyCallback(const int key, const int scancode, const int action, const int mods) {
     if (!selected_input) return;
     if (action != GLFW_RELEASE && action != GLFW_REPEAT) return;
@@ -155,9 +165,7 @@ static void tekGuiTextInputKeyCallback(const int key, const int scancode, const 
 
     switch (key) {
     case GLFW_KEY_ENTER:
-        selected_input->cursor_index = 0;
-        selected_input->text_start_index = 0;
-        selected_input = 0;
+        tekGuiFinishTextInput(selected_input);
         break;
     case GLFW_KEY_BACKSPACE:
         tekGuiTextInputRemove(selected_input);
@@ -184,6 +192,10 @@ static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCall
     case TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK:
         if (callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT || callback_data.data.mouse_button.action != GLFW_RELEASE)
             break;
+        if (text_input == selected_input)
+            break;
+        if (selected_input)
+            tekGuiFinishTextInput(selected_input);
         selected_input = text_input;
         printf("Selected input: %p\n", selected_input);
         break;
@@ -252,6 +264,46 @@ exception tekGuiDrawTextInput(const TekGuiTextInput* text_input) {
         tekChainThrow(tekDrawColouredText(&text_input->tek_text, x, y, text_input->text_colour));
     }
     glDepthFunc(GL_LESS);
+
+    return SUCCESS;
+}
+
+exception tekGuiSetTextInputPosition(TekGuiTextInput* text_input, uint x_pos, uint y_pos) {
+    tekGuiSetButtonPosition(&text_input->button, x_pos, y_pos);
+    tekChainThrow(tekGuiTextInputUpdateGLMesh(text_input));
+
+    return SUCCESS;
+}
+
+exception tekGuiSetTextInputSize(TekGuiTextInput* text_input, uint width, uint height) {
+    tekGuiSetButtonSize(&text_input->button, width, height);
+    tekChainThrow(tekGuiTextInputUpdateGLMesh(text_input));
+
+    return SUCCESS;
+}
+
+exception tekGuiSetTextInputText(TekGuiTextInput* text_input, const char* text) {
+    text_input->cursor_index = 0;
+    text_input->text_start_index = 0;
+    vectorClear(&text_input->text);
+
+    const char zero = 0;
+    for (uint i = 0; i < 2; i++)
+        tekChainThrow(vectorAddItem(&text_input->text, &zero));
+
+    const uint len_text = strlen(text);
+    for (uint i = 0; i < len_text; i++) {
+        tekChainThrow(tekGuiTextInputAdd(text_input, text[i]));
+        if (text_input->text_max_length == -1)
+            tekChainThrow(tekGuiTextInputRecreateText(text_input));
+    }
+
+    tekChainThrow(tekGuiTextInputRecreateText(text_input));
+
+    if (text_input != selected_input) {
+        text_input->cursor_index = 0;
+        text_input->text_start_index = 0;
+    }
 
     return SUCCESS;
 }
