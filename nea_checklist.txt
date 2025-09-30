@@ -1,0 +1,14 @@
+Design:
+
+Testing:
+
+Evaluation:
+    - objective evaluation
+        make a table with objectives + evaluation + test number
+    - end user feedback
+        talk to stu about ur program
+    - 3 future improvements.
+
+Technical Solution:
+    - code ctrlc ctrlv
+    - guide to complex functions

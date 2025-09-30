@@ -509,6 +509,7 @@ exception ymlGetList(YmlFile* yml, YmlData** data, const List* keys) {
             tekThrow(YML_EXCEPTION, "Invalid key - inaccessible type.");
 
         // get the data stored in the hashtable, and make sure that it is a valid key
+        printf("Checking key: %s\n", key->data);
         const exception tek_exception = hashtableGet(hashtable, key->data, &loop_data);
         if (tek_exception)
             tekThrow(YML_EXCEPTION, "Invalid key - key does not exist.");

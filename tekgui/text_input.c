@@ -37,7 +37,6 @@ static void tekGuiTextInputDecrementCursor(TekGuiTextInput* text_input) {
         return;
     if (text_input->text_start_index > 0 && text_input->cursor_index < text_input->text_start_index)
         text_input->text_start_index--;
-    printf("Text Start Index: %u\n", text_input->text_start_index);
 }
 
 static void tekGuiTextInputIncrementCursor(TekGuiTextInput* text_input) {
@@ -144,7 +143,6 @@ static void tekGuiTextInputCharCallback(const uint codepoint) {
     if (!selected_input) return;
     tekGuiTextInputAdd(selected_input, (char)codepoint);
     tekGuiTextInputRecreateText(selected_input);
-    printf("%d %u %u\n", selected_input->text_max_length, selected_input->cursor_index, selected_input->text_start_index);
 }
 
 static exception tekGuiFinishTextInput(TekGuiTextInput* text_input) {
@@ -172,7 +170,6 @@ static void tekGuiTextInputKeyCallback(const int key, const int scancode, const 
         break;
     case GLFW_KEY_LEFT:
         tekGuiTextInputDecrementCursor(selected_input);
-        printf("%d %u %u\n", selected_input->text_max_length, selected_input->cursor_index, selected_input->text_start_index);
         break;
     case GLFW_KEY_RIGHT:
         tekGuiTextInputIncrementCursor(selected_input);
@@ -185,7 +182,6 @@ static void tekGuiTextInputKeyCallback(const int key, const int scancode, const 
 }
 
 static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCallbackData callback_data) {
-    printf("Callbakc\n");
     TekGuiTextInput* text_input = (TekGuiTextInput*)button->data;
 
     switch (callback_data.type) {
@@ -197,7 +193,6 @@ static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCall
         if (selected_input)
             tekGuiFinishTextInput(selected_input);
         selected_input = text_input;
-        printf("Selected input: %p\n", selected_input);
         break;
     default:
         break;

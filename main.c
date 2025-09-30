@@ -39,6 +39,7 @@
 #include "tekgui/list_window.h"
 #include "tekgui/text_button.h"
 #include "tekgui/text_input.h"
+#include "tekgui/option_window.h"
 
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT 480
@@ -409,42 +410,14 @@ exception run() {
 }
 
 exception test() {
-    Vector list = {};
-    vectorCreate(1, sizeof(char), &list);
-
-    char item = 'A';
-
-    for (uint i = 0; i < 5; i++) {
-        tekChainThrow(vectorAddItem(&list, &item));
-        item++;
-    }
-
-    printf("Before inserting:\n[");
-    for (uint i = 0; i < list.length; i++) {
-        vectorGetItem(&list, i, &item);
-        if (i != 0) printf(", ");
-        printf("%c", item);
-    }
-    printf("]\n");
-
-    item = '@';
-    tekChainThrow(vectorInsertItem(&list, 1, &item));
-
-    printf("After inserting:\n[");
-    for (uint i = 0; i < list.length; i++) {
-        vectorGetItem(&list, i, &item);
-        if (i != 0) printf(", ");
-        printf("%c", item);
-    }
-    printf("]\n");
-
-    vectorDelete(&list);
+    TekGuiOptionWindow option_window = {};
+    tekChainThrow(tekGuiCreateOptionWindow("../res/windows/test_window.yml", &option_window));
 
     return SUCCESS;
 }
 
 int main(void) {
     tekInitExceptions();
-    tekLog(run());
+    tekLog(test());
     tekCloseExceptions();
 }
