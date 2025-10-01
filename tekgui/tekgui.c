@@ -11,6 +11,7 @@
 #define DE_INITIALISED  2
 
 static flag tek_gui_init = NOT_INITIALISED;
+static flag tek_gui_gl_init = NOT_INITIALISED;
 static YmlFile options_yml;
 
 static struct TekGuiWindowDefaults window_defaults;
@@ -250,11 +251,13 @@ exception tekGuiGetTextInputDefaults(struct TekGuiTextInputDefaults* defaults) {
 }
 
 void tekGuiDelete() {
-
+    tek_gui_init = DE_INITIALISED;
+    tek_gui_gl_init = DE_INITIALISED;
 }
 
 exception tekGuiGLLoad() {
     tekChainThrow(tekCreateBitmapFont("../res/urwgothic.ttf", 0, 64, &default_font));
+    tek_gui_gl_init = INITIALISED;
     return SUCCESS;
 }
 
@@ -299,6 +302,10 @@ tek_init tekGuiInit() {
     tek_gui_init = INITIALISED;
 }
 
-TekBitmapFont* tekGuiGetDefaultFont() {
-    return &default_font;
+exception tekGuiGetDefaultFont(TekBitmapFont** font) {
+    if (tek_gui_gl_init != INITIALISED)
+        tekThrow(OPENGL_EXCEPTION, "Attempted to run function before OpenGL initialised.");
+
+    *font = &default_font;
+    return SUCCESS;
 }

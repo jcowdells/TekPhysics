@@ -52,4 +52,4 @@ exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults);
 exception tekGuiGetListWindowDefaults(struct TekGuiListWindowDefaults* defaults);
 exception tekGuiGetTextButtonDefaults(struct TekGuiTextButtonDefaults* defaults);
 exception tekGuiGetTextInputDefaults(struct TekGuiTextInputDefaults* defaults);
-TekBitmapFont* tekGuiGetDefaultFont();
+exception tekGuiGetDefaultFont(TekBitmapFont** font);

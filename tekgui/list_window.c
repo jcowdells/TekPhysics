@@ -41,7 +41,9 @@ static exception tekGuiListWindowAddLookup(TekGuiListWindow* window, const char*
     TekText* tek_text_ptr = (TekText*)malloc(sizeof(TekText));
     if (!tek_text_ptr)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text mesh.");
-    tekChainThrow(tekCreateText(text, window->text_size, tekGuiGetDefaultFont(), tek_text_ptr));
+    TekBitmapFont* font;
+    tekChainThrow(tekGuiGetDefaultFont(&font));
+    tekChainThrow(tekCreateText(text, window->text_size, font, tek_text_ptr));
     tekChainThrow(hashtableSet(&window->text_lookup, text, tek_text_ptr));
     if (tek_text)
         *tek_text = tek_text_ptr;

@@ -101,7 +101,9 @@ static void tekGuiWindowUpdateButtonHitbox(TekGuiWindow* window) {
 
 static exception tekGuiWindowCreateTitleText(TekGuiWindow* window) {
     const uint text_size = window->title_width * 4 / 5;
-    tekChainThrow(tekCreateText(window->title, text_size, tekGuiGetDefaultFont(), &window->title_text));
+    TekBitmapFont* font;
+    tekChainThrow(tekGuiGetDefaultFont(&font));
+    tekChainThrow(tekCreateText(window->title, text_size, font, &window->title_text));
     return SUCCESS;
 }
 

@@ -144,8 +144,9 @@ static exception tekDrawBuilderMenu(const TekGuiWindow* hierarchy_window) {
 
 static exception tekCreateMenu(TekText* version_text, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo, TekGuiWindow* hierarchy_window) {
     // create version font + text.
-    tekChainThrow(tekCreateBitmapFont("../res/verdana_bold.ttf", 0, 64, &depth_font));
-    tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, tekGuiGetDefaultFont(), version_text));
+    TekBitmapFont* font;
+    tekChainThrow(tekGuiGetDefaultFont(&font));
+    tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, font, version_text));
 
     tekChainThrow(tekCreateMainMenu(WINDOW_WIDTH, WINDOW_HEIGHT, start_button, tekphysics_logo));
     tekChainThrow(tekCreateBuilderMenu(hierarchy_window));
@@ -272,29 +273,8 @@ exception run() {
 
     TekGuiWindow hierarchy_window = {};
 
-    TekGuiTextInput test_input = {};
-    tekGuiCreateTextInput(&test_input);
-    test_input.callback = text_callback;
-
-    tekGuiSetTextInputPosition(&test_input, 0, 0);
-
-    TekGuiTextInput test_input2 = {};
-    tekGuiCreateTextInput(&test_input2);
-    test_input2.callback = text_callback;
-
-    char buffer[128 + 8];
-    char character = 1;
-    for (uint i = 0; i < 17 * 8 - 1; i++) {
-        if (i % 17 == 0)
-            buffer[i] = '\n';
-        else
-            buffer[i] = character++;
-    }
-    buffer[128 + 7] = 0;
-    TekText test_text = {};
-    printf("%s\n", buffer);
-
-    tekChainThrow(tekCreateText(buffer, 20, tekGuiGetDefaultFont(), &test_text));
+    TekGuiOptionWindow option_window = {};
+    tekChainThrow(tekGuiCreateOptionWindow("../res/windows/test_window.yml", &option_window));
 
     tekChainThrowThen(tekCreateMenu(
         &version_text,
@@ -387,9 +367,6 @@ exception run() {
             break;
         }
 
-        tekGuiDrawTextInput(&test_input);
-        tekGuiDrawTextInput(&test_input2);
-
         tekChainThrowThen(tekDrawMenu(
             &version_text,
             &start_button, &tekphysics_logo,
@@ -398,12 +375,9 @@ exception run() {
             tekRunCleanup();
         });
 
-        // tekDrawText(&test_text, 10.0f, 10.0f);
-
         tekChainThrow(tekUpdate());
     }
 
-    tekGuiDeleteTextInput(&test_input);
     tekRunCleanup();
 
     return SUCCESS;
@@ -418,6 +392,6 @@ exception test() {
 
 int main(void) {
     tekInitExceptions();
-    tekLog(test());
+    tekLog(run());
     tekCloseExceptions();
 }
