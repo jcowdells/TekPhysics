@@ -287,7 +287,7 @@ struct TekEngineArgs {
 };
 
 #define threadThrow(exception_code, exception_message) { const exception __thread_exception = exception_code; if (__thread_exception) { tekSetException(__thread_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); threadExcept(state_queue, __thread_exception); goto tek_engine_cleanup; } }
-#define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__LINE__, __FUNCTION__, __FILE__); threadExcept(state_queue, __thread_exception); goto tek_engine_cleanup; } }
+#define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__thread_exception, __LINE__, __FUNCTION__, __FILE__); threadExcept(state_queue, __thread_exception); goto tek_engine_cleanup; } }
 
 /**
  * @brief The main physics thread procedure, will run in parallel to the graphics thread. Responsible for logic, has a loop running at fixed time interval.

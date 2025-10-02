@@ -297,6 +297,22 @@ static exception tekGuiCreateOption(const char* name, const char* label, const f
     return SUCCESS;
 }
 
+static exception tekGuiOptionWindowDrawCallback(TekGuiWindow* window_ptr) {
+    TekGuiOptionWindow* window = (TekGuiOptionWindow*)window_ptr->data;
+    return SUCCESS;
+}
+
+static exception tekGuiCreateBaseWindow(TekGuiOptionWindow* window, struct TekGuiOptionsWindowDefaults* defaults) {
+    tekChainThrow(tekGuiCreateWindow(&window->window));
+    tekGuiSetWindowPosition(&window->window, defaults->x_pos, defaults->y_pos);
+    tekGuiSetWindowSize(&window->window, defaults->width, defaults->height);
+    tekChainThrow(tekGuiSetWindowTitle(&window->window, defaults->title));
+    printf("Set title to: '%s'\n", defaults->title);
+    window->window.draw_callback = tekGuiOptionWindowDrawCallback;
+    window->window.data = window;
+    return SUCCESS;
+}
+
 exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* window) {
     tekChainThrow(vectorCreate(4, sizeof(TekGuiOption), &window->option_display));
 
@@ -315,6 +331,10 @@ exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* 
             ymlDelete(&yml_file);
         });
     }
+
+    tekChainThrowThen(tekGuiCreateBaseWindow(window, &defaults), {
+        ymlDelete(&yml_file);
+    });
 
     ymlDelete(&yml_file);
     return SUCCESS;

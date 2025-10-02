@@ -297,7 +297,12 @@ exception hashtableGet(HashTable* hashtable, const char* key, void** data) {
 
     // retrieve the node in the linked list
     HashNode* node_ptr;
-    tekChainThrow(hashtableGetNode(hashtable, key, &node_ptr));
+    exception tek_exception = hashtableGetNode(hashtable, key, &node_ptr);
+
+    if (tek_exception) {
+        if (tek_exception == FAILURE) return FAILURE;
+        else tekChainThrow(tek_exception);
+    }
 
     // return the data stored at that node
     *data = node_ptr->data;

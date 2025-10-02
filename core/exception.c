@@ -31,7 +31,6 @@ void tekAddException(const int exception_code, const char* exception_name) {
  * Initialise exceptions, adding human readable names to the list of exception names.
  */
 void tekInitExceptions() {
-    initialised = 1;
     tekAddException(FAILURE, "Failure");
     tekAddException(MEMORY_EXCEPTION, "Memory Allocation Exception");
     tekAddException(NULL_PTR_EXCEPTION, "Null Pointer Exception");
@@ -50,6 +49,7 @@ void tekInitExceptions() {
     tekAddException(VECTOR_EXCEPTION, "Vector Exception");
     tekAddException(ENGINE_EXCEPTION, "Engine Exception");
     tekAddException(BITSET_EXCEPTION, "BitSet Exception");
+    initialised = 1;
 }
 
 /**
@@ -66,8 +66,11 @@ void tekCloseExceptions() {
  * Get the name of an exception using its numeric code.
  * @param exception_code The exception code to get.
  * @return A pointer to the exception's name
+ * @note Will return a default name if the exception code is not valid, or the exception handler is not initialised.
  */
 char* tekGetExceptionName(const int exception_code) {
+    if (!initialised || exception_code > NUM_EXCEPTIONS || exception_code <= 0)
+        return default_exception;
     char* exception = exceptions[exception_code - 1];
     if (!exception) exception = default_exception;
     return exception;
@@ -96,13 +99,11 @@ void tekPrintException() {
  * @param exception_message A message to describe the error, e.g. malloc() returned a null pointer.
  */
 void tekSetException(const int exception_code, const int exception_line, const char* exception_function, const char* exception_file, const char* exception_message) {
-    char* exception_name;
-    if (initialised) {
-        exception_name = tekGetExceptionName(exception_code);
-    } else {
-        exception_name = default_exception;
+    snprintf(exception_buffer, E_BUFFER_SIZE, "%s (%d) in function '%s', line %d of %s:\n    %s\n", tekGetExceptionName(exception_code), exception_code, exception_function, exception_line, exception_file, exception_message);
+    if (exception_buffer[E_BUFFER_SIZE - 2] != 0) {
+        exception_buffer[E_BUFFER_SIZE - 2] = '\n';
+        exception_buffer[E_BUFFER_SIZE - 1] = 0;
     }
-    sprintf(exception_buffer, "%s (%d) in function '%s', line %d of %s:\n    %s\n", exception_name, exception_code, exception_function, exception_line, exception_file, exception_message);
     stack_trace_index = 0;
 }
 
@@ -113,10 +114,14 @@ void tekSetException(const int exception_code, const int exception_line, const c
  * @param exception_function The function in which the exception occurred, should use the __FUNCTION__ macro.
  * @param exception_file The file where the exception occurred, should use the __FILE__ macro.
  */
-void tekTraceException(const int exception_line, const char* exception_function, const char* exception_file) {
-    sprintf(stack_trace_buffer[stack_trace_index], "... in function '%s', line %d of %s\n", exception_function, exception_line, exception_file);
+void tekTraceException(const int exception_code, const int exception_line, const char* exception_function, const char* exception_file) {
+    snprintf(stack_trace_buffer[stack_trace_index], E_MESSAGE_SIZE,  "... %s (%d) in function '%s', line %d of %s\n", tekGetExceptionName(exception_code), exception_code, exception_function, exception_line, exception_file);
+    if (stack_trace_buffer[stack_trace_index][E_MESSAGE_SIZE - 2] != 0) {
+        stack_trace_buffer[stack_trace_index][E_MESSAGE_SIZE - 2] = '\n';
+        stack_trace_buffer[stack_trace_index][E_MESSAGE_SIZE - 1] = 0;
+    }
     if (stack_trace_index == STACK_TRACE_BUFFER_SIZE - 1) {
-        sprintf(stack_trace_buffer[stack_trace_index - 1], "... stack trace too large to display entirely ...\n");
+        snprintf(stack_trace_buffer[stack_trace_index - 1], E_MESSAGE_SIZE, "... stack trace too large to display entirely ...\n");
     } else {
         stack_trace_index++;
     }
