@@ -168,6 +168,17 @@ void tekSetWindowColour(vec3 colour) {
     glm_vec3_copy(colour, tek_window_colour);
 }
 
+void tekSetDrawMode(const flag draw_mode) {
+    if (draw_mode == DRAW_MODE_NORMAL) {
+        glDepthFunc(GL_LESS);
+        return;
+    }
+
+    if (draw_mode == DRAW_MODE_GUI) {
+        glDepthFunc(GL_ALWAYS);
+    }
+}
+
 exception tekInit(const char* window_name, const int window_width, const int window_height) {
     // initialise glfw
     if (!glfwInit()) tekThrow(GLFW_EXCEPTION, "GLFW failed to initialise.");

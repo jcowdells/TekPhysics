@@ -187,6 +187,8 @@ static exception tekDrawMenu(const TekText* version_text, const TekGuiTextButton
         tekChangeMenuMode(version_text, start_button, tekphysics_logo);
     }
 
+    tekSetDrawMode(DRAW_MODE_GUI);
+
     switch (mode) {
     case MODE_MAIN_MENU:
         tekChainThrow(tekDrawMainMenu(start_button, tekphysics_logo));
@@ -201,6 +203,9 @@ static exception tekDrawMenu(const TekText* version_text, const TekGuiTextButton
     }
 
     tekChainThrow(tekDrawText(version_text, (float)window_width - 185.0f, (float)window_height - 20.0f));
+
+    tekSetDrawMode(DRAW_MODE_NORMAL);
+
     return SUCCESS;
 }
 

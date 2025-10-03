@@ -17,10 +17,10 @@ static TekGuiTextInput* selected_input = 0;
 static TekBitmapFont monospace_font = {};
 
 static void tekGuiGetTextInputData(const TekGuiTextInput* text_input, TekGuiBoxData* box_data) {
-    glm_vec2_copy((vec2){(float)text_input->button.hitbox_x, (float)(text_input->button.hitbox_x + text_input->button.hitbox_width)}, box_data->minmax_x);
-    glm_vec2_copy((vec2){(float)text_input->button.hitbox_y, (float)(text_input->button.hitbox_y + text_input->button.hitbox_height)}, box_data->minmax_y);
-    glm_vec2_copy((vec2){(float)(text_input->button.hitbox_x + text_input->border_width), (float)(text_input->button.hitbox_x + text_input->button.hitbox_width - text_input->border_width)}, box_data->minmax_ix);
-    glm_vec2_copy((vec2){(float)(text_input->button.hitbox_y + text_input->border_width), (float)(text_input->button.hitbox_y + text_input->button.hitbox_height - text_input->border_width)}, box_data->minmax_iy);
+    glm_vec2_copy((vec2){(float)text_input->button.hitbox_x, (float)text_input->button.hitbox_x + (float)text_input->button.hitbox_width}, box_data->minmax_x);
+    glm_vec2_copy((vec2){(float)text_input->button.hitbox_y, (float)text_input->button.hitbox_y + (float)text_input->button.hitbox_height}, box_data->minmax_y);
+    glm_vec2_copy((vec2){(float)text_input->button.hitbox_x + (float)text_input->border_width, (float)text_input->button.hitbox_x + (float)(text_input->button.hitbox_width - text_input->border_width)}, box_data->minmax_ix);
+    glm_vec2_copy((vec2){(float)text_input->button.hitbox_y + (float)text_input->border_width, (float)text_input->button.hitbox_y + (float)(text_input->button.hitbox_height - text_input->border_width)}, box_data->minmax_iy);
 }
 
 static uint tekGuiGetTextInputTextLength(const TekGuiTextInput* text_input) {
@@ -182,6 +182,7 @@ static void tekGuiTextInputKeyCallback(const int key, const int scancode, const 
 }
 
 static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCallbackData callback_data) {
+    printf("Buttonic Callback\n");
     TekGuiTextInput* text_input = (TekGuiTextInput*)button->data;
 
     switch (callback_data.type) {
@@ -215,7 +216,7 @@ exception tekGuiCreateTextInput(TekGuiTextInput* text_input) {
     tekChainThrow(tekGuiGetTextInputDefaults(&defaults));
 
     tekChainThrow(tekGuiCreateButton(&text_input->button));
-    tekGuiSetButtonPosition(&text_input->button, defaults.x_pos, defaults.y_pos);
+    tekGuiSetButtonPosition(&text_input->button, (int)defaults.x_pos, (int)defaults.y_pos);
     tekGuiSetButtonSize(&text_input->button, defaults.width, defaults.text_height * 5 / 4);
     text_input->button.callback = tekGuiTextInputButtonCallback;
     text_input->button.data = (void*)text_input;
@@ -241,7 +242,6 @@ exception tekGuiCreateTextInput(TekGuiTextInput* text_input) {
 }
 
 exception tekGuiDrawTextInput(const TekGuiTextInput* text_input) {
-    glDepthFunc(GL_ALWAYS);
     tekChainThrow(tekGuiDrawBox(text_input->mesh_index, text_input->background_colour, text_input->border_colour));
     const float x = (float)(text_input->button.hitbox_x + (int)(text_input->text_height / 2));
     const float y = (float)text_input->button.hitbox_y;
@@ -258,7 +258,6 @@ exception tekGuiDrawTextInput(const TekGuiTextInput* text_input) {
     } else {
         tekChainThrow(tekDrawColouredText(&text_input->tek_text, x, y, text_input->text_colour));
     }
-    glDepthFunc(GL_LESS);
 
     return SUCCESS;
 }

@@ -202,19 +202,17 @@ static exception tekGuiLoadOptionsYml(YmlFile* yml_file, struct TekGuiOptionsWin
  * @param[in/out] option_display The vector for which to add the label display to.
  * @throws OPENGL_EXCEPTION if something fails graphically.
  */
-static exception tekGuiCreateLabelOption(const char* label, const uint text_height, Vector* option_display) {
+static exception tekGuiCreateLabelOption(const char* label, const uint text_height, TekGuiOption* option_display, uint* option_index) {
     // empty option struct
-    TekGuiOption option = {};
+    TekGuiOption* option = option_display + *option_index;
+    (*option_index)++;
 
     // fill with label data
-    option.type = TEK_LABEL;
-    option.height = text_height * 5 / 4;
+    option->type = TEK_LABEL;
+    option->height = text_height * 5 / 4;
     TekBitmapFont* font;
     tekChainThrow(tekGuiGetDefaultFont(&font));
-    tekChainThrow(tekCreateText(label, text_height, font, &option.display.label));
-
-    // add to option vector.
-    tekChainThrow(vectorAddItem(option_display, &option));
+    tekChainThrow(tekCreateText(label, text_height, font, &option->display.label));
 
     return SUCCESS;
 }
@@ -230,19 +228,15 @@ static void tekGuiOptionInputCallback(struct TekGuiTextInput* text_input, const 
  * @param[in/out] option_display The vector to add the display item to.
  * @throws OPENGL_EXCEPTION if something graphical fails.
  */
-static exception tekGuiCreateSingleInput(const char* name, const flag type, const uint input_width, Vector* option_display) {
-    // emtpy option struct
-    TekGuiOption empty_option = {};
-    tekChainThrow(vectorAddItem(option_display, &empty_option));
-
+static exception tekGuiCreateSingleInput(const char* name, const flag type, const uint input_width, TekGuiOption* option_display, uint* option_index) {
     // get pointer to struct
-    TekGuiOption* option;
-    tekChainThrow(vectorGetItemPtr(option_display, option_display->length - 1,  &option));
+    TekGuiOption* option = option_display + *option_index;
+    (*option_index)++;
 
     // fill with input data
     option->type = type;
     tekChainThrow(tekGuiCreateTextInput(&option->display.input.text_input));
-    option->height = (uint)option->display.input.text_input.button.hitbox_height;
+    option->height = option->display.input.text_input.button.hitbox_height;
     tekChainThrow(tekGuiSetTextInputSize(&option->display.input.text_input, input_width, option->height));
 
     // set up callbacks
@@ -262,23 +256,24 @@ static exception tekGuiCreateSingleInput(const char* name, const flag type, cons
  * @param[in/out] option_display The vector to add all the display items to.
  * @throws OPENGL_EXCEPTION if any of the single inputs failed to be created.
  */
-static exception tekGuiCreateMultiInput(const char* name, const flag type, const uint input_width, const uint num_inputs, Vector* option_display) {
+static exception tekGuiCreateMultiInput(const char* name, const flag type, const uint input_width, const uint num_inputs, TekGuiOption* option_display, uint* option_index) {
     // iterate for each input needed
     for (uint i = 0; i < num_inputs; i++) {
+        // get the option pointer before the index is incremented.
+        TekGuiOption* option = option_display + *option_index;
+
         // each has the same name, as pointing to the same option
-        tekChainThrow(tekGuiCreateSingleInput(name, type, input_width, option_display));
+        tekChainThrow(tekGuiCreateSingleInput(name, type, input_width, option_display, option_index));
 
         // once created, update the display index to whatever
-        TekGuiOption* option;
-        tekChainThrow(vectorGetItemPtr(option_display, option_display->length - 1, &option));
         option->display.input.index = i;
     }
 
     return SUCCESS;
 }
 
-static exception tekGuiCreateOption(const char* name, const char* label, const flag type, const uint text_height, const uint input_width, Vector* option_display) {
-    tekChainThrow(tekGuiCreateLabelOption(label, text_height, option_display));
+static exception tekGuiCreateOption(const char* name, const char* label, const flag type, const uint text_height, const uint input_width, TekGuiOption* option_display, uint* option_index) {
+    tekChainThrow(tekGuiCreateLabelOption(label, text_height, option_display, option_index));
 
     switch (type) {
     case TEK_LABEL:
@@ -286,13 +281,13 @@ static exception tekGuiCreateOption(const char* name, const char* label, const f
     case TEK_STRING_INPUT:
     case TEK_NUMBER_INPUT:
     case TEK_BOOLEAN_INPUT:
-        tekChainThrow(tekGuiCreateSingleInput(name, type, input_width, option_display));
+        tekChainThrow(tekGuiCreateSingleInput(name, type, input_width, option_display, option_index));
         break;
     case TEK_VEC3_INPUT:
-        tekChainThrow(tekGuiCreateMultiInput(name, type, input_width, 3, option_display));
+        tekChainThrow(tekGuiCreateMultiInput(name, type, input_width, 3, option_display, option_index));
         break;
     case TEK_VEC4_INPUT:
-        tekChainThrow(tekGuiCreateMultiInput(name, type, input_width, 4, option_display));
+        tekChainThrow(tekGuiCreateMultiInput(name, type, input_width, 4, option_display, option_index));
         break;
     default:
         tekThrow(YML_EXCEPTION, "Invalid input type for option.");
@@ -303,10 +298,8 @@ static exception tekGuiCreateOption(const char* name, const char* label, const f
 
 static exception tekGuiDrawOptionLabel(TekGuiOption* option, int x_pos, int y_pos) {
     float x = (float)x_pos + (float)option->height * 0.4f;
-    float y = (float)y_pos + (float)option->height * 0.1f;
-    glDepthFunc(GL_ALWAYS);
-    tekChainThrow(tekDrawText(&option->display.label, x_pos, y_pos));
-    printf("Drawing @ %f %f\n", x,y );
+    float y = (float)y_pos;
+    tekChainThrow(tekDrawText(&option->display.label, x, y));
     return SUCCESS;
 }
 
@@ -338,13 +331,12 @@ static exception tekGuiDrawOption(TekGuiOption* option, int x_pos, int y_pos) {
 static exception tekGuiOptionWindowDrawCallback(TekGuiWindow* window_ptr) {
     TekGuiOptionWindow* window = (TekGuiOptionWindow*)window_ptr->data;
 
-    uint x_pos = (uint)window_ptr->x_pos;
-    uint y_pos = (uint)window_ptr->y_pos;
-    for (uint i = 0; i < window->option_display.length; i++) {
-        TekGuiOption* option;
-        tekChainThrow(vectorGetItemPtr(&window->option_display, i, &option));
+    int x_pos = window_ptr->x_pos;
+    int y_pos = window_ptr->y_pos;
+    for (uint i = 0; i < window->len_options; i++) {
+        TekGuiOption* option = window->option_display + i;
         tekChainThrow(tekGuiDrawOption(option, x_pos, y_pos));
-        y_pos += option->height;
+        y_pos += (int)option->height;
     }
 
     return SUCCESS;
@@ -360,9 +352,32 @@ static exception tekGuiCreateBaseWindow(TekGuiOptionWindow* window, struct TekGu
     return SUCCESS;
 }
 
-exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* window) {
-    tekChainThrow(vectorCreate(4, sizeof(TekGuiOption), &window->option_display));
+static uint tekGuiGetOptionDisplaySize(const flag type) {
+    switch (type) {
+    case TEK_LABEL:
+        return 1;
+    case TEK_STRING_INPUT:
+    case TEK_NUMBER_INPUT:
+    case TEK_BOOLEAN_INPUT:
+        return 2;
+    case TEK_VEC3_INPUT:
+        return 4;
+    case TEK_VEC4_INPUT:
+        return 5;
+    default:
+        return 0;
+    }
+}
 
+static uint tekGuiGetOptionsDisplayTotalSize(struct TekGuiOptionsWindowOption* options, const uint len_options) {
+    uint total_len = 0;
+    for (uint i = 0; i < len_options; i++) {
+        total_len += tekGuiGetOptionDisplaySize(options[i].type);
+    }
+    return total_len;
+}
+
+exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* window) {
     YmlFile yml_file = {};
     tekChainThrow(ymlReadFile(options_yml, &yml_file));
 
@@ -373,8 +388,14 @@ exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* 
         ymlDelete(&yml_file);
     });
 
+    window->len_options = tekGuiGetOptionsDisplayTotalSize(options, len_options);
+    window->option_display = (TekGuiOption*)malloc(window->len_options * sizeof(TekGuiOption));
+    if (!window->option_display)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for options display array.");
+
+    uint option_index = 0;
     for (uint i = 0; i < len_options; i++) {
-        tekChainThrowThen(tekGuiCreateOption(options[i].name, options[i].label, options[i].type, defaults.text_height, defaults.input_width, &window->option_display), {
+        tekChainThrowThen(tekGuiCreateOption(options[i].name, options[i].label, options[i].type, defaults.text_height, defaults.input_width, window->option_display, &option_index), {
             ymlDelete(&yml_file);
         });
     }

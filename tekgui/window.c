@@ -221,13 +221,11 @@ exception tekGuiDrawWindow(const TekGuiWindow* window) {
 }
 
 exception tekGuiDrawAllWindows() {
-    glDepthFunc(GL_ALWAYS);
     const ListItem* item = 0;
     foreach(item, (&window_ptr_list), {
         const TekGuiWindow* window = (const TekGuiWindow*)item->data;
         tekChainThrow(tekGuiDrawWindow(window));
     });
-    glDepthFunc(GL_LESS);
 
     return SUCCESS;
 }

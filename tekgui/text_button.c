@@ -136,14 +136,11 @@ exception tekGuiDrawTextButton(const TekGuiTextButton* button) {
         memcpy(background_colour, button->background_colour, sizeof(vec4));
     }
 
-    glDepthFunc(GL_ALWAYS);
     tekChainThrow(tekGuiDrawBox(button->mesh_index, background_colour, button->border_colour));
 
     const float x = (float)button->button.hitbox_x + ((float)button->button.hitbox_width - button->tek_text.width) * 0.5f;
     const float y = (float)button->button.hitbox_y + ((float)button->button.hitbox_height - button->tek_text.height) * 0.5f;
     tekChainThrow(tekDrawText(&button->tek_text, x, y));
-
-    glDepthFunc(GL_LESS);
 
     return SUCCESS;
 }

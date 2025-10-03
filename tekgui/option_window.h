@@ -32,7 +32,8 @@ typedef struct TekGuiOption {
 
 typedef struct TekGuiOptionWindow {
     TekGuiWindow window;
-    Vector option_display;
+    TekGuiOption* option_display;
+    uint len_options;
     HashTable option_data;
 } TekGuiOptionWindow;
 

@@ -6,12 +6,18 @@ height: 180
 text_height: 20
 input_width: 100
 options:
+    third:
+        label: "Will this one work?"
+        type: $tek_boolean_input
     string_input:
         label: "Enter a string:"
         type: $tek_string_input
     number_input:
         label: "Enter a number:"
         type: $tek_number_input
-    third:
-        label: "Will this one work?"
-        type: "$tek_string_input"
+    number_input2:
+        label: "Enter a number2:"
+        type: $tek_number_input
+    number_input3:
+        label: "Enter a number3:"
+        type: $tek_number_input

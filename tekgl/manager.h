@@ -13,6 +13,9 @@
 #define DEFAULT_CURSOR   0
 #define CROSSHAIR_CURSOR 1
 
+#define DRAW_MODE_NORMAL 0
+#define DRAW_MODE_GUI    1
+
 typedef void(*TekFramebufferCallback)(int framebuffer_width, int framebuffer_height);
 typedef void(*TekDeleteFunc)(void);
 typedef exception(*TekGLLoadFunc)(void);
@@ -32,6 +35,7 @@ void tekGetWindowSize(int* window_width, int* window_height);
 void tekSetMouseMode(flag mouse_mode);
 void tekSetCursor(flag cursor_mode);
 void tekSetWindowColour(vec3 colour);
+void tekSetDrawMode(flag draw_mode);
 
 exception tekAddFramebufferCallback(TekFramebufferCallback callback);
 exception tekAddKeyCallback(TekKeyCallback callback);

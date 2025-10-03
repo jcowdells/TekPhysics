@@ -32,7 +32,7 @@ static uint tekGuiGetButtonIndex(const TekGuiButton* button) {
     return index;
 }
 
-static int tekGuiCheckButtonHitbox(const TekGuiButton* button, uint check_x, uint check_y) {
+static int tekGuiCheckButtonHitbox(const TekGuiButton* button, int check_x, int check_y) {
     return (button->hitbox_x <= check_x) &&
         (button->hitbox_x + button->hitbox_width > check_x) &&
         (button->hitbox_y <= check_y) &&
@@ -41,6 +41,7 @@ static int tekGuiCheckButtonHitbox(const TekGuiButton* button, uint check_x, uin
 
 static void tekGuiButtonMouseButtonCallback(const int button, const int action, const int mods) {
     const ListItem* item = 0;
+
     TekGuiButton* clicked_button = 0;
     foreach(item, (&button_list), {
         TekGuiButton* loop_button = (TekGuiButton*)item->data;
