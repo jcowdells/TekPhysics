@@ -4,6 +4,7 @@ y_pos: 100
 width: 320
 height: 180
 text_height: 20
+input_width: 100
 options:
     string_input:
         label: "Enter a string:"
@@ -11,3 +12,6 @@ options:
     number_input:
         label: "Enter a number:"
         type: $tek_number_input
+    third:
+        label: "Will this one work?"
+        type: "$tek_string_input"

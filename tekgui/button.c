@@ -166,7 +166,7 @@ exception tekGuiCreateButton(TekGuiButton* button) {
     return SUCCESS;
 }
 
-void tekGuiSetButtonPosition(TekGuiButton* button, uint x, uint y) {
+void tekGuiSetButtonPosition(TekGuiButton* button, int x, int y) {
     button->hitbox_x = x;
     button->hitbox_y = y;
 }

@@ -108,8 +108,8 @@ static exception tekGuiWindowCreateTitleText(TekGuiWindow* window) {
 }
 
 static exception tekGuiWindowRecreateTitleText(TekGuiWindow* window) {
-    tekDeleteText(&window->title_text);
-    tekChainThrow(tekGuiWindowCreateTitleText(window));
+    const uint text_size = window->title_width * 4 / 5;
+    tekChainThrow(tekUpdateText(&window->title_text, window->title, text_size));
     return SUCCESS;
 }
 
@@ -148,7 +148,9 @@ void tekGuiWindowTitleButtonCallback(TekGuiButton* button_ptr, TekGuiButtonCallb
 }
 
 static exception tekGuiSetWindowTitleBuffer(TekGuiWindow* window, const char* title) {
-    const uint len_title = strlen(window_defaults.title) + 1;
+    if (window->title)
+        free(window->title);
+    const uint len_title = strlen(title) + 1;
     window->title = (char*)malloc(len_title * sizeof(char));
     if (!window->title)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for title.");
@@ -178,6 +180,7 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     glm_vec4_copy(window_defaults.title_colour, window->title_colour);
 
     // create the window title char buffer and the corresponding text mesh.
+    window->title = NULL;
     tekChainThrow(tekGuiSetWindowTitleBuffer(window, window_defaults.title));
     tekChainThrow(tekGuiWindowCreateTitleText(window));
 

@@ -148,8 +148,6 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
 
     tekChainThrow(tekGenerateTextMeshData(text, len_text, size, font, tek_text, &vertices, &len_vertices, &indices, &len_indices));
 
-    printf("LenS: %u %u vs %lu %lu\n", len_vertices, len_indices, 16 * len_text, 6 * len_text);
-
     // define the vertex data layout: 2 floats for position, 2 floats for texture coordinates
     const int layout[] = {2, 2};
 

@@ -263,7 +263,7 @@ exception tekGuiDrawTextInput(const TekGuiTextInput* text_input) {
     return SUCCESS;
 }
 
-exception tekGuiSetTextInputPosition(TekGuiTextInput* text_input, uint x_pos, uint y_pos) {
+exception tekGuiSetTextInputPosition(TekGuiTextInput* text_input, int x_pos, int y_pos) {
     tekGuiSetButtonPosition(&text_input->button, x_pos, y_pos);
     tekChainThrow(tekGuiTextInputUpdateGLMesh(text_input));
 
