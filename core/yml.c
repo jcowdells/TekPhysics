@@ -250,7 +250,7 @@ exception ymlDataToInteger(const YmlData* yml_data, long* integer) {
  */
 exception ymlDataToFloat(const YmlData* yml_data, double* number) {
     // make sure that the data is actually of a double
-    if (yml_data->type != FLOAT_DATA) tekThrow(YML_EXCEPTION, "Data is not of double precision floating point type.");
+    if (yml_data->type != FLOAT_DATA && yml_data->type != INTEGER_DATA) tekThrow(YML_EXCEPTION, "Data is not of double precision floating point type.");
     memcpy(number, &yml_data->value, sizeof(void*));
     return SUCCESS;
 }

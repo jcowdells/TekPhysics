@@ -20,7 +20,7 @@ void priorityQueueDelete(PriorityQueue* queue) {
     PriorityQueueItem* item = queue->queue;
     while (item) {
         // essentially, go to each item starting from the front, store the item before it, then free itself.
-        PriorityQueueItem* prev = item->prev;
+        PriorityQueueItem* prev = item->next;
         free(item);
         item = prev;
     }
@@ -42,7 +42,7 @@ exception priorityQueueEnqueue(PriorityQueue* queue, const double priority, void
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for priority queue item.");
     new_item->priority = priority;
     new_item->data = data;
-    new_item->prev = 0;
+    new_item->next = 0;
 
     queue->length++;
 
@@ -54,7 +54,7 @@ exception priorityQueueEnqueue(PriorityQueue* queue, const double priority, void
 
     // if the priority is smaller than the first item, this now becomes the first item.
     if (priority < queue->queue->priority) {
-        new_item->prev = queue->queue;
+        new_item->next = queue->queue;
         queue->queue = new_item;
         return SUCCESS;
     }
@@ -62,15 +62,15 @@ exception priorityQueueEnqueue(PriorityQueue* queue, const double priority, void
     // otherwise, iterate over the list to find the first item that has a bigger priority than the new item.
     // or if no item is found, give the last item in the queue.
     PriorityQueueItem* item = queue->queue;
-    while (item->prev) {
-        if (priority < item->prev->priority)
+    while (item->next) {
+        if (priority < item->next->priority)
             break;
-        item = item->prev;
+        item = item->next;
     }
 
     // insert item into the queue at this point.
-    new_item->prev = item->prev;
-    item->prev = new_item;
+    new_item->next = item->next;
+    item->next = new_item;
     return SUCCESS;
 }
 
@@ -90,7 +90,7 @@ flag priorityQueueDequeue(PriorityQueue* queue, void** data) {
     // shift everything in queue forwards and free the old front.
     PriorityQueueItem* front = queue->queue;
     *data = front->data;
-    queue->queue = front->prev;
+    queue->queue = front->next;
     free(front);
 
     queue->length--;

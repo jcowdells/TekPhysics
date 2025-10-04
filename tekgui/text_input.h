@@ -7,7 +7,7 @@
 
 struct TekGuiTextInput;
 
-typedef void(*TekGuiTextInputCallback)(struct TekGuiTextInput* text_input, const char* text, uint len_text);
+typedef exception(*TekGuiTextInputCallback)(struct TekGuiTextInput* text_input, const char* text, uint len_text);
 
 typedef struct TekGuiTextInput {
     TekGuiButton button;

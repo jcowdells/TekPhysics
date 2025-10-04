@@ -6,7 +6,7 @@
 typedef struct PriorityQueueItem {
     double priority;
     void* data;
-    struct PriorityQueueItem* prev;
+    struct PriorityQueueItem* next;
 } PriorityQueueItem;
 
 typedef struct PriorityQueue {

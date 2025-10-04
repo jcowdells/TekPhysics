@@ -150,7 +150,7 @@ static exception tekGuiFinishTextInput(TekGuiTextInput* text_input) {
     text_input->cursor_index = 0;
     text_input->text_start_index = 0;
     if (text_input->callback)
-        text_input->callback(text_input, text_input->text.internal, text_input->text.length);
+        tekChainThrow(text_input->callback(text_input, text_input->text.internal, text_input->text.length));
     tekChainThrow(tekGuiTextInputRecreateText(text_input));
     return SUCCESS;
 }
@@ -182,7 +182,6 @@ static void tekGuiTextInputKeyCallback(const int key, const int scancode, const 
 }
 
 static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCallbackData callback_data) {
-    printf("Buttonic Callback\n");
     TekGuiTextInput* text_input = (TekGuiTextInput*)button->data;
 
     switch (callback_data.type) {
