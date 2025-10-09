@@ -9,7 +9,7 @@ options:
     third:
         label: "Will this one work?"
         type: $tek_boolean_input
-        index: 0
+        index: 2
     string_input:
         label: "Enter a string:"
         type: $tek_string_input
@@ -20,9 +20,13 @@ options:
         index: 20
     number_input2:
         label: "Enter a number2:"
-        type: $tek_number_input
+        type: $tek_vec3_input
         index: 30
     number_input3:
         label: "Enter a number3:"
         type: $tek_number_input
         index: 40
+    button_input:
+        label: "CLICK ME"
+        type: $tek_button_input
+        index: 0

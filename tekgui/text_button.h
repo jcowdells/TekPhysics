@@ -21,6 +21,7 @@ typedef struct TekGuiTextButton {
     uint mesh_index;
     flag hovered;
     TekGuiTextButtonCallback callback;
+    void* data;
 } TekGuiTextButton;
 
 exception tekGuiCreateTextButton(const char* text, TekGuiTextButton* button);

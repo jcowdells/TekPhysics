@@ -6,16 +6,18 @@
 #include "../core/yml.h"
 #include "tekgui.h"
 #include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #include "../core/priorityqueue.h"
 
-#define TEK_UNKNOWN_INPUT -1
+#define TEK_UNKNOWN_INPUT  (-1)
 #define TEK_LABEL          0
 #define TEK_STRING_INPUT   1
 #define TEK_NUMBER_INPUT   2
 #define TEK_BOOLEAN_INPUT  3
 #define TEK_VEC3_INPUT     4
 #define TEK_VEC4_INPUT     5
+#define TEK_BUTTON_INPUT   6
 
 /// Struct containing data about the window rendering.
 struct TekGuiOptionsWindowDefaults {
@@ -106,6 +108,9 @@ static flag tekGuiGetOptionInputType(const char* option_type) {
 
     if (!strcmp(option_type, "$tek_vec4_input"))
         return TEK_VEC4_INPUT;
+
+    if (!strcmp(option_type, "$tek_button_input"))
+        return TEK_BUTTON_INPUT;
 
     return TEK_UNKNOWN_INPUT;
 }
@@ -240,6 +245,8 @@ static exception tekGuiLoadOptionsYml(YmlFile* yml_file, struct TekGuiOptionsWin
 static exception tekGuiWriteStringOption(TekGuiOptionWindow* window, const char* key, const char* string, const uint len_string) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+    if (option_data->data.string)
+        free(option_data->data.string);
     option_data->data.string = (char*)malloc(len_string * sizeof(char));
     if (!option_data->data.string)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate string buffer.");
@@ -281,8 +288,9 @@ static exception tekGuiWriteNumberOptionString(TekGuiOptionWindow* window, const
     double number = strtod(number_str, &endptr);
     if (errno == ERANGE)
         number = 0.0;
-    if (endptr != number_str + len_number_str)
+    if (endptr != number_str + len_number_str - 1)
         number = 0.0;
+
     tekChainThrow(tekGuiWriteNumberOption(window,  key, number));
     return SUCCESS;
 }
@@ -304,11 +312,46 @@ static exception tekGuiWriteVecIndexOptionString(TekGuiOptionWindow* window, con
     float element = strtof(element_str, &endptr);
     if (errno == ERANGE)
         element = 0.0f;
-    if (endptr != element_str + len_element_str)
+    if (endptr != element_str + len_element_str - 1)
         element = 0.0f;
 
     // vector_3 and vector_4 overlap, so doesn't matter if this was called for a vec3 or vec4.
     option_data->data.vector_4[index] = element;
+    return SUCCESS;
+}
+
+static exception tekGuiWriteDefaultValue(TekGuiOptionWindow* window, const char* name, const flag type) {
+    // mallocate the option data
+    TekGuiOptionData* option_data = (TekGuiOptionData*)malloc(sizeof(TekGuiOptionData));
+    if (!option_data)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for option data.");
+    option_data->type = type;
+
+    // set the data based on type.
+    switch (type) {
+    case TEK_STRING_INPUT:
+        option_data->data.string = 0;
+        break;
+    case TEK_NUMBER_INPUT:
+        option_data->data.number = 0.0;
+        break;
+    case TEK_BOOLEAN_INPUT:
+        option_data->data.boolean = 0;
+        break;
+    case TEK_VEC3_INPUT:
+        glm_vec3_zero(option_data->data.vector_3);
+        break;
+    case TEK_VEC4_INPUT:
+        glm_vec4_zero(option_data->data.vector_4);
+        break;
+    default:
+        free(option_data);
+        tekThrow(FAILURE, "Unknown option type.");
+    }
+
+    // set the pointer at hash table.
+    tekChainThrow(hashtableSet(&window->option_data, name, option_data));
+
     return SUCCESS;
 }
 
@@ -347,10 +390,56 @@ static exception tekGuiReadVec4Option(TekGuiOptionWindow* window, const char* ke
     return SUCCESS;
 }
 
+static exception tekGuiUpdateOptionInputText(TekGuiOptionWindow* window, TekGuiOption* option) {
+    // for strings, we already have the text to write direct into text.
+    if (option->type == TEK_STRING_INPUT) {
+        char* string;
+        tekChainThrow(tekGuiReadStringOption(window, option->display.input.name, &string));
+        tekChainThrow(tekGuiSetTextInputText(&option->display.input.text_input, string));
+        return SUCCESS;
+    }
+
+    // for other ones, gotta convert into a string first.
+    const uint len_buffer = 128;
+    char buffer[len_buffer];
+
+    double number;
+    flag boolean;
+    vec4 vector;
+    switch (option->type) {
+    case TEK_NUMBER_INPUT:
+        tekChainThrow(tekGuiReadNumberOption(window, option->display.input.name, &number));
+        snprintf(buffer, len_buffer, "%.5f", number);
+        break;
+    case TEK_BOOLEAN_INPUT:
+        tekChainThrow(tekGuiReadBooleanOption(window, option->display.input.name, &boolean));
+        if (boolean) {
+            snprintf(buffer, len_buffer, "True");
+        } else {
+            snprintf(buffer, len_buffer, "False");
+        }
+        break;
+    case TEK_VEC3_INPUT:
+        tekChainThrow(tekGuiReadVec3Option(window, option->display.input.name, vector));
+        snprintf(buffer, len_buffer, "%.5f", vector[option->display.input.index]);
+        break;
+    case TEK_VEC4_INPUT:
+        tekChainThrow(tekGuiReadVec4Option(window, option->display.input.name, vector));
+        snprintf(buffer, len_buffer, "%.5f", vector[option->display.input.index]);
+        break;
+    default:
+        tekThrow(FAILURE, "Unknown input type.");
+    }
+
+    tekChainThrow(tekGuiSetTextInputText(&option->display.input.text_input, buffer));
+
+    return SUCCESS;
+}
+
 static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const char* text, const uint len_text) {
     struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)text_input->data;
     TekGuiOptionWindow* window = option_pair->window;
-    const TekGuiOption* option = option_pair->option;
+    TekGuiOption* option = option_pair->option;
     const char* name = option->display.input.name;
     const uint index = option->display.input.index;
 
@@ -372,7 +461,38 @@ static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const ch
         tekThrow(FAILURE, "Input called on unknown input type.");
     }
 
+    TekGuiOptionWindowCallbackData callback_data;
+    callback_data.type = option->type;
+    callback_data.name = name;
+    if (window->callback) tekChainThrow(window->callback(window, callback_data));
+
+    tekChainThrow(tekGuiUpdateOptionInputText(window, option));
+
     return SUCCESS;
+}
+
+static void tekGuiButtonInputCallback(TekGuiTextButton* button, TekGuiButtonCallbackData callback_data) {
+    struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)button->data;
+    TekGuiOptionWindow* window = option_pair->window;
+    const TekGuiOption* option = option_pair->option;
+
+    // if there is no callback just instantly quit
+    if (!window->callback)
+        return;
+
+    // make sure that there is a left click or else quit
+    if (callback_data.type != TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK
+        || callback_data.data.mouse_button.action != GLFW_RELEASE
+        || callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT)
+        return;
+
+    // fill up some callback data
+    TekGuiOptionWindowCallbackData outbound_callback_data;
+    outbound_callback_data.type = TEK_BUTTON_INPUT;
+    outbound_callback_data.name = option->display.button.name;
+
+    // pass control onto the user
+    window->callback(window, outbound_callback_data);
 }
 
 /**
@@ -420,12 +540,18 @@ static exception tekGuiCreateSingleInput(TekGuiOptionWindow* window, const char*
 
     // set up callbacks
     struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)malloc(sizeof(struct TekGuiOptionPair));
+    if (!option_pair)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for option pair.");
     option_pair->window = window;
     option_pair->option = option;
     option->display.input.text_input.data = option_pair;
     option->display.input.text_input.callback = tekGuiOptionInputCallback;
     option->display.input.name = name;
     option->display.input.index = 0; // index only relevant for multi-item inputs
+
+    // add an empty entry in the hash table.
+    tekChainThrow(tekGuiWriteDefaultValue(window, name, type));
+    tekChainThrow(tekGuiUpdateOptionInputText(window, option_display + *option_index - 1))
 
     return SUCCESS;
 }
@@ -456,6 +582,29 @@ static exception tekGuiCreateMultiInput(TekGuiOptionWindow* window, const char* 
     return SUCCESS;
 }
 
+static exception tekGuiCreateButtonOption(TekGuiOptionWindow* window, const char* name, const char* label, TekGuiOption* option_display, uint* option_index) {
+    // empty option struct
+    TekGuiOption* option = option_display + *option_index;
+    (*option_index)++;
+
+    // set all the option data
+    option->type = TEK_BUTTON_INPUT;
+    tekChainThrow(tekGuiCreateTextButton(label, &option->display.button.button));
+    option->height = option->display.button.button.button.hitbox_height;
+    option->display.button.name = name;
+
+    // set up callbacks
+    struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)malloc(sizeof(struct TekGuiOptionPair));
+    if (!option_pair)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for option pair.");
+    option_pair->window = window;
+    option_pair->option = option;
+    option->display.button.button.callback = tekGuiButtonInputCallback;
+    option->display.button.button.data = (void*)option_pair;
+
+    return SUCCESS;
+}
+
 /**
  * Add a chunk of option displays based on a set of parameters. For example, a vec3 option will create 4 option displays, one for the label, and 3 inputs.
  * @param[in] window The window which to create the options for.
@@ -469,8 +618,16 @@ static exception tekGuiCreateMultiInput(TekGuiOptionWindow* window, const char* 
  * @throws OPENGL_EXCEPTION if something went wrong graphically at any stage.
  */
 static exception tekGuiCreateOption(TekGuiOptionWindow* window, const char* name, const char* label, const flag type, const uint text_height, const uint input_width, TekGuiOption* option_display, uint* option_index) {
+    // a button does not require a label, cuz it already has text on it
+    if (type == TEK_BUTTON_INPUT) {
+        tekChainThrow(tekGuiCreateButtonOption(window, name, label, option_display, option_index));
+        return SUCCESS;
+    }
+
+    // for non-buttons, write a piece of text above
     tekChainThrow(tekGuiCreateLabelOption(label, text_height, option_display, option_index));
 
+    // then, append the correct type of input below.
     switch (type) {
     case TEK_LABEL:
         return SUCCESS;
@@ -499,7 +656,7 @@ static exception tekGuiCreateOption(TekGuiOptionWindow* window, const char* name
  * @param y_pos The y coordinate to draw at.
  * @throws OPENGL_EXCEPTION if something fails graphically.
  */
-static exception tekGuiDrawOptionLabel(TekGuiOption* option, int x_pos, int y_pos) {
+static exception tekGuiDrawOptionLabel(const TekGuiOption* option, const int x_pos, const int y_pos) {
     float x = (float)x_pos + (float)option->height * 0.4f;
     float y = (float)y_pos;
     tekChainThrow(tekDrawText(&option->display.label, x, y));
@@ -513,9 +670,22 @@ static exception tekGuiDrawOptionLabel(TekGuiOption* option, int x_pos, int y_po
  * @param y_pos The y coordinate to draw at.
  * @throws OPENGL_EXCEPTION if something fails graphically.
  */
-static exception tekGuiDrawOptionInput(TekGuiOption* option, int x_pos, int y_pos) {
+static exception tekGuiDrawOptionInput(TekGuiOption* option, const int x_pos, const int y_pos) {
     tekChainThrow(tekGuiSetTextInputPosition(&option->display.input.text_input, x_pos + option->height, y_pos));
     tekChainThrow(tekGuiDrawTextInput(&option->display.input.text_input));
+    return SUCCESS;
+}
+
+/**
+ * Draw a button input, which is just a text button + link back to main window.
+ * @param option The option to draw.
+ * @param x_pos The x coordinate to draw at.
+ * @param y_pos The y coordinate to draw at.
+ * @return
+ */
+static exception tekGuiDrawButtonInput(TekGuiOption* option, const int x_pos, const int y_pos) {
+    tekChainThrow(tekGuiSetTextButtonPosition(&option->display.button.button, x_pos, y_pos));
+    tekChainThrow(tekGuiDrawTextButton(&option->display.button.button));
     return SUCCESS;
 }
 
@@ -526,10 +696,13 @@ static exception tekGuiDrawOptionInput(TekGuiOption* option, int x_pos, int y_po
  * @param y_pos The y coordinate to draw at.
  * @throws OPENGL_EXCEPTION if something goes wrong graphically.
  */
-static exception tekGuiDrawOption(TekGuiOption* option, int x_pos, int y_pos) {
+static exception tekGuiDrawOption(TekGuiOption* option, const int x_pos, const int y_pos) {
     switch (option->type) {
     case TEK_LABEL:
         tekGuiDrawOptionLabel(option, x_pos, y_pos);
+        break;
+    case TEK_BUTTON_INPUT:
+        tekGuiDrawButtonInput(option, x_pos, y_pos);
         break;
     case TEK_STRING_INPUT:
     case TEK_NUMBER_INPUT:
@@ -588,6 +761,7 @@ static exception tekGuiCreateBaseWindow(TekGuiOptionWindow* window, struct TekGu
 static uint tekGuiGetOptionDisplaySize(const flag type) {
     switch (type) {
     case TEK_LABEL:
+    case TEK_BUTTON_INPUT:
         return 1;
     case TEK_STRING_INPUT:
     case TEK_NUMBER_INPUT:
@@ -634,6 +808,8 @@ static uint tekGuiGetOptionsDisplayTotalSize(struct TekGuiOptionsWindowOption* o
  * @throws MEMORY_EXCEPTION in a few scenarios to do with allocating buffers for text/titles.
  */
 exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* window) {
+    tekChainThrow(hashtableCreate(&window->option_data, 4));
+
     YmlFile yml_file = {};
     tekChainThrow(ymlReadFile(options_yml, &yml_file));
 

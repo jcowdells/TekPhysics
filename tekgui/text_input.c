@@ -193,6 +193,7 @@ static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCall
         if (selected_input)
             tekGuiFinishTextInput(selected_input);
         selected_input = text_input;
+        printf("SELECT: %u %u\n", text_input->cursor_index, text_input->text_start_index);
         break;
     default:
         break;
@@ -284,19 +285,22 @@ exception tekGuiSetTextInputText(TekGuiTextInput* text_input, const char* text) 
     for (uint i = 0; i < 2; i++)
         tekChainThrow(vectorAddItem(&text_input->text, &zero));
 
-    const uint len_text = strlen(text);
-    for (uint i = 0; i < len_text; i++) {
-        tekChainThrow(tekGuiTextInputAdd(text_input, text[i]));
-        if (text_input->text_max_length == -1)
-            tekChainThrow(tekGuiTextInputRecreateText(text_input));
+    // if text is null, assume an empty string is wanted.
+    if (text) {
+        const uint len_text = strlen(text);
+        for (uint i = 0; i < len_text; i++) {
+            tekChainThrow(tekGuiTextInputAdd(text_input, text[i]));
+            if (text_input->text_max_length == -1)
+                tekChainThrow(tekGuiTextInputRecreateText(text_input));
+        }
     }
-
-    tekChainThrow(tekGuiTextInputRecreateText(text_input));
 
     if (text_input != selected_input) {
         text_input->cursor_index = 0;
         text_input->text_start_index = 0;
     }
+
+    tekChainThrow(tekGuiTextInputRecreateText(text_input));
 
     return SUCCESS;
 }

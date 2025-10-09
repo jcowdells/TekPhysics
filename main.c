@@ -97,6 +97,11 @@ static void tekStartButtonCallback(TekGuiTextButton* button, TekGuiButtonCallbac
     next_mode = MODE_BUILDER;
 }
 
+static exception tekOptionsCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
+    printf("Callback for %s\n", callback_data.name);
+    return SUCCESS;
+}
+
 static exception tekCreateMainMenu(const int window_width, const int window_height, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo) {
     tekChainThrow(tekGuiCreateTextButton("Start", start_button));
     tekChainThrow(tekGuiSetTextButtonPosition(start_button, window_width / 2 - 100, window_height / 2 - 50));
@@ -280,6 +285,7 @@ exception run() {
 
     TekGuiOptionWindow option_window = {};
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/test_window.yml", &option_window));
+    option_window.callback = tekOptionsCallback;
 
     tekChainThrowThen(tekCreateMenu(
         &version_text,

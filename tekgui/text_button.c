@@ -74,6 +74,7 @@ exception tekGuiCreateTextButton(const char* text, TekGuiTextButton* button) {
     button->text_height = defaults.text_height;
     button->hovered = 0;
     button->button.data = button;
+    button->callback = NULL;
     glm_vec4_copy(defaults.background_colour, button->background_colour);
     glm_vec4_copy(defaults.selected_colour, button->selected_colour);
     glm_vec4_copy(defaults.border_colour, button->border_colour);

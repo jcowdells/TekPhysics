@@ -1,5 +1,6 @@
 #pragma once
 
+#include "text_button.h"
 #include "window.h"
 #include "../core/hashtable.h"
 #include "../core/vector.h"
@@ -27,14 +28,27 @@ typedef struct TekGuiOption {
             const char* name;
             uint index;
         } input;
+        struct {
+            TekGuiTextButton button;
+            const char* name;
+        } button;
     } display;
 } TekGuiOption;
+
+typedef struct TekGuiOptionWindowCallbackData {
+    flag type;
+    const char* name;
+} TekGuiOptionWindowCallbackData;
+
+struct TekGuiOptionWindow;
+typedef exception (*TekGuiOptionWindowCallback)(struct TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data);
 
 typedef struct TekGuiOptionWindow {
     TekGuiWindow window;
     TekGuiOption* option_display;
     uint len_options;
     HashTable option_data;
+    TekGuiOptionWindowCallback callback;
 } TekGuiOptionWindow;
 
 exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* window);
