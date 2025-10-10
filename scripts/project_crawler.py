@@ -44,11 +44,11 @@ macro_func_pattern = re.compile(
 
 func_pattern = re.compile(
     r'^\s*'
-    r'(?:[A-Za-z_]\w*\s+)*'
+    r'(?:[A-Za-z_]\w*\s+){1,2}'
     r'(?!(?:if|while|for|switch|return|sizeof)\b)'
     r'([A-Za-z_]\w*)'
     r'\s*\(([^)]*)\)\s*'
-    r'\{?\s*$'
+    r'\{',
 )
 
 struct_pattern = re.compile(
@@ -68,7 +68,7 @@ def get_path(root, *args):
     return os.path.abspath(os.path.join(root, *args))
 
 def read_file(file_path):
-    with open(file_path) as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         file_data = f.read()
     return file_data
 
@@ -264,6 +264,51 @@ def generate_project_data(file_tree, report_options):
                 print(f"-------------------------------- {file_data}")
                 process_file(file_data, report_options)
 
+def find_function_usage(file, function_name):
+    file_lines = file.split("\n")
+    depth = 0
+    for i, line in enumerate(file_lines):
+        line = line.rstrip()
+        if line.endswith("{") and not line.startswith("typedef"):
+            depth += 1
+            continue
+        elif line.endswith("}"):
+            depth -= 1
+            continue
+
+        if depth == 0:
+            continue
+
+        if function_name + "(" in line:
+            print(f"Usage in line {i + 1}: {line}")
+
+def generate_function_list(file_tree):
+    file_queue = list()
+    file_list = list()
+    file_queue.append(file_tree)
+    while len(file_queue) > 0:
+        file_tree = file_queue.pop(-1)
+        for file_name, file_data in file_tree.items():
+            if type(file_data) == dict:
+                file_queue.append(file_data)
+            else:
+                file_list.append((file_data, read_file(file_data)))
+
+    function_list = list()
+    for file_name, file in file_list:
+        file_lines = file.split("\n")
+        for i in range(len(file_lines)):
+            line = file_lines[i]
+            function_data = get_function_data(line)
+            if function_data is None:
+                continue
+            function_list.append(function_data[1])
+
+    for function in function_list:
+        print(f" =========== Function: {function}")
+        for file_name, file in file_list:
+            find_function_usage(file, function)
+
 """
     display_type: bool
     display_name: bool
@@ -311,4 +356,5 @@ def main():
     generate_project_data(generate_file_tree(), report_options)
 
 if __name__ == "__main__":
-    main()
+    # main()
+    generate_function_list(generate_file_tree())
