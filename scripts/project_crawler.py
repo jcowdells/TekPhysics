@@ -38,6 +38,21 @@ class ReportOptions:
     warn_length: bool
     warn_only: bool
 
+class Node:
+    def __init__(self, data):
+        self.__data = data
+        self.__children = list()
+
+    def add_child(self, child_data):
+        child = Node(child_data)
+        self.__children.append(child)
+        return child
+
+    def traverse(self, func):
+        for child in self.__children:
+            child.traverse(func)
+        func(self)
+
 macro_func_pattern = re.compile(
     r'^\s*#define\s+([A-Za-z_]\w*)\s*\(([^)]*)\)',
 )
@@ -71,6 +86,15 @@ def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         file_data = f.read()
     return file_data
+
+def read_blacklist(file_path):
+    blacklist = list()
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            blacklist.append(line.strip())
+    return blacklist
 
 def generate_file_tree():
     root_file_tree = dict()
@@ -264,28 +288,63 @@ def generate_project_data(file_tree, report_options):
                 print(f"-------------------------------- {file_data}")
                 process_file(file_data, report_options)
 
-def find_function_usage(file, function_name):
+def line_has_function(line, function_name):
+    if function_name + "(" in line:
+        return True
+    if function_name + ")" in line:
+        return True
+    if function_name + ";" in line:
+        return True
+    if function_name + "," in line:
+        return True
+    return False
+
+def find_function_usage(file, function_name, blacklist) -> list[str]:
     file_lines = file.split("\n")
     depth = 0
+    typedef = False
+    struct = False
+    current_function = None
+    usage = list()
+
     for i, line in enumerate(file_lines):
+        function_data = get_function_data(line)
+        new_data = False
+        if function_data is not None:
+            current_function = function_data[1]
+            new_data = True
+
+        if current_function is None:
+            continue
+
+        if current_function in blacklist:
+            continue
+
         line = line.rstrip()
-        if line.endswith("{") and not line.startswith("typedef"):
-            depth += 1
-            continue
-        elif line.endswith("}"):
-            depth -= 1
+
+        if line.startswith("#define"):
             continue
 
-        if depth == 0:
+        if new_data:
             continue
 
-        if function_name + "(" in line:
-            print(f"Usage in line {i + 1}: {line}")
+        if line_has_function(line, function_name):
+            usage.append(current_function)
+            if function_name == current_function:
+                print(f"Recursion in {function_name}")
 
-def generate_function_list(file_tree):
+    return list(set(usage))
+
+def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
     file_queue = list()
     file_list = list()
     file_queue.append(file_tree)
+
+    if blacklist_file is None:
+        blacklist = list()
+    else:
+        blacklist = read_blacklist(blacklist_file)
+
     while len(file_queue) > 0:
         file_tree = file_queue.pop(-1)
         for file_name, file_data in file_tree.items():
@@ -294,7 +353,7 @@ def generate_function_list(file_tree):
             else:
                 file_list.append((file_data, read_file(file_data)))
 
-    function_list = list()
+    function_dict = dict()
     for file_name, file in file_list:
         file_lines = file.split("\n")
         for i in range(len(file_lines)):
@@ -302,12 +361,41 @@ def generate_function_list(file_tree):
             function_data = get_function_data(line)
             if function_data is None:
                 continue
-            function_list.append(function_data[1])
+            function_dict[function_data[1]] = list()
 
-    for function in function_list:
-        print(f" =========== Function: {function}")
+    for function in function_dict.keys():
+        if function in blacklist:
+            continue
         for file_name, file in file_list:
-            find_function_usage(file, function)
+            usage = find_function_usage(file, function, blacklist)
+            for use in usage:
+                function_dict[use].append(function)
+
+    function_call_stack = list()
+    function_call_stack.append(("main", 0))
+
+    while len(function_call_stack) > 0:
+        function, depth = function_call_stack.pop()
+        if function == "Recursive call...":
+            continue
+        print(f"{"  " * depth}{function}")
+        recursive = None
+        for sub_function in function_dict[function]:
+            for stack_function, _ in function_call_stack:
+                if sub_function == stack_function:
+                    function_call_stack.append(("Recursive call...", depth + 1))
+                    recursive = sub_function
+                    break
+            # print(function_call_stack)
+            if not recursive:
+                function_call_stack.append((sub_function, depth + 1))
+
+        if recursive:
+            while len(function_call_stack) > 0:
+                function, _ = function_call_stack.pop()
+                if function == recursive:
+                    break
+
 
 """
     display_type: bool

@@ -1,0 +1,12 @@
+#### common macro name
+func_name
+foreach
+#### exception wrappers
+tekThrow
+tekChainThrow
+tekChainBreak
+tekChainThrowThen
+#### exception wrappers in thread
+threadThrow
+threadChainThrow
+threadChainThrowThen
