@@ -3,6 +3,9 @@ import re
 from dataclasses import dataclass
 from enum import Enum, auto
 import argparse
+from more_itertools import unique_everseen
+from anytree import Node, RenderTree
+from anytree.exporter import DotExporter
 
 @dataclass
 class Parameter:
@@ -37,21 +40,6 @@ class ReportOptions:
     warn_comment_ratio: bool
     warn_length: bool
     warn_only: bool
-
-class Node:
-    def __init__(self, data):
-        self.__data = data
-        self.__children = list()
-
-    def add_child(self, child_data):
-        child = Node(child_data)
-        self.__children.append(child)
-        return child
-
-    def traverse(self, func):
-        for child in self.__children:
-            child.traverse(func)
-        func(self)
 
 macro_func_pattern = re.compile(
     r'^\s*#define\s+([A-Za-z_]\w*)\s*\(([^)]*)\)',
@@ -301,9 +289,6 @@ def line_has_function(line, function_name):
 
 def find_function_usage(file, function_name, blacklist) -> list[str]:
     file_lines = file.split("\n")
-    depth = 0
-    typedef = False
-    struct = False
     current_function = None
     usage = list()
 
@@ -329,11 +314,22 @@ def find_function_usage(file, function_name, blacklist) -> list[str]:
             continue
 
         if line_has_function(line, function_name):
-            usage.append(current_function)
-            if function_name == current_function:
-                print(f"Recursion in {function_name}")
+            if function_name != current_function:
+                usage.append((i, current_function))
 
-    return list(set(usage))
+    usage.sort(key=lambda u: u[0])
+    usage = [u[1] for u in usage]
+    return list(unique_everseen(usage))
+
+def display_function_list(function_call_stack, function_dict, depth=0, parent=None):
+    function_name = function_call_stack[-1]
+    print(f"{"  " * depth}{function_name}")
+    for function in function_dict[function_name]:
+        if function in function_call_stack:
+            Node("Recursive call", parent=parent)
+            continue
+        child = Node(function, parent=parent)
+        display_function_list((*function_call_stack, function), function_dict, depth=depth+1, parent=child)
 
 def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
     file_queue = list()
@@ -371,31 +367,10 @@ def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
             for use in usage:
                 function_dict[use].append(function)
 
-    function_call_stack = list()
-    function_call_stack.append(("main", 0))
+    root = Node("TekPhysics")
 
-    while len(function_call_stack) > 0:
-        function, depth = function_call_stack.pop()
-        if function == "Recursive call...":
-            continue
-        print(f"{"  " * depth}{function}")
-        recursive = None
-        for sub_function in function_dict[function]:
-            for stack_function, _ in function_call_stack:
-                if sub_function == stack_function:
-                    function_call_stack.append(("Recursive call...", depth + 1))
-                    recursive = sub_function
-                    break
-            # print(function_call_stack)
-            if not recursive:
-                function_call_stack.append((sub_function, depth + 1))
-
-        if recursive:
-            while len(function_call_stack) > 0:
-                function, _ = function_call_stack.pop()
-                if function == recursive:
-                    break
-
+    display_function_list(("main",), function_dict, parent=root)
+    DotExporter(root).to_picture("hierarchy.png")
 
 """
     display_type: bool

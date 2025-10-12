@@ -39,7 +39,7 @@ exception func_name(ThreadQueue* queue, func_type* param_name) { \
 static RECV_FUNC(recvEvent, TekEvent, event);
 
 /**
- * @brief Recieve a state from the thread queue.
+ * @brief Receive a state from the thread queue.
  * @note Requires the state struct to exist already.
  * @param queue A pointer to the thread queue to recieve from.
  * @param state A pointer to an empty TekState struct.
