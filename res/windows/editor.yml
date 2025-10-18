@@ -1,8 +1,8 @@
 title: "Editor"
 x_pos: 100
 y_pos: 100
-width: 320
-height: 180
+width: 240
+height: 320
 text_height: 20
 input_width: 100
 options:

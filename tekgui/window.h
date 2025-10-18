@@ -36,6 +36,7 @@ typedef struct TekGuiWindow {
 } TekGuiWindow;
 
 exception tekGuiCreateWindow(TekGuiWindow* window);
+exception tekGuiCreateWindowSAFE(TekGuiWindow* window);
 void tekGuiSetWindowPosition(TekGuiWindow* window, int x_pos, int y_pos);
 void tekGuiSetWindowSize(TekGuiWindow* window, uint width, uint height);
 exception tekGuiSetWindowTitle(TekGuiWindow* window, const char* title);
