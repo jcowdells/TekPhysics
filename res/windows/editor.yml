@@ -1,0 +1,20 @@
+title: "Editor"
+x_pos: 100
+y_pos: 100
+width: 320
+height: 180
+text_height: 20
+input_width: 100
+options:
+  name:
+    label: "Object Name:"
+    type: $tek_string_input
+    index: 0
+  position:
+    label: "Position (x, y, z):"
+    type: $tek_vec3_input
+    index: 10
+  rotation:
+    label: "Rotation (yaw, pitch, roll):"
+    type: $tek_vec3_input
+    index: 20

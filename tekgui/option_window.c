@@ -839,3 +839,7 @@ exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* 
     ymlDelete(&yml_file);
     return SUCCESS;
 }
+
+void tekGuiDeleteOptionWindow(const TekGuiOptionWindow* window) {
+    // TODO: this
+}

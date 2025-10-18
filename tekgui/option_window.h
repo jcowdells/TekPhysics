@@ -52,3 +52,4 @@ typedef struct TekGuiOptionWindow {
 } TekGuiOptionWindow;
 
 exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* window);
+void tekGuiDeleteOptionWindow(const TekGuiOptionWindow* window);
