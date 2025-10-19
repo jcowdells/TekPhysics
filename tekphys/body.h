@@ -34,6 +34,16 @@ typedef struct TekBody {
     TekCollider collider;
 } TekBody;
 
+typedef struct TekBodySnapshot {
+    float mass;
+    float restitution;
+    float friction;
+    vec3 position;
+    vec4 rotation;
+    vec4 velocity;
+    // TODO: add this "vec3 scale;"
+} TekBodySnapshot;
+
 exception tekCreateBody(const char* mesh_filename, float mass, vec3 position, vec4 rotation, vec3 scale, TekBody* body);
 void tekBodyAdvanceTime(TekBody* body, float delta_time);
 void tekDeleteBody(const TekBody* body);

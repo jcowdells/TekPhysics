@@ -5,6 +5,10 @@
 #include "../core/hashtable.h"
 #include <cglm/vec4.h>
 
+struct TekGuiListWindow;
+
+typedef void (*TekGuiListWindowCallback)(struct TekGuiListWindow* window);
+
 typedef struct TekGuiListWindow {
     TekGuiWindow window;
     List* text_list;
@@ -16,6 +20,8 @@ typedef struct TekGuiListWindow {
     int hover_index;
     int select_index;
     TekGuiButton button;
+    void* data;
+    TekGuiListWindowCallback callback;
 } TekGuiListWindow;
 
 exception tekGuiCreateListWindow(TekGuiListWindow* window, List* text_list);

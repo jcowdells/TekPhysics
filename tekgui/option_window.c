@@ -242,148 +242,35 @@ static exception tekGuiLoadOptionsYml(YmlFile* yml_file, struct TekGuiOptionsWin
     return SUCCESS;
 }
 
-static exception tekGuiWriteStringOption(TekGuiOptionWindow* window, const char* key, const char* string, const uint len_string) {
-    TekGuiOptionData* option_data;
-    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
-    if (option_data->data.string)
-        free(option_data->data.string);
-    option_data->data.string = (char*)malloc(len_string * sizeof(char));
-    if (!option_data->data.string)
-        tekThrow(MEMORY_EXCEPTION, "Failed to allocate string buffer.");
-    memcpy(option_data->data.string, string, len_string);
-    return SUCCESS;
-}
-
-static exception tekGuiWriteNumberOption(TekGuiOptionWindow* window, const char* key, const double number) {
-    TekGuiOptionData* option_data;
-    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
-    option_data->data.number = number;
-    return SUCCESS;
-}
-
-static exception tekGuiWriteBooleanOption(TekGuiOptionWindow* window, const char* key, const flag boolean) {
-    TekGuiOptionData* option_data;
-    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
-    option_data->data.boolean = boolean;
-    return SUCCESS;
-}
-
-static exception tekGuiWriteVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector) {
-    TekGuiOptionData* option_data;
-    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
-    glm_vec3_copy(vector, option_data->data.vector_3);
-    return SUCCESS;
-}
-
-static exception tekGuiWriteVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector) {
-    TekGuiOptionData* option_data;
-    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
-    glm_vec4_copy(vector, option_data->data.vector_4);
-    return SUCCESS;
-}
-
-static exception tekGuiWriteNumberOptionString(TekGuiOptionWindow* window, const char* key, const char* number_str) {
-    char* endptr;
-    const uint len_number_str = strlen(number_str) + 1;
-    double number = strtod(number_str, &endptr);
-    if (errno == ERANGE)
-        number = 0.0;
-    if (endptr != number_str + len_number_str - 1)
-        number = 0.0;
-
-    tekChainThrow(tekGuiWriteNumberOption(window,  key, number));
-    return SUCCESS;
-}
-
-static exception tekGuiWriteBooleanOptionString(TekGuiOptionWindow* window, const char* key, const char* boolean_str) {
-    flag boolean = 0;
-    if (!strcasecmp(boolean_str, "TRUE") || !strcasecmp(boolean_str, "YES") || !strcasecmp(boolean_str, "OK"))
-        boolean = 1;
-    tekChainThrow(tekGuiWriteBooleanOption(window, key, boolean));
-    return SUCCESS;
-}
-
-static exception tekGuiWriteVecIndexOptionString(TekGuiOptionWindow* window, const char* key, const char* element_str, const uint index) {
-    TekGuiOptionData* option_data;
-    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
-
-    char* endptr;
-    uint len_element_str = strlen(element_str);
-    float element = strtof(element_str, &endptr);
-    if (errno == ERANGE)
-        element = 0.0f;
-    if (endptr != element_str + len_element_str - 1)
-        element = 0.0f;
-
-    // vector_3 and vector_4 overlap, so doesn't matter if this was called for a vec3 or vec4.
-    option_data->data.vector_4[index] = element;
-    return SUCCESS;
-}
-
-static exception tekGuiWriteDefaultValue(TekGuiOptionWindow* window, const char* name, const flag type) {
-    // mallocate the option data
-    TekGuiOptionData* option_data = (TekGuiOptionData*)malloc(sizeof(TekGuiOptionData));
-    if (!option_data)
-        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for option data.");
-    option_data->type = type;
-
-    // set the data based on type.
-    switch (type) {
-    case TEK_STRING_INPUT:
-        option_data->data.string = 0;
-        break;
-    case TEK_NUMBER_INPUT:
-        option_data->data.number = 0.0;
-        break;
-    case TEK_BOOLEAN_INPUT:
-        option_data->data.boolean = 0;
-        break;
-    case TEK_VEC3_INPUT:
-        glm_vec3_zero(option_data->data.vector_3);
-        break;
-    case TEK_VEC4_INPUT:
-        glm_vec4_zero(option_data->data.vector_4);
-        break;
-    default:
-        free(option_data);
-        tekThrow(FAILURE, "Unknown option type.");
-    }
-
-    // set the pointer at hash table.
-    tekChainThrow(hashtableSet(&window->option_data, name, option_data));
-
-    return SUCCESS;
-}
-
-static exception tekGuiReadStringOption(TekGuiOptionWindow* window, const char* key, char** string) {
+exception tekGuiReadStringOption(TekGuiOptionWindow* window, const char* key, char** string) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
     *string = option_data->data.string;
     return SUCCESS;
 }
 
-static exception tekGuiReadNumberOption(TekGuiOptionWindow* window, const char* key, double* number) {
+exception tekGuiReadNumberOption(TekGuiOptionWindow* window, const char* key, double* number) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
     *number = option_data->data.number;
     return SUCCESS;
 }
 
-static exception tekGuiReadBooleanOption(TekGuiOptionWindow* window, const char* key, flag* boolean) {
+exception tekGuiReadBooleanOption(TekGuiOptionWindow* window, const char* key, flag* boolean) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
     *boolean = option_data->data.boolean;
     return SUCCESS;
 }
 
-static exception tekGuiReadVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector) {
+exception tekGuiReadVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
     glm_vec3_copy(option_data->data.vector_3, vector);
     return SUCCESS;
 }
 
-static exception tekGuiReadVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector) {
+exception tekGuiReadVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
     glm_vec3_copy(option_data->data.vector_4, vector);
@@ -436,7 +323,152 @@ static exception tekGuiUpdateOptionInputText(TekGuiOptionWindow* window, TekGuiO
     return SUCCESS;
 }
 
+static flag tekGuiIsOptionInput(const TekGuiOption* option) {
+    switch (option->type) {
+    case TEK_LABEL:
+    case TEK_BUTTON_INPUT:
+    case TEK_UNKNOWN_INPUT:
+        return 0;
+    default:
+        return 1;
+    }
+}
+
+static exception tekGuiUpdateInputOption(TekGuiOptionWindow* window, const char* key) {
+    for (uint i = 0; i < window->len_options; i++) {
+        TekGuiOption* option = window->option_display + i;
+        if (!tekGuiIsOptionInput(option))
+            continue;
+        if (!strcmp(option->display.input.name, key)) {
+            tekChainThrow(tekGuiUpdateOptionInputText(window, option));
+        }
+    }
+    return SUCCESS;
+}
+
+exception tekGuiWriteStringOption(TekGuiOptionWindow* window, const char* key, const char* string, const uint len_string) {
+    TekGuiOptionData* option_data;
+    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+    if (option_data->data.string)
+        free(option_data->data.string);
+    option_data->data.string = (char*)malloc(len_string * sizeof(char));
+    if (!option_data->data.string)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate string buffer.");
+    memcpy(option_data->data.string, string, len_string);
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+exception tekGuiWriteNumberOption(TekGuiOptionWindow* window, const char* key, const double number) {
+    TekGuiOptionData* option_data;
+    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+    option_data->data.number = number;
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+exception tekGuiWriteBooleanOption(TekGuiOptionWindow* window, const char* key, const flag boolean) {
+    TekGuiOptionData* option_data;
+    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+    option_data->data.boolean = boolean;
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+exception tekGuiWriteVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector) {
+    TekGuiOptionData* option_data;
+    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+    glm_vec3_copy(vector, option_data->data.vector_3);
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+exception tekGuiWriteVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector) {
+    TekGuiOptionData* option_data;
+    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+    glm_vec4_copy(vector, option_data->data.vector_4);
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+static exception tekGuiWriteNumberOptionString(TekGuiOptionWindow* window, const char* key, const char* number_str) {
+    char* endptr;
+    const uint len_number_str = strlen(number_str) + 1;
+    double number = strtod(number_str, &endptr);
+
+    if (errno == ERANGE)
+        number = 0.0;
+    if (endptr != number_str + len_number_str - 1)
+        number = 0.0;
+
+    tekChainThrow(tekGuiWriteNumberOption(window,  key, number));
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+static exception tekGuiWriteBooleanOptionString(TekGuiOptionWindow* window, const char* key, const char* boolean_str) {
+    flag boolean = 0;
+    if (!strcasecmp(boolean_str, "TRUE") || !strcasecmp(boolean_str, "YES") || !strcasecmp(boolean_str, "OK"))
+        boolean = 1;
+    tekChainThrow(tekGuiWriteBooleanOption(window, key, boolean));
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+static exception tekGuiWriteVecIndexOptionString(TekGuiOptionWindow* window, const char* key, const char* element_str, const uint index) {
+    TekGuiOptionData* option_data;
+    tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+
+    char* endptr;
+    uint len_element_str = strlen(element_str) + 1;
+    float element = strtof(element_str, &endptr);
+    if (errno == ERANGE)
+        element = 0.0f;
+    if (endptr != element_str + len_element_str - 1)
+        element = 0.0f;
+
+    // vector_3 and vector_4 overlap, so doesn't matter if this was called for a vec3 or vec4.
+    option_data->data.vector_4[index] = element;
+    tekChainThrow(tekGuiUpdateInputOption(window, key));
+    return SUCCESS;
+}
+
+static exception tekGuiWriteDefaultValue(TekGuiOptionWindow* window, const char* name, const flag type) {
+    // mallocate the option data
+    TekGuiOptionData* option_data = (TekGuiOptionData*)malloc(sizeof(TekGuiOptionData));
+    if (!option_data)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for option data.");
+    option_data->type = type;
+
+    // set the data based on type.
+    switch (type) {
+    case TEK_STRING_INPUT:
+        option_data->data.string = 0;
+        break;
+    case TEK_NUMBER_INPUT:
+        option_data->data.number = 0.0;
+        break;
+    case TEK_BOOLEAN_INPUT:
+        option_data->data.boolean = 0;
+        break;
+    case TEK_VEC3_INPUT:
+        glm_vec3_zero(option_data->data.vector_3);
+        break;
+    case TEK_VEC4_INPUT:
+        glm_vec4_zero(option_data->data.vector_4);
+        break;
+    default:
+        free(option_data);
+        tekThrow(FAILURE, "Unknown option type.");
+    }
+
+    // set the pointer at hash table.
+    tekChainThrow(hashtableSet(&window->option_data, name, option_data));
+    return SUCCESS;
+}
+
 static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const char* text, const uint len_text) {
+    printf("Callbackus\n");
     struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)text_input->data;
     TekGuiOptionWindow* window = option_pair->window;
     TekGuiOption* option = option_pair->option;
@@ -448,6 +480,7 @@ static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const ch
         tekChainThrow(tekGuiWriteStringOption(window, name, text, len_text));
         break;
     case TEK_NUMBER_INPUT:
+        printf("NUMBERINPUT...\n");
         tekChainThrow(tekGuiWriteNumberOptionString(window, name, text));
         break;
     case TEK_BOOLEAN_INPUT:

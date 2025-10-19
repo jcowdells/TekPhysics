@@ -15,6 +15,7 @@ typedef exception(*TekGuiWindowDrawCallback)(struct TekGuiWindow* window);
 
 typedef struct TekGuiWindow {
     flag type;
+    flag visible;
     void* data;
     int x_pos;
     int y_pos;

@@ -165,6 +165,8 @@ static void tekGuiListWindowButtonCallback(TekGuiButton* button, TekGuiButtonCal
         if (callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT || callback_data.data.mouse_button.action != GLFW_RELEASE)
             break;
         window->select_index = tekGuiListWindowGetIndex(window, (int)callback_data.mouse_y);
+        if (window->callback)
+            window->callback(window);
         break;
     case TEK_GUI_BUTTON_MOUSE_SCROLL_CALLBACK:
         if (callback_data.data.mouse_scroll.y_offset > 0.0) {

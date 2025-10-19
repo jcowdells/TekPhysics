@@ -48,8 +48,19 @@ typedef struct TekGuiOptionWindow {
     TekGuiOption* option_display;
     uint len_options;
     HashTable option_data;
+    void* data;
     TekGuiOptionWindowCallback callback;
 } TekGuiOptionWindow;
 
 exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* window);
+exception tekGuiWriteStringOption(TekGuiOptionWindow* window, const char* key, const char* string, uint len_string);
+exception tekGuiWriteNumberOption(TekGuiOptionWindow* window, const char* key, double number);
+exception tekGuiWriteBooleanOption(TekGuiOptionWindow* window, const char* key, flag boolean);
+exception tekGuiWriteVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector);
+exception tekGuiWriteVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector);
+exception tekGuiReadStringOption(TekGuiOptionWindow* window, const char* key, char** string);
+exception tekGuiReadNumberOption(TekGuiOptionWindow* window, const char* key, double* number);
+exception tekGuiReadBooleanOption(TekGuiOptionWindow* window, const char* key, flag* boolean);
+exception tekGuiReadVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector);
+exception tekGuiReadVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector);
 void tekGuiDeleteOptionWindow(const TekGuiOptionWindow* window);

@@ -24,6 +24,7 @@ void listCreate(List* list);
 void listDelete(List* list);
 void listFreeAllData(const List* list);
 exception listAddItem(List* list, void* data);
+exception listSetItem(List* list, uint index, void* data);
 exception listInsertItem(List* list, uint index, void* data);
 exception listGetItem(const List* list, uint index, void** data);
 exception listPopItem(List* list, void** data);

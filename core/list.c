@@ -87,6 +87,38 @@ exception listAddItem(List* list, void* data) {
     return SUCCESS;
 }
 
+exception listSetItem(List* list, const uint index, void* data) {
+    // obviously we cant insert an item outside of the list
+    if (index >= list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
+
+    // create some iterator variables
+    ListItem* item = list->data;
+
+    // keep a pointer to the pointer to next so we can overwrite it
+    ListItem** item_ptr = &list->data;
+
+    // if index is 0, then we are inserting at the start
+    // this means changing the root item of the list
+    // no need to run this loop
+    if (index) {
+        // counter variable
+        uint count = 0;
+        while (item->next) {
+            // if we have reached the specified index, then stop looping
+            if (++count >= index) break;
+            item = item->next;
+        }
+
+        // update pointers
+        item_ptr = &item->next;
+    }
+
+    // fill item with new data
+    (*item_ptr)->data = data;
+
+    return SUCCESS;
+}
+
 /**
  * Insert an item at a specific index into the list.
  * @note Will only copy the pointer into the list, but not actually the data. So don't try and add stack variables to it and then pass on to another function, etc.
@@ -97,7 +129,7 @@ exception listAddItem(List* list, void* data) {
  */
 exception listInsertItem(List* list, const uint index, void* data) {
     // obviously we cant insert an item outside of the list
-    if (index > list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
+    if (index >= list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
 
     // create some iterator variables
     ListItem* item = list->data;
@@ -147,7 +179,7 @@ exception listInsertItem(List* list, const uint index, void* data) {
  */
 exception listGetItem(const List* list, const uint index, void** data) {
     // make sure we are getting something that exists in the list
-    if (index > list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
+    if (index >= list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
 
     // iterator variables
     const ListItem* item = list->data;

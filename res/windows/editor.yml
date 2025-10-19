@@ -1,9 +1,9 @@
 title: "Editor"
-x_pos: 100
-y_pos: 100
+x_pos: 385
+y_pos: 30
 width: 240
-height: 320
-text_height: 20
+height: 410
+text_height: 16
 input_width: 100
 options:
   name:
@@ -18,3 +18,19 @@ options:
     label: "Rotation (yaw, pitch, roll):"
     type: $tek_vec3_input
     index: 20
+  velocity:
+    label: "Velocity (x, y z):"
+    type: $tek_vec3_input
+    index: 30
+  mass:
+    label: "Mass:"
+    type: $tek_number_input
+    index: 40
+  restitution:
+    label: "Coef. of restitution:"
+    type: $tek_number_input
+    index: 50
+  friction:
+    label: "Coef. of friction:"
+    type: $tek_number_input
+    index: 60

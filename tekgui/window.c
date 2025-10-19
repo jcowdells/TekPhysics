@@ -168,6 +168,7 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     if (!window_init) tekThrow(FAILURE, "Attempted to run function before initialised.");
 
     window->type = WINDOW_TYPE_EMPTY;
+    window->visible = 1;
     window->data = NULL;
     window->x_pos = (int)window_defaults.x_pos;
     window->y_pos = (int)window_defaults.y_pos;
@@ -205,6 +206,8 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
 }
 
 exception tekGuiDrawWindow(const TekGuiWindow* window) {
+    if (!window->visible) return SUCCESS;
+
     // draw background box
     tekChainThrow(tekGuiDrawBox(window->mesh_index, window->background_colour, window->border_colour));
 
