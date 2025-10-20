@@ -4,12 +4,15 @@
 #include "../core/threadqueue.h"
 
 #include "../tekgl/entity.h"
-#include "cglm/ivec3.h"
+#include "body.h"
 
 #define QUIT_EVENT        0
 #define KEY_EVENT         1
 #define MOUSE_POS_EVENT   2
 #define MODE_CHANGE_EVENT 3
+#define BODY_CREATE_EVENT 4
+#define BODY_DELETE_EVENT 5
+#define BODY_UPDATE_EVENT 6
 
 #define MESSAGE_STATE       0
 #define EXCEPTION_STATE     1
@@ -33,6 +36,10 @@ typedef struct TekEvent {
             double x;
             double y;
         } mouse_move_input;
+        struct {
+            TekBodySnapshot snapshot;
+            uint id;
+        } body;
         flag mode;
     } data;
 } TekEvent;
@@ -55,6 +62,7 @@ typedef struct TekState {
         struct {
             vec3 position;
             vec4 rotation;
+            vec3 scale;
         } entity_update;
         void* collider;
         struct {

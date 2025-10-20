@@ -73,7 +73,7 @@ static exception tekCalculateBodyProperties(TekBody* body) {
     // so we should take absolute value of volume
     // as long as face orientation is consistent however, this shouldn't affect much
     body->volume = fabsf(volume);
-    body->mass = body->volume * body->density;
+    body->density = body->mass / body->volume;
 
     // prepare the inertia tensor, as we will be adding to it
     mat3 inertia_tensor;
@@ -131,7 +131,7 @@ static void tekBodyUpdateTransform(TekBody* body) {
  * @param body A pointer to a struct to contain the new body.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
-exception tekCreateBody(const char* mesh_filename, const float mass, vec3 position, vec4 rotation, vec3 scale, TekBody* body) {
+exception tekCreateBody(const char* mesh_filename, const float mass, const float friction, const float restitution, vec3 position, vec4 rotation, vec3 scale, TekBody* body) {
     float* vertex_array = 0;
     uint* index_array = 0;
     int* layout_array = 0;
@@ -164,9 +164,9 @@ exception tekCreateBody(const char* mesh_filename, const float mass, vec3 positi
     body->num_vertices = num_vertices;
     body->indices = index_array;
     body->num_indices = len_index_array;
-    body->density = mass;
-    body->restitution = 1.0f; // TODO: make this a real thing.
-    body->friction = 0.5f;
+    body->mass = mass;
+    body->friction = friction;
+    body->restitution = restitution;
     glm_vec3_copy(position, body->position);
     glm_vec4_copy(rotation, body->rotation);
     glm_vec3_copy(scale, body->scale);
@@ -254,6 +254,12 @@ void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse,
 
     // add change in angular velocity (angular acceleration * Δtime = Δangular velocity)
     glm_vec3_muladds(angular_acceleration, delta_time, body->angular_velocity);
+}
+
+exception tekBodySetMass(TekBody* body, const float mass) {
+    body->mass = mass;
+    tekChainThrow(tekCalculateBodyProperties(body));
+    return SUCCESS;
 }
 
 /**

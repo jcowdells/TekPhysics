@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <math.h>
 #include <pthread.h>
+#include <cglm/euler.h>
 
 #include "body.h"
 #include "collider.h"
@@ -154,16 +155,17 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
  * @param mesh_filename The file that contains the mesh for the object.
  * @param material_filename The file that contains the material for the object. Only used in the graphics thread.
  * @param mass The mass of the body.
+ * @param friction The coefficient of friction.
+ * @param restitution The coefficient of restitution.
  * @param position The position of the body in the world.
  * @param rotation The rotation of the body as a quaternion.
  * @param scale The scale in x, y, and z direction from the original shape of the body.
  * @param object_id A pointer to where the new object id will be stored. Can be set to NULL if id is not needed.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
-static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Queue* unused_ids, const char* mesh_filename, const char* material_filename,
-                              const float mass, vec3 position, vec4 rotation, vec3 scale, uint* object_id) {
+static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, const uint object_id, const char* mesh_filename, const char* material_filename, const float mass, const float friction, const float restitution, vec3 position, vec4 rotation, vec3 scale) {
     TekBody body = {};
-    tekChainThrow(tekCreateBody(mesh_filename, mass, position, rotation, scale, &body));
+    tekChainThrow(tekCreateBody(mesh_filename, mass, friction, restitution, position, rotation, scale, &body));
 
     const uint len_mesh = strlen(mesh_filename) + 1;
     const uint len_material = strlen(material_filename) + 1;
@@ -180,24 +182,30 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
     memcpy(material_copy, material_filename, len_material);
 
     TekState state = {};
+    state.object_id = object_id;
 
-    flag create_id_via_queue = 1;
-    if (!queueIsEmpty(unused_ids)) {
-        uint unused_id;
-        tekChainThrowThen(queueDequeue(unused_ids, &unused_id), {
-            tekEngineCreateBodyCleanup;
-        });
-        tekChainThrowThen(vectorSetItem(bodies, unused_id, &body),
-            queueEnqueue(unused_ids, (void*)unused_id);
-            tekEngineCreateBodyCleanup;
-        );
-        state.object_id = unused_id;
-    } else {
-        create_id_via_queue = 0;
+    if (bodies->length <= object_id) {
+        TekBody dummy = {};
+        memset(&dummy, 0, sizeof(TekBody));
+        while (bodies->length < object_id) {
+            tekChainThrowThen(vectorAddItem(bodies, &dummy), {
+                tekEngineCreateBodyCleanup;
+            });
+        }
         tekChainThrowThen(vectorAddItem(bodies, &body), {
             tekEngineCreateBodyCleanup;
         });
-        state.object_id = bodies->length - 1;
+    } else {
+        TekBody* delete_body;
+        tekChainThrowThen(vectorGetItemPtr(bodies, object_id, &delete_body), {
+           tekEngineCreateBodyCleanup;
+        });
+        if (delete_body->num_vertices != 0)
+            tekDeleteBody(delete_body);
+
+        tekChainThrowThen(vectorSetItem(bodies, object_id, &body), {
+            tekEngineCreateBodyCleanup;
+        });
     }
 
     state.type = ENTITY_CREATE_STATE;
@@ -206,17 +214,9 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
     glm_vec3_copy(position, state.data.entity.position);
     glm_vec4_copy(rotation, state.data.entity.rotation);
     glm_vec3_copy(scale, state.data.entity.scale);
-    tekChainThrowThen(pushState(state_queue, state), {
-        if (create_id_via_queue) {
-            // if this enqueue also fails, then you're beyond screwed xD
-            // plus we are gonna clean up anyway
-            queueEnqueue(unused_ids, (void*)state.object_id);
-        }
-        tekEngineCreateBodyCleanup;
-    });
 
-    if (object_id)
-        *object_id = state.object_id;
+    pushState(state_queue, state);
+
     return SUCCESS;
 }
 
@@ -227,9 +227,10 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, Q
  * @param object_id The object id of the body to update.
  * @param position The new position of the body.
  * @param rotation The new rotation of the body as a quaternion.
+ * @param scale The new scale of the body.
  * @throws ENGINE_EXCEPTION if the object id is invalid.
  */
-static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bodies, const uint object_id, vec3 position, vec4 rotation) {
+static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bodies, const uint object_id, vec3 position, vec4 rotation, vec3 scale) {
     TekBody* body;
     tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
     if (body->num_vertices == 0) {
@@ -243,6 +244,7 @@ static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bod
     state.object_id = object_id;
     glm_vec3_copy(position, state.data.entity_update.position);
     glm_vec4_copy(rotation, state.data.entity_update.rotation);
+    glm_vec3_copy(scale, state.data.entity_update.scale);
 
     tekChainThrow(pushState(state_queue, state));
     return SUCCESS;
@@ -322,6 +324,11 @@ static void tekEngine(void* args) {
     uint counter = 0;
     flag mode = 0;
 
+    mat4 snapshot_rotation_matrix;
+    vec4 snapshot_rotation_quat;
+    uint snapshot_body_id;
+    TekBody* snapshot_body;
+
     while (running) {
         TekEvent event = {};
         while (recvEvent(event_queue, &event) == SUCCESS) {
@@ -358,8 +365,7 @@ static void tekEngine(void* args) {
                 if ((event.data.key_input.key == GLFW_KEY_E) && (event.data.key_input.action == GLFW_RELEASE)) {
                     vec4 cube_rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
                     vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
-                    //threadChainThrow(tekEngineCreateBody(state_queue, &bodies, &unused_ids, "../res/rad1.tmsh", "../res/material.tmat",
-                    //                                     10.0f, position, cube_rotation, cube_scale, 0));
+
                 }
                 break;
             case MOUSE_POS_EVENT:
@@ -378,6 +384,41 @@ static void tekEngine(void* args) {
             case MODE_CHANGE_EVENT:
                 mode = event.data.mode;
                 break;
+            case BODY_CREATE_EVENT:
+                // cannot convert directly for some reason
+                glm_euler(event.data.body.snapshot.rotation, snapshot_rotation_matrix);
+                glm_mat4_quat(snapshot_rotation_matrix, snapshot_rotation_quat);
+
+                threadChainThrow(tekEngineCreateBody(
+                    state_queue, &bodies, event.data.body.id,
+                    "../res/rad1.tmsh", "../res/material.tmat",
+                    event.data.body.snapshot.mass, event.data.body.snapshot.friction, event.data.body.snapshot.restitution,
+                    event.data.body.snapshot.position, snapshot_rotation_quat, (vec3){1.0f, 1.0f, 1.0f}
+                    ));
+
+                threadChainThrow(vectorGetItemPtr(&bodies, event.data.body.id, &snapshot_body));
+                glm_vec3_copy(event.data.body.snapshot.velocity, snapshot_body->velocity);
+
+                break;
+            case BODY_UPDATE_EVENT:
+                // cannot convert directly for some reason
+                glm_euler(event.data.body.snapshot.rotation, snapshot_rotation_matrix);
+                glm_mat4_quat(snapshot_rotation_matrix, snapshot_rotation_quat);
+
+                threadChainThrow(vectorGetItemPtr(&bodies, event.data.body.id, &snapshot_body));
+                glm_vec3_copy(event.data.body.snapshot.position, snapshot_body->position);
+                glm_vec3_copy(event.data.body.snapshot.rotation, snapshot_body->rotation);
+                glm_vec3_copy(event.data.body.snapshot.velocity, snapshot_body->velocity);
+                snapshot_body->friction = event.data.body.snapshot.friction;
+                snapshot_body->restitution = event.data.body.snapshot.restitution;
+                threadChainThrow(tekBodySetMass(snapshot_body, event.data.body.snapshot.mass));
+
+                threadChainThrow(tekEngineUpdateBody(
+                    state_queue, &bodies, event.data.body.id,
+                    event.data.body.snapshot.position, snapshot_rotation_quat, (vec3){1.0f, 1.0f, 1.0f} // TODO: scale
+                ));
+
+                break;
             default:
                 break;
             }
@@ -390,7 +431,7 @@ static void tekEngine(void* args) {
             threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
             if (!body->num_vertices) continue;
             tekBodyAdvanceTime(body, (float)phys_period);
-            threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation));
+            threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
         }
 
         if (mouse_moving) {

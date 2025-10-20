@@ -189,6 +189,28 @@ static exception tekCreateBodySnapshot(Vector* bodies, List* hierarchy_list, Lis
     tekChainThrow(listInsertItem(hierarchy_id_list, hierarchy_id_list->length - 1, (void*)id));
     *snapshot_id = id;
 
+    TekEvent event = {};
+    event.type = BODY_CREATE_EVENT;
+    memcpy(&event.data.body.snapshot, &dummy, sizeof(TekBodySnapshot));
+    event.data.body.id = (uint)id;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    return SUCCESS;
+}
+
+static exception tekUpdateBodySnapshot(Vector* bodies, int snapshot_id) {
+    if (snapshot_id < 0)
+        return SUCCESS;
+
+    TekBodySnapshot* body_snapshot;
+    tekChainThrow(vectorGetItemPtr(bodies, (uint)snapshot_id, &body_snapshot));
+
+    TekEvent event = {};
+    event.type = BODY_UPDATE_EVENT;
+    memcpy(&event.data.body.snapshot, body_snapshot, sizeof(TekBodySnapshot));
+    event.data.body.id = (uint)snapshot_id;
+    tekChainThrow(pushEvent(&event_queue, event));
+
     return SUCCESS;
 }
 
@@ -241,10 +263,23 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     double number;
     tekChainThrow(tekGuiReadNumberOption(window, "mass", &number));
     snapshot->mass = (float)number;
+    if (snapshot->mass < 0.0001f)
+        snapshot->mass = 0.0001f;
     tekChainThrow(tekGuiReadNumberOption(window, "restitution", &number));
     snapshot->restitution = (float)number;
+    if (snapshot->restitution > 1.0f)
+        snapshot->restitution = 1.0f;
+    if (snapshot->restitution < 0.0f)
+        snapshot->restitution = 0.0f;
     tekChainThrow(tekGuiReadNumberOption(window, "friction", &number));
     snapshot->friction = (float)number;
+    if (snapshot->friction > 1.0f)
+        snapshot->friction = 1.0f;
+    if (snapshot->friction < 0.0f)
+        snapshot->friction = 0.0f;
+
+    tekChainThrow(tekUpdateEditorWindow(window, hierarchy_data->hierarchy_list, hierarchy_data->bodies));
+    tekChainThrow(tekUpdateBodySnapshot(hierarchy_data->bodies, hierarchy_index));
 
     return SUCCESS;
 }
@@ -485,10 +520,12 @@ exception run() {
                 }
                 break;
             case EXCEPTION_STATE:
-                threadQueueDelete(&event_queue);
-                threadQueueDelete(&state_queue);
                 force_exit = 1;
-                tekChainThrowThen(state.data.exception, { tekRunCleanup(); });
+                tekChainThrowThen(state.data.exception, {
+                    tekRunCleanup();
+                    threadQueueDelete(&event_queue);
+                    threadQueueDelete(&state_queue);
+                });
                 break;
             case ENTITY_CREATE_STATE:
                 TekEntity dummy_entity = {};
@@ -532,14 +569,13 @@ exception run() {
         case MODE_MAIN_MENU:
             break;
         case MODE_RUNNER:
+        case MODE_BUILDER:
             for (uint i = 0; i < entities.length; i++) {
                 TekEntity* entity;
                 tekChainThrowThen(vectorGetItemPtr(&entities, i, &entity), { tekRunCleanup(); });
                 if (entity->mesh == 0) continue;
                 tekChainThrowThen(tekDrawEntity(entity, &camera), { tekRunCleanup(); });
             }
-            break;
-        case MODE_BUILDER:
             break;
         default:
             break;

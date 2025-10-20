@@ -129,7 +129,7 @@ exception listSetItem(List* list, const uint index, void* data) {
  */
 exception listInsertItem(List* list, const uint index, void* data) {
     // obviously we cant insert an item outside of the list
-    if (index >= list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
+    if (index > list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
 
     // create some iterator variables
     ListItem* item = list->data;
