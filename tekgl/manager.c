@@ -268,7 +268,7 @@ void tekDelete() {
     listDelete(&tek_mbutton_funcs);
     listDelete(&tek_mscroll_funcs);
 
-    tekDeleteFreeType();
+    // tekDeleteFreeType();
 
     glfwDestroyCursor(crosshair_cursor);
 
