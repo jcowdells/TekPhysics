@@ -12,6 +12,7 @@
 struct TekGuiWindow;
 
 typedef exception(*TekGuiWindowDrawCallback)(struct TekGuiWindow* window);
+typedef exception(*TekGuiWindowSelectCallback)(struct TekGuiWindow* window);
 
 typedef struct TekGuiWindow {
     flag type;
@@ -34,6 +35,7 @@ typedef struct TekGuiWindow {
     int x_delta;
     int y_delta;
     TekGuiWindowDrawCallback draw_callback;
+    TekGuiWindowSelectCallback select_callback;
 } TekGuiWindow;
 
 exception tekGuiCreateWindow(TekGuiWindow* window);

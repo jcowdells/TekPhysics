@@ -91,6 +91,10 @@ static exception tekGuiBringWindowToFront(const TekGuiWindow* window) {
     // make sure that the window buttons are also brought to the front.
     tekChainThrow(tekGuiBringButtonToFront(&window->title_button));
 
+    // on window select, call back to other windows.
+    if (window->select_callback)
+        tekChainThrow(window->select_callback(window));
+
     return SUCCESS;
 }
 

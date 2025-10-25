@@ -140,6 +140,12 @@ static exception tekGuiDrawListWindow(TekGuiWindow* window) {
     return SUCCESS;
 }
 
+static exception tekGuiSelectListWindow(TekGuiWindow* window) {
+    TekGuiListWindow* list_window = (TekGuiListWindow*)window->data;
+    tekChainThrow(tekGuiBringButtonToFront(&list_window->button));
+    return SUCCESS;
+}
+
 static int tekGuiListWindowGetIndex(TekGuiListWindow* window, int mouse_y) {
     const int
         min_y = window->window.y_pos,
@@ -157,6 +163,8 @@ static int tekGuiListWindowGetIndex(TekGuiListWindow* window, int mouse_y) {
 
 static void tekGuiListWindowButtonCallback(TekGuiButton* button, TekGuiButtonCallbackData callback_data) {
     TekGuiListWindow* window = (TekGuiListWindow*)button->data;
+    if (!window->window.visible)
+        return;
     switch (callback_data.type) {
     case TEK_GUI_BUTTON_MOUSE_TOUCHING_CALLBACK:
         window->hover_index = tekGuiListWindowGetIndex(window, (int)callback_data.mouse_y);
@@ -194,6 +202,7 @@ exception tekGuiCreateListWindow(TekGuiListWindow* window, List* text_list) {
     glm_vec4_copy(list_window_defaults.text_colour, window->text_colour);
     window->window.data = window;
     window->window.draw_callback = tekGuiDrawListWindow;
+    window->window.select_callback = tekGuiSelectListWindow;
 
     printf("num: %u, size: %u, final: %u\n", window->num_visible, window->text_size, window->num_visible * window->text_size * 5 / 4);
     tekGuiSetWindowSize(&window->window, window->window.width, window->num_visible * window->text_size * 5 / 4);
