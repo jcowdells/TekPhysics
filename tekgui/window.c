@@ -229,7 +229,6 @@ exception tekGuiDrawAllWindows() {
         const TekGuiWindow* window = (const TekGuiWindow*)item->data;
         tekChainThrow(tekGuiDrawWindow(window));
     });
-
     return SUCCESS;
 }
 

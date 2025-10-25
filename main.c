@@ -45,6 +45,12 @@
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT 480
 
+#define SAVE_OPTION 0
+#define LOAD_OPTION 1
+#define RUN_OPTION  2
+#define QUIT_OPTION 3
+#define NUM_OPTIONS 4
+
 struct TekHierarchyData {
     List* hierarchy_list;
     List* hierarchy_id_list;
@@ -284,15 +290,53 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     return SUCCESS;
 }
 
-static exception tekCreateBuilderMenu(struct TekHierarchyData* hierarchy_data, TekGuiListWindow* hierarchy_window, TekGuiOptionWindow* editor_window) {
+static exception tekCreateActionsList(List** actions_list) {
+    *actions_list = (List*)malloc(sizeof(List));
+    listCreate(*actions_list);
+
+    for (uint i = 0; i < NUM_OPTIONS; i++) {
+        const char* string;
+        switch (i) {
+        case SAVE_OPTION:
+            string = "Save";
+            break;
+        case LOAD_OPTION:
+            string = "Load";
+            break;
+        case RUN_OPTION:
+            string = "Run";
+            break;
+        case QUIT_OPTION:
+            string = "Quit";
+            break;
+        default:
+           tekThrow(FAILURE, "Unknown option id in action menu.");
+        }
+        const uint len_string = strlen(string) + 1;
+        char* buffer = (char*)malloc(sizeof(char) * len_string);
+        memcpy(buffer, string, len_string);
+        tekChainThrow(listAddItem(*actions_list, buffer));
+    }
+
+    return SUCCESS;
+}
+
+static exception tekCreateBuilderMenu(struct TekHierarchyData* hierarchy_data, TekGuiListWindow* hierarchy_window, TekGuiOptionWindow* editor_window, TekGuiListWindow* action_window) {
     tekChainThrow(tekGuiCreateListWindow(hierarchy_window, hierarchy_data->hierarchy_list));
     hierarchy_window->data = hierarchy_data;
     hierarchy_window->callback = tekHierarchyCallback;
     tekChainThrow(tekGuiSetWindowTitle(&hierarchy_window->window, "Hierarchy"));
+
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/editor.yml", editor_window))
     editor_window->window.visible = 0;
     editor_window->data = hierarchy_data;
     editor_window->callback = tekEditorCallback;
+
+    List* actions_list;
+    tekChainThrow(tekCreateActionsList(&actions_list));
+    tekChainThrow(tekGuiCreateListWindow(action_window, actions_list));
+    // tekChainThrow(tekGuiSetWindowTitle(&action_window->window, "Actions"))
+
     return SUCCESS;
 }
 
@@ -301,19 +345,22 @@ static exception tekDrawBuilderMenu() {
     return SUCCESS;
 }
 
-static void tekDeleteBuilderMenu(TekGuiListWindow* hierarchy_window, const TekGuiOptionWindow* editor_window) {
+static void tekDeleteBuilderMenu(TekGuiListWindow* hierarchy_window, const TekGuiOptionWindow* editor_window, TekGuiListWindow* action_window) {
     tekGuiDeleteListWindow(hierarchy_window);
     tekGuiDeleteOptionWindow(editor_window);
+    listFreeAllData(action_window->text_list);
+    listDelete(action_window->text_list);
+    tekGuiDeleteListWindow(action_window);
 }
 
-static exception tekCreateMenu(TekText* version_text, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo, struct TekHierarchyData* hierarchy_data, TekGuiListWindow* hierarchy_window, TekGuiOptionWindow* editor_window) {
+static exception tekCreateMenu(TekText* version_text, TekGuiTextButton* start_button, TekGuiImage* tekphysics_logo, struct TekHierarchyData* hierarchy_data, TekGuiListWindow* hierarchy_window, TekGuiOptionWindow* editor_window, TekGuiListWindow* action_window) {
     // create version font + text.
     TekBitmapFont* font;
     tekChainThrow(tekGuiGetDefaultFont(&font));
     tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, font, version_text));
 
     tekChainThrow(tekCreateMainMenu(WINDOW_WIDTH, WINDOW_HEIGHT, start_button, tekphysics_logo));
-    tekChainThrow(tekCreateBuilderMenu(hierarchy_data, hierarchy_window, editor_window));
+    tekChainThrow(tekCreateBuilderMenu(hierarchy_data, hierarchy_window, editor_window, action_window));
 
     tekChainThrow(tekSwitchToMainMenu(start_button, tekphysics_logo));
     return SUCCESS;
@@ -373,15 +420,15 @@ static exception tekDrawMenu(const TekText* version_text, const TekGuiTextButton
     return SUCCESS;
 }
 
-static void tekDeleteMenu(const TekText* version_text, const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo, const TekGuiListWindow* hierarchy_window, const TekGuiOptionWindow* editor_window) {
+static void tekDeleteMenu(const TekText* version_text, const TekGuiTextButton* start_button, const TekGuiImage* tekphysics_logo, const TekGuiListWindow* hierarchy_window, const TekGuiOptionWindow* editor_window, TekGuiListWindow* action_window) {
     tekDeleteText(version_text);
     tekDeleteMainMenu(start_button, tekphysics_logo);
-    tekDeleteBuilderMenu(hierarchy_window, editor_window);
+    tekDeleteBuilderMenu(hierarchy_window, editor_window, action_window);
 }
 
 #define tekRunCleanup() \
 pushEvent(&event_queue, quit_event); \
-tekDeleteMenu(&version_text, &start_button, &tekphysics_logo, &hierarchy_window, &editor_window); \
+tekDeleteMenu(&version_text, &start_button, &tekphysics_logo, &hierarchy_window, &editor_window, &action_window); \
 listFreeAllData(&hierarchy_list); \
 listDelete(&hierarchy_list); \
 listDelete(&hierarchy_id_list); \
@@ -461,6 +508,7 @@ exception run() {
     listCreate(&hierarchy_list);
     listCreate(&hierarchy_id_list);
     TekGuiListWindow hierarchy_window = {};
+    TekGuiListWindow action_window = {};
 
     struct TekHierarchyData hierarchy_data = {
         &hierarchy_list,
@@ -472,7 +520,7 @@ exception run() {
     tekChainThrowThen(tekCreateMenu(
         &version_text,
         &start_button, &tekphysics_logo,
-        &hierarchy_data, &hierarchy_window, &editor_window
+        &hierarchy_data, &hierarchy_window, &editor_window, &action_window
     ), {
         listDelete(&hierarchy_list);
         listDelete(&hierarchy_id_list);

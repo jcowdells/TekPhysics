@@ -288,10 +288,12 @@ exception listRemoveItem(List* list, const uint index, void** data) {
  * @throws LIST_EXCEPTION if either index is out of range.
  */
 exception listMoveItem(List* list, const uint old_index, const uint new_index) {
+    printf("Moving item:\n");
+    listPrint(list);
     // make sure that we actually need to move the item
     if (old_index == new_index) return SUCCESS;
 
-    if (old_index >= list->length || new_index >= list->length)
+    if (old_index >= list->length || new_index >= list->length || old_index < 0 || new_index < 0)
         tekThrow(LIST_EXCEPTION, "List index out of range.");
 
     // scan the list to find the old item
@@ -310,6 +312,8 @@ exception listMoveItem(List* list, const uint old_index, const uint new_index) {
     } else {
         prev->next = item->next;
     }
+
+    listPrint(list);
 
     // keep track of what the old item was.
     ListItem* moved_item = item;
@@ -331,15 +335,17 @@ exception listMoveItem(List* list, const uint old_index, const uint new_index) {
 
     // iterate to find the new index.
     while (item) {
-        if (index == new_index) break;
-        index++;
         prev = item;
         item = item->next;
+        if (index == new_index) break;
+        index++;
     }
 
     // insert the item into the new location.
     prev->next = moved_item;
     moved_item->next = item;
+
+    listPrint(list);
 
     return SUCCESS;
 }
