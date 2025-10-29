@@ -1,0 +1,16 @@
+title: "Load"
+x_pos: 385
+y_pos: 30
+width: 240
+height: 410
+text_height: 16
+input_width: 100
+options:
+  filename:
+    label: "Load File:"
+    type: $tek_string_input
+    index: 0
+  save:
+    label: "Load"
+    type: $tek_button_input
+    index: 10

@@ -10,5 +10,7 @@ typedef unsigned int uint;
 #define MODE_MAIN_MENU 0
 #define MODE_BUILDER   1
 #define MODE_RUNNER    2
+#define MODE_SAVE      3
+#define MODE_LOAD      4
 
 #define BILLION 1000000000

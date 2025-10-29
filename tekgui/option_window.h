@@ -7,6 +7,15 @@
 #include "../tekgl/text.h"
 #include "text_input.h"
 
+#define TEK_UNKNOWN_INPUT  (-1)
+#define TEK_LABEL          0
+#define TEK_STRING_INPUT   1
+#define TEK_NUMBER_INPUT   2
+#define TEK_BOOLEAN_INPUT  3
+#define TEK_VEC3_INPUT     4
+#define TEK_VEC4_INPUT     5
+#define TEK_BUTTON_INPUT   6
+
 typedef struct TekGuiOptionData {
     flag type;
     union {
