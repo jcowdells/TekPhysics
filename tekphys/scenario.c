@@ -183,3 +183,15 @@ exception tekWriteScenario(const TekScenario* scenario, const char* scenario_fil
     free(buffer);
     return SUCCESS;
 }
+
+void tekDeleteScenario(TekScenario* scenario) {
+    ListItem* item;
+    foreach(item, (&scenario->scenarios), {
+        struct TekScenarioPair* pair = item->data;
+        if (pair->allocated) {
+            free(pair->snapshot);
+        }
+        free(pair);
+    });
+    listDelete(&scenario->scenarios);
+}

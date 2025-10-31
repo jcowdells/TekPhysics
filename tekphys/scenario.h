@@ -18,4 +18,4 @@ exception tekScenarioGetSnapshot(const TekScenario* scenario, uint snapshot_id, 
 exception tekScenarioPutSnapshot(TekScenario* scenario, TekBodySnapshot* snapshot, uint snapshot_id);
 exception tekScenarioDeleteSnapshot(TekScenario* scenario, uint snapshot_id);
 
-exception tekDeleteScenario(const TekScenario* scenario);
+void tekDeleteScenario(TekScenario* scenario);

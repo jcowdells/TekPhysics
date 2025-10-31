@@ -778,6 +778,8 @@ exception test() {
 
     tekChainThrow(tekWriteScenario(&scenario, "../res/scenario.tscn"));
 
+    tekDeleteScenario(&scenario);
+
     return SUCCESS;
 }
 
