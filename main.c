@@ -41,6 +41,7 @@
 #include "tekgui/text_button.h"
 #include "tekgui/text_input.h"
 #include "tekgui/option_window.h"
+#include "tekphys/scenario.h"
 
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT 480
@@ -767,25 +768,21 @@ exception run() {
 }
 
 exception test() {
-    List testlist = {};
-    listCreate(&testlist);
+    TekScenario scenario = {};
 
-    tekChainThrow(listAddItem(&testlist, "Something0"));
-    tekChainThrow(listAddItem(&testlist, "Something1"));
-    tekChainThrow(listAddItem(&testlist, "Something2"));
-    tekChainThrow(listAddItem(&testlist, "Something3"));
+    tekChainThrow(tekReadScenario("../res/scenario.tscn", &scenario));
 
-    listPrint(&testlist);
+    TekBodySnapshot snapshot = {};
+    snapshot.friction = 100.0f;
+    tekChainThrow(tekScenarioPutSnapshot(&scenario, &snapshot, 100));
 
-    tekChainThrow(listSetItem(&testlist, 0, "Changed"));
-
-    listPrint(&testlist);
+    tekChainThrow(tekWriteScenario(&scenario, "../res/scenario.tscn"));
 
     return SUCCESS;
 }
 
 int main(void) {
     tekInitExceptions();
-    tekLog(run());
+    tekLog(test());
     tekCloseExceptions();
 }

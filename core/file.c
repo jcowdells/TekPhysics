@@ -49,3 +49,23 @@ exception readFile(const char* filename, const uint buffer_size, char* buffer) {
 
     return SUCCESS;
 }
+
+/**
+ * Write a string buffer into a file. This will create a file if one doesn't exist, and will overwrite if it does.
+ * @param buffer The contents to write to the file.
+ * @param filename The path to the file that should be written to.
+ * @throws FILE_EXCEPTION
+ */
+exception writeFile(const char* buffer, const char* filename) {
+    // get pointer to file.
+    FILE* file_ptr = fopen(filename, "w");
+    if (!file_ptr) tekThrow(FILE_EXCEPTION, "Could not open file.");
+
+    // write file
+    const int fpf_out = fprintf(file_ptr, "%s", buffer);
+    fclose(file_ptr);
+    if (fpf_out < 0)
+        tekThrow(FILE_EXCEPTION, "Failed to write to file.");
+
+    return SUCCESS;
+}
