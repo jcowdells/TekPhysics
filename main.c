@@ -53,9 +53,7 @@
 #define NUM_OPTIONS 4
 
 struct TekHierarchyData {
-    List* hierarchy_list;
-    List* hierarchy_id_list;
-    Vector* bodies;
+    TekScenario* scenario;
     TekGuiOptionWindow* editor_window;
 };
 
@@ -236,16 +234,16 @@ static void tekDeleteMainMenu(const struct TekGuiComponents* gui) {
     tekGuiDeleteImage(&gui->logo);
 }
 
-static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const List* hierarchy_list, const Vector* bodies) {
+static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const TekScenario* scenario) {
     if (hierarchy_index < 0) {
         editor_window->window.visible = 0;
         return SUCCESS;
     }
     editor_window->window.visible = 1;
     TekBodySnapshot* body;
-    tekChainThrow(vectorGetItemPtr(bodies, (uint)hierarchy_index, &body));
-    const char* object_name;
-    tekChainThrow(listGetItem(hierarchy_list, hierarchy_index, &object_name));
+    tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)hierarchy_index, &body));
+    char* object_name;
+    tekChainThrow(tekScenarioGetName(scenario, (uint)hierarchy_index, &object_name));
     tekChainThrow(tekGuiWriteStringOption(editor_window, "name", object_name, strlen(object_name) + 1));
 
     tekChainThrow(tekGuiWriteVec3Option(editor_window, "position", body->position));
@@ -258,19 +256,7 @@ static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const 
     return SUCCESS;
 }
 
-static exception tekCreateBodySnapshot(Vector* bodies, List* hierarchy_list, List* hierarchy_id_list, int* snapshot_id) {
-    *snapshot_id = -1;
-    const char* new_object_string = "New Object";
-    const uint len_string = strlen(new_object_string) + 1;
-    char* new_object_buffer = (char*)malloc(sizeof(char) * len_string);
-    if (!new_object_buffer)
-        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for new buffer.");
-    memcpy(new_object_buffer, new_object_string, len_string);
-
-    tekChainThrowThen(listInsertItem(hierarchy_list, hierarchy_list->length - 1, new_object_buffer), {
-        free(new_object_buffer);
-    });
-
+static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) {
     TekBodySnapshot dummy = {};
     dummy.mass = 1.0f;
     dummy.friction = 0.5f;
@@ -279,26 +265,26 @@ static exception tekCreateBodySnapshot(Vector* bodies, List* hierarchy_list, Lis
     glm_vec3_zero(dummy.rotation);
     glm_vec3_zero(dummy.velocity);
 
-    const int id = (int)bodies->length;
-    tekChainThrow(vectorAddItem(bodies, &dummy));
-    tekChainThrow(listInsertItem(hierarchy_id_list, hierarchy_id_list->length - 1, (void*)id));
-    *snapshot_id = id;
+    uint id;
+    tekChainThrow(tekScenarioGetNextId(scenario, &id));
+    tekChainThrow(tekScenarioPutSnapshot(scenario, &dummy, id, "New Object"));
+    *snapshot_id = (int)id;
 
     TekEvent event = {};
     event.type = BODY_CREATE_EVENT;
     memcpy(&event.data.body.snapshot, &dummy, sizeof(TekBodySnapshot));
-    event.data.body.id = (uint)id;
+    event.data.body.id = id;
     tekChainThrow(pushEvent(&event_queue, event));
 
     return SUCCESS;
 }
 
-static exception tekUpdateBodySnapshot(const Vector* bodies, const int snapshot_id) {
+static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int snapshot_id) {
     if (snapshot_id < 0)
         return SUCCESS;
 
     TekBodySnapshot* body_snapshot;
-    tekChainThrow(vectorGetItemPtr(bodies, (uint)snapshot_id, &body_snapshot));
+    tekChainThrow(tekScenarioGetSnapshot(scenario, snapshot_id, &body_snapshot));
 
     TekEvent event = {};
     event.type = BODY_UPDATE_EVENT;
@@ -313,21 +299,17 @@ static void tekHierarchyCallback(TekGuiListWindow* hierarchy_window) {
     if (mode != MODE_BUILDER)
         return;
     const struct TekHierarchyData* hierarchy_data = (struct TekHierarchyData*)hierarchy_window->data;
-    void* raw_index;
-    listGetItem(hierarchy_data->hierarchy_id_list, hierarchy_window->select_index, &raw_index);
-    listPrint(hierarchy_data->hierarchy_id_list);
-    const int index = (int)raw_index;
-    printf("%d\n", hierarchy_window->select_index);
+
+    int index;
+    tekScenarioGetByNameIndex(hierarchy_data->scenario, hierarchy_window->select_index, NULL, &index);
 
     if (index == -1) {
-        tekCreateBodySnapshot(hierarchy_data->bodies, hierarchy_data->hierarchy_list, hierarchy_data->hierarchy_id_list, &hierarchy_index);
-    } else if (index >= hierarchy_data->hierarchy_list->length) {
-        hierarchy_index = -1;
+        tekCreateBodySnapshot(hierarchy_data->scenario, &hierarchy_index);
     } else {
         hierarchy_index = index;
     }
 
-    tekUpdateEditorWindow(hierarchy_data->editor_window, hierarchy_data->hierarchy_list, hierarchy_data->bodies);
+    tekUpdateEditorWindow(hierarchy_data->editor_window, hierarchy_data->scenario);
 }
 
 static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
@@ -338,27 +320,16 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
         return SUCCESS;
 
     const struct TekHierarchyData* hierarchy_data = (struct TekHierarchyData*)window->data;
-    TekBodySnapshot* snapshot;
 
     if (!strcmp(callback_data.name, "name")) {
-        char* name;
-        tekChainThrow(listGetItem(hierarchy_data->hierarchy_list, hierarchy_index, &name));
-
         char* inputted_name;
         tekChainThrow(tekGuiReadStringOption(window, "name", &inputted_name));
-
-        const uint len_name = strlen(inputted_name) + 1;
-        char* new_name = (char*)realloc(name, sizeof(char) * len_name);
-        if (!new_name) {
-            if (name) free(name);
-            tekThrow(MEMORY_EXCEPTION, "Failed to reallocate memory for new name");
-        }
-        memcpy(new_name, inputted_name, len_name);
-        tekChainThrow(listSetItem(hierarchy_data->hierarchy_list, hierarchy_index, new_name));
+        tekChainThrow(tekScenarioSetName(hierarchy_data->scenario, (uint)hierarchy_index, inputted_name));
         return SUCCESS;
     }
 
-    tekChainThrow(vectorGetItemPtr(hierarchy_data->bodies, hierarchy_index, &snapshot));
+    TekBodySnapshot* snapshot;
+    tekChainThrow(tekScenarioGetSnapshot(hierarchy_data->scenario, (uint)hierarchy_index, &snapshot));
     tekChainThrow(tekGuiReadVec3Option(window, "position", snapshot->position));
     tekChainThrow(tekGuiReadVec3Option(window, "rotation", snapshot->rotation));
     tekChainThrow(tekGuiReadVec3Option(window, "velocity", snapshot->velocity));
@@ -380,8 +351,8 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     if (snapshot->friction < 0.0f)
         snapshot->friction = 0.0f;
 
-    tekChainThrow(tekUpdateEditorWindow(window, hierarchy_data->hierarchy_list, hierarchy_data->bodies));
-    tekChainThrow(tekUpdateBodySnapshot(hierarchy_data->bodies, hierarchy_index));
+    tekChainThrow(tekUpdateEditorWindow(window, hierarchy_data->scenario));
+    tekChainThrow(tekUpdateBodySnapshot(hierarchy_data->scenario, hierarchy_index));
 
     return SUCCESS;
 }
@@ -440,7 +411,7 @@ static exception tekCreateActionsList(List** actions_list) {
 }
 
 static exception tekCreateBuilderMenu(const int window_width, const int window_height, struct TekGuiComponents* gui, struct TekHierarchyData* hierarchy_data) {
-    tekChainThrow(tekGuiCreateListWindow(&gui->hierarchy_window, hierarchy_data->hierarchy_list));
+    tekChainThrow(tekGuiCreateListWindow(&gui->hierarchy_window, &hierarchy_data->scenario->names));
     gui->hierarchy_window.data = hierarchy_data;
     gui->hierarchy_window.callback = tekHierarchyCallback;
     tekChainThrow(tekGuiSetWindowTitle(&gui->hierarchy_window.window, "Hierarchy"));
@@ -560,9 +531,7 @@ static void tekDeleteMenu(struct TekGuiComponents* gui) {
 #define tekRunCleanup() \
 pushEvent(&event_queue, quit_event); \
 tekDeleteMenu(&gui); \
-listFreeAllData(&hierarchy_list); \
-listDelete(&hierarchy_list); \
-listDelete(&hierarchy_id_list); \
+tekDeleteScenario(&scenario); \
 vectorDelete(&bodies); \
 vectorDelete(&entities); \
 tekDelete() \
@@ -631,23 +600,17 @@ exception run() {
 
     struct TekGuiComponents gui = {};
 
-    List hierarchy_list = {};
-    List hierarchy_id_list = {};
-    listCreate(&hierarchy_list);
-    listCreate(&hierarchy_id_list);
+    TekScenario scenario = {};
 
     struct TekHierarchyData hierarchy_data = {
-        &hierarchy_list,
-        &hierarchy_id_list,
-        &bodies,
+        &scenario,
         &gui.editor_window
     };
 
     tekChainThrowThen(tekCreateMenu(
         &gui, &hierarchy_data
     ), {
-        listDelete(&hierarchy_list);
-        listDelete(&hierarchy_id_list);
+        tekDeleteScenario(&scenario);
         vectorDelete(&bodies);
         vectorDelete(&entities);
         threadQueueDelete(&event_queue);
@@ -658,23 +621,6 @@ exception run() {
     // create the camera struct
     TekCamera camera = {};
     tekChainThrowThen(tekCreateCamera(&camera, camera_position, camera_rotation, 1.2f, 0.1f, 100.0f), {
-        tekRunCleanup();
-    });
-
-    const char* new_object_string = "Add New Object";
-    const uint len_new_object_string = strlen(new_object_string) + 1;
-    char* new_object_buffer = (char*)malloc(sizeof(char) * len_new_object_string);
-    if (!new_object_buffer)
-        tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate buffer for new object string.", {
-            tekRunCleanup();
-        });
-    memcpy(new_object_buffer, new_object_string, len_new_object_string);
-    tekChainThrowThen(listAddItem(&hierarchy_list, new_object_buffer), {
-        tekRunCleanup();
-    });
-
-    void* new_object_id = (void*)-1;
-    tekChainThrowThen(listAddItem(&hierarchy_id_list, new_object_id), {
         tekRunCleanup();
     });
 
@@ -774,7 +720,6 @@ exception test() {
 
     TekBodySnapshot snapshot = {};
     snapshot.friction = 100.0f;
-    tekChainThrow(tekScenarioPutSnapshot(&scenario, &snapshot, 100));
 
     tekChainThrow(tekWriteScenario(&scenario, "../res/scenario.tscn"));
 
