@@ -14,3 +14,7 @@ options:
     label: "Save"
     type: $tek_button_input
     index: 10
+  _:
+    label: "Will be saved as ../saves/<your-filename>.tscn"
+    type: $tek_label
+    index: 20

@@ -52,11 +52,6 @@
 #define QUIT_OPTION 3
 #define NUM_OPTIONS 4
 
-struct TekHierarchyData {
-    TekScenario* scenario;
-    TekGuiOptionWindow* editor_window;
-};
-
 struct TekGuiComponents {
     TekGuiTextButton start_button;
     TekGuiImage logo;
@@ -83,6 +78,8 @@ char depth_message[64];
 flag text_init = 0;
 TekText depth_text = {};
 TekBitmapFont depth_font = {};
+
+TekScenario active_scenario = {};
 
 void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
     width = (float)fb_width;
@@ -298,18 +295,18 @@ static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int sn
 static void tekHierarchyCallback(TekGuiListWindow* hierarchy_window) {
     if (mode != MODE_BUILDER)
         return;
-    const struct TekHierarchyData* hierarchy_data = (struct TekHierarchyData*)hierarchy_window->data;
+    TekGuiOptionWindow* editor_window = hierarchy_window->data;
 
     int index;
-    tekScenarioGetByNameIndex(hierarchy_data->scenario, hierarchy_window->select_index, NULL, &index);
+    tekScenarioGetByNameIndex(&active_scenario, hierarchy_window->select_index, NULL, &index);
 
     if (index == -1) {
-        tekCreateBodySnapshot(hierarchy_data->scenario, &hierarchy_index);
+        tekCreateBodySnapshot(&active_scenario, &hierarchy_index);
     } else {
         hierarchy_index = index;
     }
 
-    tekUpdateEditorWindow(hierarchy_data->editor_window, hierarchy_data->scenario);
+    tekUpdateEditorWindow(editor_window, &active_scenario);
 }
 
 static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
@@ -319,17 +316,15 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     if (hierarchy_index < 0)
         return SUCCESS;
 
-    const struct TekHierarchyData* hierarchy_data = (struct TekHierarchyData*)window->data;
-
     if (!strcmp(callback_data.name, "name")) {
         char* inputted_name;
         tekChainThrow(tekGuiReadStringOption(window, "name", &inputted_name));
-        tekChainThrow(tekScenarioSetName(hierarchy_data->scenario, (uint)hierarchy_index, inputted_name));
+        tekChainThrow(tekScenarioSetName(&active_scenario, (uint)hierarchy_index, inputted_name));
         return SUCCESS;
     }
 
     TekBodySnapshot* snapshot;
-    tekChainThrow(tekScenarioGetSnapshot(hierarchy_data->scenario, (uint)hierarchy_index, &snapshot));
+    tekChainThrow(tekScenarioGetSnapshot(&active_scenario, (uint)hierarchy_index, &snapshot));
     tekChainThrow(tekGuiReadVec3Option(window, "position", snapshot->position));
     tekChainThrow(tekGuiReadVec3Option(window, "rotation", snapshot->rotation));
     tekChainThrow(tekGuiReadVec3Option(window, "velocity", snapshot->velocity));
@@ -351,8 +346,8 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     if (snapshot->friction < 0.0f)
         snapshot->friction = 0.0f;
 
-    tekChainThrow(tekUpdateEditorWindow(window, hierarchy_data->scenario));
-    tekChainThrow(tekUpdateBodySnapshot(hierarchy_data->scenario, hierarchy_index));
+    tekChainThrow(tekUpdateEditorWindow(window, &active_scenario));
+    tekChainThrow(tekUpdateBodySnapshot(&active_scenario, hierarchy_index));
 
     return SUCCESS;
 }
@@ -410,16 +405,17 @@ static exception tekCreateActionsList(List** actions_list) {
     return SUCCESS;
 }
 
-static exception tekCreateBuilderMenu(const int window_width, const int window_height, struct TekGuiComponents* gui, struct TekHierarchyData* hierarchy_data) {
-    tekChainThrow(tekGuiCreateListWindow(&gui->hierarchy_window, &hierarchy_data->scenario->names));
-    gui->hierarchy_window.data = hierarchy_data;
+static exception tekCreateBuilderMenu(const int window_width, const int window_height, struct TekGuiComponents* gui) {
+    tekCreateScenario(&active_scenario);
+    tekChainThrow(tekGuiCreateListWindow(&gui->hierarchy_window, &active_scenario.names));
+    gui->hierarchy_window.data = &gui->editor_window;
     gui->hierarchy_window.callback = tekHierarchyCallback;
     tekChainThrow(tekGuiSetWindowTitle(&gui->hierarchy_window.window, "Hierarchy"));
     tekGuiSetWindowPosition(&gui->hierarchy_window.window, 10, 10 + (int)gui->hierarchy_window.window.title_width);
 
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/editor.yml", &gui->editor_window))
     gui->editor_window.window.visible = 0;
-    gui->editor_window.data = hierarchy_data;
+    gui->editor_window.data = NULL;
     gui->editor_window.callback = tekEditorCallback;
 
     List* actions_list;
@@ -470,14 +466,14 @@ static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
 }
 
 
-static exception tekCreateMenu(struct TekGuiComponents* gui, struct TekHierarchyData* hierarchy_data) {
+static exception tekCreateMenu(struct TekGuiComponents* gui) {
     // create version font + text.
     TekBitmapFont* font;
     tekChainThrow(tekGuiGetDefaultFont(&font));
     tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, font, &gui->version_text));
 
     tekChainThrow(tekCreateMainMenu(WINDOW_WIDTH, WINDOW_HEIGHT, gui));
-    tekChainThrow(tekCreateBuilderMenu(WINDOW_WIDTH, WINDOW_HEIGHT, gui, hierarchy_data));
+    tekChainThrow(tekCreateBuilderMenu(WINDOW_WIDTH, WINDOW_HEIGHT, gui));
 
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/save.yml", &gui->save_window));
     gui->save_window.callback = tekSaveCallback;
@@ -530,16 +526,12 @@ static void tekDeleteMenu(struct TekGuiComponents* gui) {
 
 #define tekRunCleanup() \
 pushEvent(&event_queue, quit_event); \
+tekAwaitEngineStop(engine_thread); \
 tekDeleteMenu(&gui); \
 tekDeleteScenario(&scenario); \
 vectorDelete(&bodies); \
 vectorDelete(&entities); \
 tekDelete() \
-
-static void text_callback(TekGuiTextInput* input, const char* text, uint len_text) {
-    printf("Callback: %s\n", text);
-    tekGuiSetTextInputText(input, "The Input Has Been Changed.");
-}
 
 exception run() {
     // set up GLFW window and other utilities.
@@ -584,7 +576,8 @@ exception run() {
     TekEvent quit_event;
     quit_event.type = QUIT_EVENT;
     quit_event.data.message = 0;
-    tekChainThrowThen(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0), {
+    unsigned long long engine_thread;
+    tekChainThrowThen(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0, &engine_thread), {
         vectorDelete(&bodies);
         vectorDelete(&entities);
         threadQueueDelete(&event_queue);
@@ -602,13 +595,8 @@ exception run() {
 
     TekScenario scenario = {};
 
-    struct TekHierarchyData hierarchy_data = {
-        &scenario,
-        &gui.editor_window
-    };
-
     tekChainThrowThen(tekCreateMenu(
-        &gui, &hierarchy_data
+        &gui
     ), {
         tekDeleteScenario(&scenario);
         vectorDelete(&bodies);
@@ -730,6 +718,6 @@ exception test() {
 
 int main(void) {
     tekInitExceptions();
-    tekLog(test());
+    tekLog(run());
     tekCloseExceptions();
 }

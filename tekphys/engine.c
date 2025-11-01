@@ -518,15 +518,23 @@ tek_engine_cleanup:
  * @param event_queue A pointer to an existing thread queue that will send events to the physics thread.
  * @param state_queue A pointer to an existing thread queue that will recieve updates of the physics state.
  * @param phys_period A time period that represents the length of a single iteration of the physics loop. In other words '1 / ticks per second'
+ * @param thread A pointer to a pthread_t variable that will contain the thread. Do pthread_join(thread) at the end to ensure the thread is finished.
  * @throws THREAD_EXCEPTION if the call to pthread_create() fails.
  */
-exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, const double phys_period) {
+exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, const double phys_period, unsigned long long* thread) {
     struct TekEngineArgs* engine_args = (struct TekEngineArgs*)malloc(sizeof(struct TekEngineArgs));
     engine_args->event_queue = event_queue;
     engine_args->state_queue = state_queue;
     engine_args->phys_period = phys_period;
-    pthread_t engine_thread;
-    if (pthread_create(&engine_thread, NULL, tekEngine, engine_args))
+    if (pthread_create((pthread_t*)thread, NULL, tekEngine, engine_args))
 	    tekThrow(THREAD_EXCEPTION, "Failed to create physics thread");
     return SUCCESS;
+}
+
+/**
+ * Wait for the engine thread to join.
+ * @param thread The engine thread, returned by tekInitEngine()
+ */
+void tekAwaitEngineStop(const unsigned long long thread) {
+    pthread_join(thread, NULL);
 }

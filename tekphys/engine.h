@@ -75,7 +75,8 @@ typedef struct TekState {
 
 exception recvState(ThreadQueue* queue, TekState* state);
 exception pushEvent(ThreadQueue* queue, TekEvent event);
-exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, double phys_period);
+exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, double phys_period, unsigned long long* thread);
+void tekAwaitEngineStop(unsigned long long thread);
 
 exception pushTriangle(vec3 triangle[3]);
 exception pushOBB(void* obb);

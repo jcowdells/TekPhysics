@@ -125,6 +125,10 @@ static exception tekScenarioCreatePair(TekScenario* scenario, const TekBodySnaps
     });
 
     ListItem* list_ptr = scenario->names.data;
+    while (list_ptr->next) {
+        if (!list_ptr->next->next) break;
+        list_ptr = list_ptr->next;
+    }
     (*pair)->list_ptr = list_ptr;
 
     memcpy((*pair)->snapshot, copy_snapshot, sizeof(TekBodySnapshot));
