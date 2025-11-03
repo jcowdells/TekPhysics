@@ -6,13 +6,14 @@
 #include "../tekgl/entity.h"
 #include "body.h"
 
-#define QUIT_EVENT        0
-#define KEY_EVENT         1
-#define MOUSE_POS_EVENT   2
-#define MODE_CHANGE_EVENT 3
-#define BODY_CREATE_EVENT 4
-#define BODY_DELETE_EVENT 5
-#define BODY_UPDATE_EVENT 6
+#define QUIT_EVENT         0
+#define CAM_POSITION_EVENT 1
+#define CAM_ROTATION_EVENT 2
+#define MODE_CHANGE_EVENT  3
+#define BODY_CREATE_EVENT  4
+#define BODY_DELETE_EVENT  5
+#define BODY_UPDATE_EVENT  6
+#define CLEAR_EVENT        7
 
 #define MESSAGE_STATE       0
 #define EXCEPTION_STATE     1

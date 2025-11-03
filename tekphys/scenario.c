@@ -272,6 +272,32 @@ static int tekWriteSnapshot(char* string, size_t max_length, const TekBodySnapsh
     );
 }
 
+/**
+ * Allocate a buffer containing the ids of all snapshots in the scenario.
+ * @param scenario The scenario to generate this buffer for.
+ * @param ids A pointer to where a pointer to the newly created buffer will be written.
+ * @param num_ids A pointer to where the number of ids in the new buffer will be written.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @note This function allocates memory which you are responsible for freeing.
+ */
+exception tekScenarioGetAllIds(const TekScenario* scenario, uint** ids, uint* num_ids) {
+    const uint num_snapshots = scenario->snapshots.length;
+    *num_ids = num_snapshots;
+    *ids = (uint*)malloc(num_snapshots * sizeof(uint));
+    if (!*ids)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for id list.");
+
+    const ListItem* item;
+    uint index = 0;
+    foreach(item, (&scenario->snapshots), {
+        const struct TekScenarioPair* pair = item->data;
+        (*ids)[index] = pair->id;
+        index++;
+    });
+
+    return SUCCESS;
+}
+
 exception tekWriteScenario(const TekScenario* scenario, const char* scenario_filepath) {
     const ListItem* item;
     int len_buffer = 0;

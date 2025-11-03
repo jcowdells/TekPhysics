@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "core/bitset.h"
+#include "core/file.h"
 #include "core/priorityqueue.h"
 #include "core/queue.h"
 #include "core/threadqueue.h"
@@ -51,6 +52,9 @@
 #define RUN_OPTION  2
 #define QUIT_OPTION 3
 #define NUM_OPTIONS 4
+
+#define MOUSE_SENSITIVITY 0.5f
+#define MOVE_SPEED        2.0f
 
 struct TekGuiComponents {
     TekGuiTextButton start_button;
@@ -79,6 +83,10 @@ flag text_init = 0;
 TekText depth_text = {};
 TekBitmapFont depth_font = {};
 
+double mouse_x = 0.0, mouse_y = 0.0;
+float mouse_dx = 0.0f, mouse_dy = 0.0f;
+flag mouse_moved = 0, mouse_right = 0;
+flag w_pressed = 0, a_pressed = 0, s_pressed = 0, d_pressed = 0;
 TekScenario active_scenario = {};
 
 void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
@@ -88,23 +96,41 @@ void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
 }
 
 void tekMainKeyCallback(const int key, const int scancode, const int action, const int mods) {
-    TekEvent event = {};
-    event.type = KEY_EVENT;
-    event.data.key_input.key = key;
-    event.data.key_input.scancode = scancode;
-    event.data.key_input.action = action;
-    event.data.key_input.mods = mods;
-
-    pushEvent(&event_queue, event);
+    if (key == GLFW_KEY_W) {
+        if (action == GLFW_RELEASE) w_pressed = 0;
+        else w_pressed = 1;
+    }
+    if (key == GLFW_KEY_A) {
+        if (action == GLFW_RELEASE) a_pressed = 0;
+        else a_pressed = 1;
+    }
+    if (key == GLFW_KEY_S) {
+        if (action == GLFW_RELEASE) s_pressed = 0;
+        else s_pressed = 1;
+    }
+    if (key == GLFW_KEY_D) {
+        if (action == GLFW_RELEASE) d_pressed = 0;
+        else d_pressed = 1;
+    }
 }
 
 void tekMainMousePosCallback(const double x, const double y) {
-    TekEvent event = {};
-    event.type = MOUSE_POS_EVENT;
-    event.data.mouse_move_input.x = x;
-    event.data.mouse_move_input.y = y;
+    if (mouse_moved) return;
+    mouse_dx = (float)(x - mouse_x);
+    mouse_dy = (float)(y - mouse_y);
+    mouse_x = x;
+    mouse_y = y;
+    mouse_moved = 1;
+}
 
-    pushEvent(&event_queue, event);
+void tekMainMouseButtonCallback(const int button, const int action, const int mods) {
+    if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+        if (action == GLFW_PRESS) {
+            mouse_right = 1;
+        } else if (action == GLFW_RELEASE) {
+            mouse_right = 0;
+        }
+    }
 }
 
 static void tekHideAllWindows(struct TekGuiComponents* gui) {
@@ -253,6 +279,15 @@ static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const 
     return SUCCESS;
 }
 
+static exception tekBodyCreateEvent(const TekBodySnapshot* snapshot, const int snapshot_id) {
+    TekEvent event = {};
+    event.type = BODY_CREATE_EVENT;
+    memcpy(&event.data.body.snapshot, snapshot, sizeof(TekBodySnapshot));
+    event.data.body.id = snapshot_id;
+    tekChainThrow(pushEvent(&event_queue, event));
+    return SUCCESS;
+}
+
 static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) {
     TekBodySnapshot dummy = {};
     dummy.mass = 1.0f;
@@ -267,11 +302,7 @@ static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) 
     tekChainThrow(tekScenarioPutSnapshot(scenario, &dummy, id, "New Object"));
     *snapshot_id = (int)id;
 
-    TekEvent event = {};
-    event.type = BODY_CREATE_EVENT;
-    memcpy(&event.data.body.snapshot, &dummy, sizeof(TekBodySnapshot));
-    event.data.body.id = id;
-    tekChainThrow(pushEvent(&event_queue, event));
+    tekChainThrow(tekBodyCreateEvent(&dummy, id));
 
     return SUCCESS;
 }
@@ -288,6 +319,27 @@ static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int sn
     memcpy(&event.data.body.snapshot, body_snapshot, sizeof(TekBodySnapshot));
     event.data.body.id = (uint)snapshot_id;
     tekChainThrow(pushEvent(&event_queue, event));
+
+    return SUCCESS;
+}
+
+static exception tekResetScenario(const TekScenario* scenario) {
+    TekEvent event = {};
+    event.type = CLEAR_EVENT;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    uint* ids;
+    uint num_ids;
+    tekChainThrow(tekScenarioGetAllIds(scenario, &ids, &num_ids));
+
+    for (uint i = 0; i < num_ids; i++) {
+        const uint id = ids[i];
+        TekBodySnapshot* snapshot;
+        tekChainThrow(tekScenarioGetSnapshot(scenario, id, &snapshot));
+        tekChainThrow(tekBodyCreateEvent(snapshot, id));
+    }
+
+    free(ids);
 
     return SUCCESS;
 }
@@ -441,6 +493,11 @@ static void tekDeleteBuilderMenu(struct TekGuiComponents* gui) {
     tekGuiDeleteListWindow(&gui->action_window);
 }
 
+static exception tekDisplayOptionError(TekGuiOptionWindow* window, const char* error_message) {
+    tekChainThrow(tekGuiWriteStringOption(window, "filename", error_message, strlen(error_message) + 1))
+    return SUCCESS;
+}
+
 static exception tekSaveCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (callback_data.type != TEK_BUTTON_INPUT) {
         return SUCCESS;
@@ -449,10 +506,31 @@ static exception tekSaveCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
     char* filename;
     tekChainThrow(tekGuiReadStringOption(window, "filename", &filename));
 
-    if (!filename[0])
-        printf("No filename.");
+    if (!filename || !filename[0])
+        return tekDisplayOptionError(window, "ENTER FILE");
 
-    printf("Save Filename: %s\n", filename);
+    char* filepath;
+    tekChainThrow(addPathToFile("../saves/", filename, &filepath));
+
+    const uint len_filename = strlen(filename);
+    flag needs_ext = 1;
+    if (len_filename >= 5) {
+        const char* ext_ptr = filename + len_filename - 5;
+        if (!strcmp(ext_ptr, ".tscn")) {
+            needs_ext = 0;
+        }
+    }
+
+    if (needs_ext) {
+        char* filepath_ext;
+        tekChainThrow(addPathToFile(filepath, ".tscn", &filepath_ext));
+        filepath = filepath_ext;
+    }
+
+    tekChainThrow(tekWriteScenario(&active_scenario, filepath));
+    next_mode = MODE_BUILDER;
+
+    free(filepath);
 
     return SUCCESS;
 }
@@ -465,9 +543,7 @@ static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
     char* filename;
     tekChainThrow(tekGuiReadStringOption(window, "filename", &filename));
     if (!filename || !filename[0])
-        printf("No filename.\n");
-    else
-        printf("%s\n", filename);
+        return tekDisplayOptionError(window, "ENTER FILE");
 
     char* filepath;
     tekChainThrow(addPathToFile("../saves/", filename, &filepath));
@@ -476,11 +552,19 @@ static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
         char* filepath_ext;
         tekChainThrow(addPathToFile(filepath, ".tscn", &filepath_ext));
         if (!fileExists(filepath_ext)) {
-            printf("File not real.");
+            printf("filepath_ext: %s\n", filepath_ext);
+            return tekDisplayOptionError(window, "NOT FOUND");
         }
-        free(filepath);
         filepath = filepath_ext;
     }
+
+    tekDeleteScenario(&active_scenario);
+    tekChainThrow(tekReadScenario(filepath, &active_scenario));
+    tekChainThrow(tekResetScenario(&active_scenario));
+
+    free(filepath);
+
+    next_mode = MODE_BUILDER;
 
     return SUCCESS;
 }
@@ -564,6 +648,9 @@ exception run() {
     tekChainThrowThen(tekAddMousePosCallback(tekMainMousePosCallback), {
         tekDelete();
     });
+    tekChainThrowThen(tekAddMouseButtonCallback(tekMainMouseButtonCallback), {
+        tekDelete();
+    });
 
     // create state queue and thread queue, allow to communicate with thread.
     ThreadQueue state_queue = {};
@@ -634,6 +721,9 @@ exception run() {
 
     // tekSetMouseMode(MOUSE_MODE_CAMERA);
 
+    struct timespec curr_time, prev_time;
+    float delta_time = 0.0f;
+    clock_gettime(CLOCK_MONOTONIC, &prev_time);
     flag force_exit = 0;
     TekState state = {};
     while (tekRunning()) {
@@ -676,14 +766,6 @@ exception run() {
                 tekChainThrowThen(vectorGetItemPtr(&entities, state.object_id, &delete_entity), { tekRunCleanup(); });
                 memset(delete_entity, 0, sizeof(TekEntity));
                 break;
-            case CAMERA_MOVE_STATE:
-                memcpy(camera_position, state.data.cam_position, sizeof(vec3));
-                tekSetCameraPosition(&camera, camera_position);
-                break;
-            case CAMERA_ROTATE_STATE:
-                memcpy(camera_rotation, state.data.cam_rotation, sizeof(vec3));
-                tekSetCameraRotation(&camera, camera_rotation);
-                break;
             }
 
             if (force_exit) break;
@@ -714,6 +796,42 @@ exception run() {
         });
 
         tekChainThrow(tekUpdate());
+
+        clock_gettime(CLOCK_MONOTONIC, &curr_time);
+        delta_time = (float)(curr_time.tv_sec - prev_time.tv_sec) + (float)(curr_time.tv_nsec - prev_time.tv_nsec) / (float)BILLION;
+        memcpy(&prev_time, &curr_time, sizeof(struct timespec));
+
+        if (mouse_moved) {
+            if (mouse_right) {
+                camera_rotation[0] = (float)(fmod(camera_rotation[0] + mouse_dx * delta_time * MOUSE_SENSITIVITY + M_PI, 2.0 * M_PI) - M_PI);
+                camera_rotation[1] = (float)fmin(fmax(camera_rotation[1] - mouse_dy * delta_time * MOUSE_SENSITIVITY, -M_PI_2), M_PI_2);
+            }
+            mouse_moved = 0;
+        }
+
+        const double pitch = camera_rotation[1], yaw = camera_rotation[0];
+        if (w_pressed) {
+            camera_position[0] += (float)(cos(yaw) * cos(pitch) * MOVE_SPEED * delta_time);
+            camera_position[1] += (float)(sin(pitch) * MOVE_SPEED * delta_time);
+            camera_position[2] += (float)(sin(yaw) * cos(pitch) * MOVE_SPEED * delta_time);
+        }
+        if (a_pressed) {
+            camera_position[0] += (float)(cos(yaw + M_PI_2) * -MOVE_SPEED * delta_time);
+            camera_position[2] += (float)(sin(yaw + M_PI_2) * -MOVE_SPEED * delta_time);
+        }
+        if (s_pressed) {
+            camera_position[0] += (float)(cos(yaw) * cos(pitch) * -MOVE_SPEED * delta_time);
+            camera_position[1] += (float)(sin(pitch) * -MOVE_SPEED * delta_time);
+            camera_position[2] += (float)(sin(yaw) * cos(pitch) * -MOVE_SPEED * delta_time);
+        }
+        if (d_pressed) {
+            camera_position[0] += (float)(cos(yaw + M_PI_2) * MOVE_SPEED * delta_time);
+            camera_position[2] += (float)(sin(yaw + M_PI_2) * MOVE_SPEED * delta_time);
+        }
+
+        tekSetCameraPosition(&camera, camera_position);
+        tekSetCameraRotation(&camera, camera_rotation);
+
     }
 
     tekRunCleanup();

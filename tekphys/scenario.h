@@ -26,5 +26,6 @@ exception tekScenarioSetName(const TekScenario* scenario, uint snapshot_id, cons
 exception tekScenarioPutSnapshot(TekScenario* scenario, const TekBodySnapshot* copy_snapshot, uint snapshot_id, const char* snapshot_name);
 exception tekScenarioDeleteSnapshot(TekScenario* scenario, uint snapshot_id);
 exception tekScenarioGetNextId(TekScenario* scenario, uint* next_id);
+exception tekScenarioGetAllIds(const TekScenario* scenario, uint** ids, uint* num_ids);
 
 void tekDeleteScenario(TekScenario* scenario);

@@ -565,7 +565,7 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
         if (pair[LEFT]->type == COLLIDER_NODE) {
             tekUpdateOBB(&pair[LEFT]->data.node.left->obb, body_a->transform);
             tekUpdateOBB(&pair[LEFT]->data.node.right->obb, body_a->transform);
-       }
+        }
         if (pair[RIGHT]->type == COLLIDER_NODE) {
             tekUpdateOBB(&pair[RIGHT]->data.node.left->obb, body_b->transform);
             tekUpdateOBB(&pair[RIGHT]->data.node.right->obb, body_b->transform);

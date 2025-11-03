@@ -11,7 +11,7 @@ options:
     type: $tek_string_input
     index: 0
   _:
-    label: "Press enter to confirm."
+    label: "Press enter before loading."
     type: $tek_label
     index: 5
   save:

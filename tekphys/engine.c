@@ -18,9 +18,6 @@
 #include "GLFW/glfw3.h"
 #include "collisions.h"
 
-#define MOUSE_SENSITIVITY 0.005f
-#define MOVE_SPEED        0.1f
-
 #define RECV_FUNC(func_name, func_type, param_name) \
 exception func_name(ThreadQueue* queue, func_type* param_name) { \
     func_type* copy; \
@@ -258,7 +255,7 @@ static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bod
  * @param object_id The id of the body to delete.
  * @throws ENGINE_EXCEPTION if the object id is invalid.
  */
-static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bodies, Queue* unused_ids, const uint object_id) {
+static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bodies, const uint object_id) {
     TekBody* body;
     tekChainThrow(vectorGetItemPtr(bodies, object_id, &body));
     if (body->num_vertices == 0) {
@@ -266,7 +263,6 @@ static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bod
         // most likely, the whole thing is just zeroes
         tekThrow(ENGINE_EXCEPTION, "Body ID is not valid.");
     }
-    tekChainThrow(queueEnqueue(unused_ids, (void*)object_id));
 
     TekState state = {};
     state.object_id = object_id;
@@ -278,6 +274,17 @@ static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bod
     // index needed to find object by id.
     tekDeleteBody(body);
     memset(body, 0, sizeof(TekBody));
+    return SUCCESS;
+}
+
+static exception tekEngineDeleteAllBodies(ThreadQueue* state_queue, const Vector* bodies) {
+    for (uint i = 0; i < bodies->length; i++) {
+        TekBody* body;
+        tekChainThrow(vectorGetItemPtr(bodies, i, &body));
+        if (body->num_vertices == 0) continue;
+
+        tekChainThrow(tekEngineDeleteBody(state_queue, bodies, i));
+    }
     return SUCCESS;
 }
 
@@ -341,46 +348,6 @@ static void tekEngine(void* args) {
                 threadQueueDelete(event_queue);
                 threadQueueDelete(state_queue);
                 break;
-            case KEY_EVENT:
-                if (event.data.key_input.key == GLFW_KEY_W) {
-                    if (event.data.key_input.action == GLFW_RELEASE) w = 0;
-                    else w = 1;
-                }
-                if (event.data.key_input.key == GLFW_KEY_A) {
-                    if (event.data.key_input.action == GLFW_RELEASE) a = 0;
-                    else a = 1;
-                }
-                if (event.data.key_input.key == GLFW_KEY_S) {
-                    if (event.data.key_input.action == GLFW_RELEASE) s = 0;
-                    else s = 1;
-                }
-                if (event.data.key_input.key == GLFW_KEY_D) {
-                    if (event.data.key_input.action == GLFW_RELEASE) d = 0;
-                    else d = 1;
-                }
-                if (event.data.key_input.key == GLFW_KEY_Q) {
-                    if (event.data.key_input.action == GLFW_RELEASE) q = 0;
-                    else q = 1;
-                }
-                if ((event.data.key_input.key == GLFW_KEY_E) && (event.data.key_input.action == GLFW_RELEASE)) {
-                    vec4 cube_rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
-                    vec3 cube_scale = { 1.0f, 1.0f, 1.0f };
-
-                }
-                break;
-            case MOUSE_POS_EVENT:
-                if (!mouse_moved) {
-                    prev_mx = event.data.mouse_move_input.x;
-                    prev_my = event.data.mouse_move_input.y;
-                    mouse_moved = 1;
-                }
-                cur_mx = event.data.mouse_move_input.x;
-                cur_my = event.data.mouse_move_input.y;
-                delta_mx = event.data.mouse_move_input.x - prev_mx;
-                delta_my = event.data.mouse_move_input.y - prev_my;
-
-                mouse_moving = 1;
-                break;
             case MODE_CHANGE_EVENT:
                 mode = event.data.mode;
                 break;
@@ -407,7 +374,7 @@ static void tekEngine(void* args) {
 
                 threadChainThrow(vectorGetItemPtr(&bodies, event.data.body.id, &snapshot_body));
                 glm_vec3_copy(event.data.body.snapshot.position, snapshot_body->position);
-                glm_vec3_copy(event.data.body.snapshot.rotation, snapshot_body->rotation);
+                glm_vec4_copy(event.data.body.snapshot.rotation, snapshot_body->rotation);
                 glm_vec3_copy(event.data.body.snapshot.velocity, snapshot_body->velocity);
                 snapshot_body->friction = event.data.body.snapshot.friction;
                 snapshot_body->restitution = event.data.body.snapshot.restitution;
@@ -418,6 +385,9 @@ static void tekEngine(void* args) {
                     event.data.body.snapshot.position, snapshot_rotation_quat, (vec3){1.0f, 1.0f, 1.0f} // TODO: scale
                 ));
 
+                break;
+            case CLEAR_EVENT:
+                threadChainThrow(tekEngineDeleteAllBodies(state_queue, &bodies));
                 break;
             default:
                 break;
@@ -434,56 +404,10 @@ static void tekEngine(void* args) {
             threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
         }
 
-        if (mouse_moving) {
-            rotation[0] = (float)(fmod(rotation[0] + delta_mx * MOUSE_SENSITIVITY + M_PI, 2.0 * M_PI) - M_PI);
-            rotation[1] = (float)fmin(fmax(rotation[1] - delta_my * MOUSE_SENSITIVITY, -M_PI_2), M_PI_2);
-            prev_mx = cur_mx;
-            prev_my = cur_my;
-            threadChainThrow(tekUpdateCamRot(state_queue, rotation));
-            delta_mx = 0.0;
-            delta_my = 0.0;
-            mouse_moving = 0;
-        }
 
-        const double pitch = rotation[1], yaw = rotation[0];
-        if (w) {
-            position[0] += (float)(cos(yaw) * cos(pitch) * MOVE_SPEED);
-            position[1] += (float)(sin(pitch) * MOVE_SPEED);
-            position[2] += (float)(sin(yaw) * cos(pitch) * MOVE_SPEED);
-            cam_pos_changed = 1;
-        }
-        if (a) {
-            position[0] += (float)(cos(yaw + M_PI_2) * -MOVE_SPEED);
-            position[2] += (float)(sin(yaw + M_PI_2) * -MOVE_SPEED);
-            cam_pos_changed = 1;
-        }
-        if (s) {
-            position[0] += (float)(cos(yaw) * cos(pitch) * -MOVE_SPEED);
-            position[1] += (float)(sin(pitch) * -MOVE_SPEED);
-            position[2] += (float)(sin(yaw) * cos(pitch) * -MOVE_SPEED);
-            cam_pos_changed = 1;
-        }
-        if (d) {
-            position[0] += (float)(cos(yaw + M_PI_2) * MOVE_SPEED);
-            position[2] += (float)(sin(yaw + M_PI_2) * MOVE_SPEED);
-            cam_pos_changed = 1;
-        }
 
-        tekSolveCollisions(&bodies, (float)phys_period);
-
-        // TODO: remove, as this is a test
-        if (q) {
-            vec3 impulse = {
-                (float)(cos(yaw) * cos(pitch)),
-                (float)(sin(pitch)),
-                (float)(sin(yaw) * cos(pitch))
-            };
-            if (bodies.length >= 1) {
-                TekBody* body_ptr;
-                threadChainThrow(vectorGetItemPtr(&bodies, 0, &body_ptr));
-                tekBodyApplyImpulse(body_ptr, position, impulse, (float)phys_period);
-            }
-        }
+        if (mode == MODE_RUNNER)
+            tekSolveCollisions(&bodies, (float)phys_period);
 
         if (cam_pos_changed) {
             threadChainThrow(tekUpdateCamPos(state_queue, position));
