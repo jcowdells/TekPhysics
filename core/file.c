@@ -69,3 +69,37 @@ exception writeFile(const char* buffer, const char* filename) {
 
     return SUCCESS;
 }
+
+/**
+ * Combine a directory and a file name into a single string. For example, directory="/usr/tekphys/" filename="file.txt" -> result="/usr/tekphys/file.txt"
+ * @param[in] directory The directory to start with
+ * @param[in] filename The file name to finish with
+ * @param[out] result A pointer to a char pointer which will be overwritten to point to the new buffer.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
+exception addPathToFile(const char* directory, const char* filename, char** result) {
+    const uint len_directory = strlen(directory);
+    const uint len_filename = strlen(filename);
+    const uint len_result = len_directory + len_filename + 1;
+    *result = (char*)malloc(len_result * sizeof(char));
+    if (!*result)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for result.");
+    memcpy(*result, directory, len_directory);
+    memcpy(*result + len_directory, filename, len_filename);
+    (*result)[len_directory + len_filename] = 0;
+    return SUCCESS;
+}
+
+/**
+ * Check if a file exists.
+ * @param filename The file to check.
+ * @return 0 if it does not exist, 1 if it does.
+ */
+flag fileExists(const char* filename) {
+    FILE* file_ptr = fopen(filename, "r");
+    if (file_ptr) {
+        fclose(file_ptr);
+        return 1;
+    }
+    return 0;
+}

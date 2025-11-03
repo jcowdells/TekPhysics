@@ -442,25 +442,45 @@ static void tekDeleteBuilderMenu(struct TekGuiComponents* gui) {
 }
 
 static exception tekSaveCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
-    if (callback_data.type == TEK_BUTTON_INPUT) {
-        next_mode = MODE_MAIN_MENU;
+    if (callback_data.type != TEK_BUTTON_INPUT) {
+        return SUCCESS;
     }
 
     char* filename;
     tekChainThrow(tekGuiReadStringOption(window, "filename", &filename));
+
+    if (!filename[0])
+        printf("No filename.");
+
     printf("Save Filename: %s\n", filename);
 
     return SUCCESS;
 }
 
 static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
-    if (callback_data.type == TEK_BUTTON_INPUT) {
-        next_mode = MODE_MAIN_MENU;
+    if (callback_data.type != TEK_BUTTON_INPUT) {
+        return SUCCESS;
     }
 
     char* filename;
     tekChainThrow(tekGuiReadStringOption(window, "filename", &filename));
-    printf("Load Filename: %s\n", filename);
+    if (!filename || !filename[0])
+        printf("No filename.\n");
+    else
+        printf("%s\n", filename);
+
+    char* filepath;
+    tekChainThrow(addPathToFile("../saves/", filename, &filepath));
+
+    if (!fileExists(filepath)) {
+        char* filepath_ext;
+        tekChainThrow(addPathToFile(filepath, ".tscn", &filepath_ext));
+        if (!fileExists(filepath_ext)) {
+            printf("File not real.");
+        }
+        free(filepath);
+        filepath = filepath_ext;
+    }
 
     return SUCCESS;
 }

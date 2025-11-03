@@ -10,11 +10,15 @@ options:
     label: "Save As:"
     type: $tek_string_input
     index: 0
+  _:
+    label: "Press enter to confirm."
+    type: $tek_label
+    index: 5
   save:
     label: "Save"
     type: $tek_button_input
     index: 10
-  _:
+  __:
     label: "Will be saved as ../saves/<your-filename>.tscn"
     type: $tek_label
     index: 20
