@@ -22,6 +22,10 @@ options:
     label: "Velocity (x, y z):"
     type: $tek_vec3_input
     index: 30
+  immovable:
+    label: "Is Immovable:"
+    type: $tek_boolean_input
+    index: 35
   mass:
     label: "Mass:"
     type: $tek_number_input
@@ -34,3 +38,15 @@ options:
     label: "Coef. of friction:"
     type: $tek_number_input
     index: 60
+  model:
+    label: "Model File:"
+    type: $tek_string_input
+    index: 70
+  material:
+    label: "Material File:"
+    type: $tek_string_input
+    index: 80
+  delete:
+    label: "Delete Body"
+    type: $tek_button_input
+    index: 90
