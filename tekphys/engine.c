@@ -371,10 +371,11 @@ static void tekEngine(void* args) {
                 // cannot convert directly for some reason
                 glm_euler(event.data.body.snapshot.rotation, snapshot_rotation_matrix);
                 glm_mat4_quat(snapshot_rotation_matrix, snapshot_rotation_quat);
+                glm_euler_xyz_quat_rh(event.data.body.snapshot.rotation, snapshot_rotation_quat);
 
                 threadChainThrow(vectorGetItemPtr(&bodies, event.data.body.id, &snapshot_body));
                 glm_vec3_copy(event.data.body.snapshot.position, snapshot_body->position);
-                glm_vec4_copy(event.data.body.snapshot.rotation, snapshot_body->rotation);
+                glm_vec4_copy(snapshot_rotation_quat, snapshot_body->rotation);
                 glm_vec3_copy(event.data.body.snapshot.velocity, snapshot_body->velocity);
                 snapshot_body->friction = event.data.body.snapshot.friction;
                 snapshot_body->restitution = event.data.body.snapshot.restitution;

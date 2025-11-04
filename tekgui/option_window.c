@@ -742,6 +742,24 @@ static exception tekGuiDrawOption(TekGuiOption* option, const int x_pos, const i
     return SUCCESS;
 }
 
+static exception tekGuiBringOptionToFront(TekGuiOption* option) {
+    switch (option->type) {
+    case TEK_BUTTON_INPUT:
+        tekChainThrow(tekGuiBringButtonToFront(&option->display.button.button.button));
+        break;
+    case TEK_STRING_INPUT:
+    case TEK_NUMBER_INPUT:
+    case TEK_BOOLEAN_INPUT:
+    case TEK_VEC3_INPUT:
+    case TEK_VEC4_INPUT:
+        tekChainThrow(tekGuiBringButtonToFront(&option->display.input.text_input.button));
+        break;
+    default:
+        break;
+    }
+    return SUCCESS;
+}
+
 /**
  * Draw callback function for option window, called after the base window is drawn.
  * @param window_ptr The base window.
@@ -761,6 +779,17 @@ static exception tekGuiOptionWindowDrawCallback(TekGuiWindow* window_ptr) {
     return SUCCESS;
 }
 
+static exception tekGuiOptionWindowSelectCallback(TekGuiWindow* window_ptr) {
+    TekGuiOptionWindow* window = (TekGuiOptionWindow*)window_ptr->data;
+
+    for (uint i = 0; i < window->len_options; i++) {
+        TekGuiOption* option = window->option_display + i;
+        tekChainThrow(tekGuiBringOptionToFront(option));
+    }
+
+    return SUCCESS;
+}
+
 /**
  * Create the base window of the option window. Simple stuff like setting size, position and title.
  * @param window The option window to create the window for.
@@ -773,6 +802,7 @@ static exception tekGuiCreateBaseWindow(TekGuiOptionWindow* window, struct TekGu
     tekGuiSetWindowSize(&window->window, defaults->width, defaults->height);
     tekChainThrow(tekGuiSetWindowTitle(&window->window, defaults->title));
     window->window.draw_callback = tekGuiOptionWindowDrawCallback;
+    window->window.select_callback = tekGuiOptionWindowSelectCallback;
     window->window.data = window;
     return SUCCESS;
 }

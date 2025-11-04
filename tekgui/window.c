@@ -77,7 +77,7 @@ static exception tekGuiWindowUpdateGLMesh(const TekGuiWindow* window) {
     return SUCCESS;
 }
 
-static exception tekGuiBringWindowToFront(const TekGuiWindow* window) {
+exception tekGuiBringWindowToFront(const TekGuiWindow* window) {
     const ListItem* item = 0;
     uint index = 0;
     foreach(item, (&window_ptr_list), {
@@ -117,7 +117,7 @@ static exception tekGuiWindowRecreateTitleText(TekGuiWindow* window) {
     return SUCCESS;
 }
 
-void tekGuiWindowTitleButtonCallback(TekGuiButton* button_ptr, TekGuiButtonCallbackData callback_data) {
+static void tekGuiWindowTitleButtonCallback(TekGuiButton* button_ptr, TekGuiButtonCallbackData callback_data) {
     TekGuiWindow* window = (TekGuiWindow*)button_ptr->data;
     switch (callback_data.type) {
     case TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK:

@@ -152,6 +152,9 @@ static exception tekSwitchToBuilderMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->hierarchy_window.window.visible = 1;
     gui->action_window.window.visible = 1;
+    tekChainThrow(tekGuiBringWindowToFront(&gui->hierarchy_window.window));
+    tekChainThrow(tekGuiBringWindowToFront(&gui->action_window.window));
+    tekChainThrow(tekGuiBringWindowToFront(&gui->editor_window.window));
     return SUCCESS;
 }
 
@@ -165,6 +168,7 @@ static exception tekSwitchToSaveMenu(struct TekGuiComponents* gui) {
         (window_width - (int)gui->save_window.window.width) / 2,
         (window_height - (int)gui->save_window.window.height) / 2
     );
+    tekChainThrow(tekGuiBringWindowToFront(&gui->save_window.window));
     return SUCCESS;
 }
 
@@ -178,6 +182,7 @@ static exception tekSwitchToLoadMenu(struct TekGuiComponents* gui) {
         (window_width - (int)gui->load_window.window.width) / 2,
         (window_height - (int)gui->load_window.window.height) / 2
     );
+    tekChainThrow(tekGuiBringWindowToFront(&gui->load_window.window));
     return SUCCESS;
 }
 

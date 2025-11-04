@@ -38,6 +38,7 @@ typedef struct TekGuiWindow {
     TekGuiWindowSelectCallback select_callback;
 } TekGuiWindow;
 
+exception tekGuiBringWindowToFront(const TekGuiWindow* window);
 exception tekGuiCreateWindow(TekGuiWindow* window);
 exception tekGuiCreateWindowSAFE(TekGuiWindow* window);
 void tekGuiSetWindowPosition(TekGuiWindow* window, int x_pos, int y_pos);
