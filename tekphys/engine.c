@@ -306,7 +306,7 @@ static void tekEngine(void* args) {
     const struct TekEngineArgs* engine_args = (struct TekEngineArgs*)args;
     ThreadQueue* event_queue = engine_args->event_queue;
     ThreadQueue* state_queue = engine_args->state_queue;
-    const double phys_period = engine_args->phys_period;
+    double phys_period = engine_args->phys_period;
     free(args);
 
     Vector bodies = {};
@@ -323,7 +323,7 @@ static void tekEngine(void* args) {
     vec3 position = { 0.0f, 0.0f, 0.0f };
 
     struct timespec engine_time, step_time;
-    const double phys_period_s = floor(phys_period);
+    double phys_period_s = floor(phys_period);
     step_time.tv_sec = (__time_t)phys_period_s;
     step_time.tv_nsec = (__syscall_slong_t)(1e9 * (phys_period - phys_period_s));
     clock_gettime(CLOCK_MONOTONIC, &engine_time);
@@ -377,18 +377,28 @@ static void tekEngine(void* args) {
                 glm_vec3_copy(event.data.body.snapshot.position, snapshot_body->position);
                 glm_vec4_copy(snapshot_rotation_quat, snapshot_body->rotation);
                 glm_vec3_copy(event.data.body.snapshot.velocity, snapshot_body->velocity);
+                glm_vec3_copy(event.data.body.snapshot.angular_velocity, snapshot_body->angular_velocity);
                 snapshot_body->friction = event.data.body.snapshot.friction;
                 snapshot_body->restitution = event.data.body.snapshot.restitution;
                 threadChainThrow(tekBodySetMass(snapshot_body, event.data.body.snapshot.mass));
 
                 threadChainThrow(tekEngineUpdateBody(
                     state_queue, &bodies, event.data.body.id,
-                    event.data.body.snapshot.position, snapshot_rotation_quat, (vec3){1.0f, 1.0f, 1.0f} // TODO: scale
+                    event.data.body.snapshot.position, snapshot_rotation_quat, (vec3){1.0f, 1.0f, 1.0f}
                 ));
 
                 break;
+            case BODY_DELETE_EVENT:
+                threadChainThrow(tekEngineDeleteBody(state_queue, &bodies, event.data.body.id));
+                break;
             case CLEAR_EVENT:
                 threadChainThrow(tekEngineDeleteAllBodies(state_queue, &bodies));
+                break;
+            case TIME_EVENT:
+                phys_period = 1 / event.data.time.rate;
+                phys_period_s = floor(phys_period / event.data.time.speed);
+                step_time.tv_sec = (__time_t)(phys_period_s / event.data.time.speed);
+                step_time.tv_nsec = (__syscall_slong_t)(1e9 * (phys_period / event.data.time.speed - phys_period_s));
                 break;
             default:
                 break;
@@ -397,22 +407,16 @@ static void tekEngine(void* args) {
 
         if (!running) break;
 
-        for (uint i = 0; i < bodies.length; i++) {
-            TekBody* body = 0;
-            threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
-            if (!body->num_vertices) continue;
-            tekBodyAdvanceTime(body, (float)phys_period);
-            threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
-        }
+        if (mode == MODE_RUNNER) {
+            for (uint i = 0; i < bodies.length; i++) {
+                TekBody* body = 0;
+                threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
+                if (!body->num_vertices) continue;
+                tekBodyAdvanceTime(body, (float)phys_period);
+                threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
+            }
 
-
-
-        if (mode == MODE_RUNNER)
-            tekSolveCollisions(&bodies, (float)phys_period);
-
-        if (cam_pos_changed) {
-            threadChainThrow(tekUpdateCamPos(state_queue, position));
-            cam_pos_changed = 0;
+            threadChainThrow(tekSolveCollisions(&bodies, (float)phys_period));
         }
 
         engine_time.tv_sec += step_time.tv_sec;

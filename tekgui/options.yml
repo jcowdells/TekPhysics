@@ -32,10 +32,10 @@ list_window_defaults:
 text_button_defaults:
   x_pos: 200
   y_pos: 200
-  width: 200
-  height: 50
+  width: 120
+  height: 30
   border_width: 1
-  text_height: 20
+  text_height: 16
   background_colour:
     r: 0.4
     g: 0.8

@@ -169,21 +169,45 @@ exception tekScenarioPutSnapshot(TekScenario* scenario, const TekBodySnapshot* c
     return SUCCESS;
 }
 
-exception tekScenarioDeleteSnapshot(TekScenario* scenario, uint snapshot_id) {
+exception tekScenarioDeleteSnapshot(TekScenario* scenario, const uint snapshot_id) {
     const ListItem* item;
+    const ListItem* list_ptr = 0;
     uint index = 0;
+    flag found = 0;
     foreach(item, (&scenario->snapshots), {
         struct TekScenarioPair* pair = item->data;
+        printf("%u %u\n", pair->id, snapshot_id);
         if (pair->id == snapshot_id) {
             tekChainThrow(listRemoveItem(&scenario->snapshots, index, NULL));
             tekChainThrow(queueEnqueue(&scenario->unused_ids, (void*)snapshot_id));
+            list_ptr = pair->list_ptr;
             free(pair);
-            return SUCCESS;
+            found = 1;
+            break;
         }
 
         index++;
     });
-    tekThrow(FAILURE, "ID not in snapshot list");
+
+    if (!found) tekThrow(FAILURE, "ID not in snapshot list");
+
+    index = 0;
+    found = 0;
+    foreach(item, (&scenario->names), {
+        if (item == list_ptr) {
+            found = 1;
+            break;
+        }
+        index++;
+    });
+
+    if (!found)
+        return SUCCESS;
+
+    tekChainThrow(listRemoveItem(&scenario->names, index, NULL));
+
+    if (!found) tekThrow(FAILURE, "ID not in snapshot list");
+    return SUCCESS;
 }
 
 exception tekCreateScenario(TekScenario* scenario) {
@@ -314,10 +338,11 @@ exception tekWriteScenario(const TekScenario* scenario, const char* scenario_fil
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for scenario file.");
 
     int write_ptr = 0;
+    uint id = 0;
     foreach(item, (&scenario->snapshots), {
         const struct TekScenarioPair* pair = (struct TekScenarioPair*)item->data;
         printf("[[[\n%s\n]]]\n", (char*)pair->list_ptr->data);
-        write_ptr += tekWriteSnapshot(buffer + write_ptr, len_buffer - write_ptr, pair->snapshot, pair->id, pair->list_ptr->data);
+        write_ptr += tekWriteSnapshot(buffer + write_ptr, len_buffer - write_ptr, pair->snapshot, id++, pair->list_ptr->data);
     });
 
     tekChainThrow(writeFile(buffer, scenario_filepath));

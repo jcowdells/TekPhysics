@@ -56,6 +56,9 @@
 #define MOUSE_SENSITIVITY 0.5f
 #define MOVE_SPEED        2.0f
 
+#define DEFAULT_RATE 100.0
+#define DEFAULT_SPEED  1.0
+
 struct TekGuiComponents {
     TekGuiTextButton start_button;
     TekGuiImage logo;
@@ -65,7 +68,7 @@ struct TekGuiComponents {
     TekGuiListWindow action_window;
     TekGuiOptionWindow save_window;
     TekGuiOptionWindow load_window;
-    List file_list;
+    TekGuiOptionWindow runner_window;
 };
 
 flag mode = MODE_MAIN_MENU;
@@ -133,12 +136,118 @@ void tekMainMouseButtonCallback(const int button, const int action, const int mo
     }
 }
 
+static exception tekBodyCreateEvent(const TekBodySnapshot* snapshot, const int snapshot_id) {
+    TekEvent event = {};
+    event.type = BODY_CREATE_EVENT;
+    memcpy(&event.data.body.snapshot, snapshot, sizeof(TekBodySnapshot));
+    event.data.body.id = snapshot_id;
+    tekChainThrow(pushEvent(&event_queue, event));
+    return SUCCESS;
+}
+
+static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) {
+    TekBodySnapshot dummy = {};
+    dummy.mass = 1.0f;
+    dummy.friction = 0.5f;
+    dummy.restitution = 0.5f;
+    glm_vec3_zero(dummy.position);
+    glm_vec3_zero(dummy.rotation);
+    glm_vec3_zero(dummy.velocity);
+    glm_vec3_zero(dummy.angular_velocity);
+
+    uint id;
+    tekChainThrow(tekScenarioGetNextId(scenario, &id));
+    tekChainThrow(tekScenarioPutSnapshot(scenario, &dummy, id, "New Object"));
+    *snapshot_id = (int)id;
+
+    tekChainThrow(tekBodyCreateEvent(&dummy, id));
+
+    return SUCCESS;
+}
+
+static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int snapshot_id) {
+    if (snapshot_id < 0)
+        return SUCCESS;
+
+    TekBodySnapshot* body_snapshot;
+    tekChainThrow(tekScenarioGetSnapshot(scenario, snapshot_id, &body_snapshot));
+
+    TekEvent event = {};
+    event.type = BODY_UPDATE_EVENT;
+    memcpy(&event.data.body.snapshot, body_snapshot, sizeof(TekBodySnapshot));
+    event.data.body.id = (uint)snapshot_id;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    return SUCCESS;
+}
+
+static exception tekDeleteBodySnapshot(TekScenario* scenario, const int snapshot_id) {
+    tekChainThrow(tekScenarioDeleteSnapshot(scenario, (uint)snapshot_id));
+
+    TekEvent event = {};
+    event.type = BODY_DELETE_EVENT;
+    event.data.body.id = (uint)snapshot_id;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    return SUCCESS;
+}
+
+static exception tekResetScenario(const TekScenario* scenario) {
+    TekEvent event = {};
+    event.type = CLEAR_EVENT;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    uint* ids;
+    uint num_ids;
+    tekChainThrow(tekScenarioGetAllIds(scenario, &ids, &num_ids));
+
+    for (uint i = 0; i < num_ids; i++) {
+        const uint id = ids[i];
+        TekBodySnapshot* snapshot;
+        tekChainThrow(tekScenarioGetSnapshot(scenario, id, &snapshot));
+        tekChainThrow(tekBodyCreateEvent(snapshot, id));
+    }
+
+    free(ids);
+
+    return SUCCESS;
+}
+
+static exception tekRestartScenario(const TekScenario* scenario) {
+    uint* ids;
+    uint num_ids;
+    tekChainThrow(tekScenarioGetAllIds(scenario, &ids, &num_ids));
+
+    for (uint i = 0; i < num_ids; i++) {
+        const uint id = ids[i];
+        tekChainThrow(tekUpdateBodySnapshot(scenario, id));
+    }
+
+    free(ids);
+    return SUCCESS;
+}
+
+static exception tekSimulationSpeedEvent(const double rate, const double speed, TekGuiOptionWindow* runner_window) {
+    TekEvent event = {};
+    event.type = TIME_EVENT;
+    event.data.time.rate = rate;
+    event.data.time.speed = speed;
+
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    tekChainThrow(tekGuiWriteNumberOption(runner_window, "rate", rate));
+    tekChainThrow(tekGuiWriteNumberOption(runner_window, "speed", speed));
+
+    return SUCCESS;
+}
+
 static void tekHideAllWindows(struct TekGuiComponents* gui) {
     gui->hierarchy_window.window.visible = 0;
     gui->editor_window.window.visible = 0;
     gui->action_window.window.visible = 0;
     gui->save_window.window.visible = 0;
     gui->load_window.window.visible = 0;
+    gui->runner_window.window.visible = 0;
 }
 
 static exception tekSwitchToMainMenu(struct TekGuiComponents* gui) {
@@ -155,6 +264,7 @@ static exception tekSwitchToBuilderMenu(struct TekGuiComponents* gui) {
     tekChainThrow(tekGuiBringWindowToFront(&gui->hierarchy_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->action_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->editor_window.window));
+    tekChainThrow(tekRestartScenario(&active_scenario));
     return SUCCESS;
 }
 
@@ -186,6 +296,15 @@ static exception tekSwitchToLoadMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
+    tekHideAllWindows(gui);
+    gui->runner_window.window.visible = 1;
+    tekChainThrow(tekGuiBringWindowToFront(&gui->runner_window.window));
+    tekChainThrow(tekSimulationSpeedEvent(DEFAULT_RATE, DEFAULT_SPEED, &gui->runner_window));
+
+    return SUCCESS;
+}
+
 static exception tekChangeMenuMode(struct TekGuiComponents* gui) {
     TekEvent event = {};
     event.type = MODE_CHANGE_EVENT;
@@ -200,6 +319,7 @@ static exception tekChangeMenuMode(struct TekGuiComponents* gui) {
         tekChainThrow(tekSwitchToBuilderMenu(gui));
         break;
     case MODE_RUNNER:
+        tekChainThrow(tekSwitchToRunnerMenu(gui));
         break;
     case MODE_SAVE:
         tekChainThrow(tekSwitchToSaveMenu(gui));
@@ -284,71 +404,6 @@ static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const 
     return SUCCESS;
 }
 
-static exception tekBodyCreateEvent(const TekBodySnapshot* snapshot, const int snapshot_id) {
-    TekEvent event = {};
-    event.type = BODY_CREATE_EVENT;
-    memcpy(&event.data.body.snapshot, snapshot, sizeof(TekBodySnapshot));
-    event.data.body.id = snapshot_id;
-    tekChainThrow(pushEvent(&event_queue, event));
-    return SUCCESS;
-}
-
-static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) {
-    TekBodySnapshot dummy = {};
-    dummy.mass = 1.0f;
-    dummy.friction = 0.5f;
-    dummy.restitution = 0.5f;
-    glm_vec3_zero(dummy.position);
-    glm_vec3_zero(dummy.rotation);
-    glm_vec3_zero(dummy.velocity);
-
-    uint id;
-    tekChainThrow(tekScenarioGetNextId(scenario, &id));
-    tekChainThrow(tekScenarioPutSnapshot(scenario, &dummy, id, "New Object"));
-    *snapshot_id = (int)id;
-
-    tekChainThrow(tekBodyCreateEvent(&dummy, id));
-
-    return SUCCESS;
-}
-
-static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int snapshot_id) {
-    if (snapshot_id < 0)
-        return SUCCESS;
-
-    TekBodySnapshot* body_snapshot;
-    tekChainThrow(tekScenarioGetSnapshot(scenario, snapshot_id, &body_snapshot));
-
-    TekEvent event = {};
-    event.type = BODY_UPDATE_EVENT;
-    memcpy(&event.data.body.snapshot, body_snapshot, sizeof(TekBodySnapshot));
-    event.data.body.id = (uint)snapshot_id;
-    tekChainThrow(pushEvent(&event_queue, event));
-
-    return SUCCESS;
-}
-
-static exception tekResetScenario(const TekScenario* scenario) {
-    TekEvent event = {};
-    event.type = CLEAR_EVENT;
-    tekChainThrow(pushEvent(&event_queue, event));
-
-    uint* ids;
-    uint num_ids;
-    tekChainThrow(tekScenarioGetAllIds(scenario, &ids, &num_ids));
-
-    for (uint i = 0; i < num_ids; i++) {
-        const uint id = ids[i];
-        TekBodySnapshot* snapshot;
-        tekChainThrow(tekScenarioGetSnapshot(scenario, id, &snapshot));
-        tekChainThrow(tekBodyCreateEvent(snapshot, id));
-    }
-
-    free(ids);
-
-    return SUCCESS;
-}
-
 static void tekHierarchyCallback(TekGuiListWindow* hierarchy_window) {
     if (mode != MODE_BUILDER)
         return;
@@ -366,6 +421,67 @@ static void tekHierarchyCallback(TekGuiListWindow* hierarchy_window) {
     tekUpdateEditorWindow(editor_window, &active_scenario);
 }
 
+static exception tekDisplayOptionError(TekGuiOptionWindow* window, const char* key, const char* error_message) {
+    tekChainThrow(tekGuiWriteStringOption(window, key, error_message, strlen(error_message) + 1))
+    return SUCCESS;
+}
+
+static exception tekReadNewFileInput(TekGuiOptionWindow* window, const char* key, const char* directory, const char* extension, char** filepath) {
+    char* filename;
+    tekChainThrow(tekGuiReadStringOption(window, key, &filename));
+
+    if (!filename || !filename[0]) {
+        *filepath = 0;
+        return tekDisplayOptionError(window, key, "ENTER FILE");
+    }
+
+    tekChainThrow(addPathToFile(directory, filename, filepath));
+
+    const uint len_filename = strlen(filename);
+    const uint len_extension = strlen(extension);
+    flag needs_ext = 1;
+    if (len_filename >= len_extension) {
+        const char* ext_ptr = filename + len_filename - 5;
+        if (!strcmp(ext_ptr, extension)) {
+            needs_ext = 0;
+        }
+    }
+
+    if (needs_ext) {
+        char* filepath_ext;
+        tekChainThrow(addPathToFile(*filepath, ".tscn", &filepath_ext));
+        free(*filepath);
+        *filepath = filepath_ext;
+    }
+
+    return SUCCESS;
+}
+
+static exception tekReadExistingFileInput(TekGuiOptionWindow* window, const char* key, const char* directory, const char* extension, char** filepath) {
+    char* filename;
+    tekChainThrow(tekGuiReadStringOption(window, key, &filename));
+    if (!filename || !filename[0]) {
+        *filepath = 0;
+        return tekDisplayOptionError(window, key, "ENTER FILE");
+    }
+
+    tekChainThrow(addPathToFile(directory, filename, filepath));
+
+    if (!fileExists(*filepath)) {
+        char* filepath_ext;
+        tekChainThrow(addPathToFile(*filepath, extension, &filepath_ext));
+        free(*filepath);
+        if (!fileExists(filepath_ext)) {
+            free(filepath_ext);
+            *filepath = 0;
+            return tekDisplayOptionError(window, key, "NOT FOUND");
+        }
+        *filepath = filepath_ext;
+    }
+
+    return SUCCESS;
+}
+
 static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (mode != MODE_BUILDER)
         return SUCCESS;
@@ -373,10 +489,42 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     if (hierarchy_index < 0)
         return SUCCESS;
 
+    if (!strcmp(callback_data.name, "delete")) {
+        tekChainThrow(tekDeleteBodySnapshot(&active_scenario, hierarchy_index));
+        hierarchy_index = -1;
+        return SUCCESS;
+    }
+
     if (!strcmp(callback_data.name, "name")) {
         char* inputted_name;
         tekChainThrow(tekGuiReadStringOption(window, "name", &inputted_name));
         tekChainThrow(tekScenarioSetName(&active_scenario, (uint)hierarchy_index, inputted_name));
+        return SUCCESS;
+    }
+
+    if (!strcmp(callback_data.name, "model")) {
+        char* filepath;
+        tekChainThrow(tekReadExistingFileInput(window, "model", "../res/", ".tmsh", &filepath));
+        if (!filepath)
+            return SUCCESS;
+
+        printf("New mesh: %s\n", filepath);
+
+        free(filepath);
+
+        return SUCCESS;
+    }
+
+    if (!strcmp(callback_data.name, "material")) {
+        char* filepath;
+        tekChainThrow(tekReadExistingFileInput(window, "material", "../res/", ".tmat", &filepath));
+        if (!filepath)
+            return SUCCESS;
+
+        printf("New material: %s\n", filepath);
+
+        free(filepath);
+
         return SUCCESS;
     }
 
@@ -421,7 +569,7 @@ static void tekActionCallback(TekGuiListWindow* window) {
         next_mode = MODE_LOAD;
         break;
     case RUN_OPTION:
-        printf("Run option.\n");
+        next_mode = MODE_RUNNER;
         break;
     case QUIT_OPTION:
         next_mode = MODE_MAIN_MENU;
@@ -485,7 +633,10 @@ static exception tekCreateBuilderMenu(const int window_width, const int window_h
     return SUCCESS;
 }
 
-static exception tekDrawBuilderMenu() {
+static exception tekDrawBuilderMenu(struct TekGuiComponents* gui) {
+    if (hierarchy_index < 0) {
+        gui->editor_window.window.visible = 0;
+    }
     tekChainThrow(tekGuiDrawAllWindows());
     return SUCCESS;
 }
@@ -498,44 +649,23 @@ static void tekDeleteBuilderMenu(struct TekGuiComponents* gui) {
     tekGuiDeleteListWindow(&gui->action_window);
 }
 
-static exception tekDisplayOptionError(TekGuiOptionWindow* window, const char* error_message) {
-    tekChainThrow(tekGuiWriteStringOption(window, "filename", error_message, strlen(error_message) + 1))
-    return SUCCESS;
-}
-
 static exception tekSaveCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (callback_data.type != TEK_BUTTON_INPUT) {
         return SUCCESS;
     }
 
-    char* filename;
-    tekChainThrow(tekGuiReadStringOption(window, "filename", &filename));
-
-    if (!filename || !filename[0])
-        return tekDisplayOptionError(window, "ENTER FILE");
+    if (!strcmp(callback_data.name, "cancel")) {
+        next_mode = MODE_BUILDER;
+        return SUCCESS;
+    }
 
     char* filepath;
-    tekChainThrow(addPathToFile("../saves/", filename, &filepath));
-
-    const uint len_filename = strlen(filename);
-    flag needs_ext = 1;
-    if (len_filename >= 5) {
-        const char* ext_ptr = filename + len_filename - 5;
-        if (!strcmp(ext_ptr, ".tscn")) {
-            needs_ext = 0;
-        }
+    tekChainThrow(tekReadNewFileInput(window, "filename", "../saves/", ".tscn", &filepath))
+    if (filepath) {
+        tekChainThrow(tekWriteScenario(&active_scenario, filepath));
+        next_mode = MODE_BUILDER;
+        free(filepath);
     }
-
-    if (needs_ext) {
-        char* filepath_ext;
-        tekChainThrow(addPathToFile(filepath, ".tscn", &filepath_ext));
-        filepath = filepath_ext;
-    }
-
-    tekChainThrow(tekWriteScenario(&active_scenario, filepath));
-    next_mode = MODE_BUILDER;
-
-    free(filepath);
 
     return SUCCESS;
 }
@@ -545,35 +675,66 @@ static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
         return SUCCESS;
     }
 
-    char* filename;
-    tekChainThrow(tekGuiReadStringOption(window, "filename", &filename));
-    if (!filename || !filename[0])
-        return tekDisplayOptionError(window, "ENTER FILE");
-
-    char* filepath;
-    tekChainThrow(addPathToFile("../saves/", filename, &filepath));
-
-    if (!fileExists(filepath)) {
-        char* filepath_ext;
-        tekChainThrow(addPathToFile(filepath, ".tscn", &filepath_ext));
-        if (!fileExists(filepath_ext)) {
-            printf("filepath_ext: %s\n", filepath_ext);
-            return tekDisplayOptionError(window, "NOT FOUND");
-        }
-        filepath = filepath_ext;
+    if (!strcmp(callback_data.name, "cancel")) {
+        next_mode = MODE_BUILDER;
+        return SUCCESS;
     }
 
-    tekDeleteScenario(&active_scenario);
-    tekChainThrow(tekReadScenario(filepath, &active_scenario));
-    tekChainThrow(tekResetScenario(&active_scenario));
+    char* filepath;
+    tekChainThrow(tekReadExistingFileInput(window, "filename", "../saves/", ".tscn", &filepath));
+    if (filepath) {
+        tekDeleteScenario(&active_scenario);
+        tekChainThrow(tekReadScenario(filepath, &active_scenario));
+        tekChainThrow(tekResetScenario(&active_scenario));
 
-    free(filepath);
+        free(filepath);
 
-    next_mode = MODE_BUILDER;
+        next_mode = MODE_BUILDER;
+    }
 
     return SUCCESS;
 }
 
+static exception tekRunnerCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
+    if (callback_data.type == TEK_BUTTON_INPUT) {
+        next_mode = MODE_BUILDER;
+        return SUCCESS;
+    }
+
+    double speed;
+    tekChainThrow(tekGuiReadNumberOption(window, "speed", &speed));
+    if (speed < 0.01)
+        speed = 0.01;
+    if (speed > 100)
+        speed = 100;
+
+    double rate;
+    tekChainThrow(tekGuiReadNumberOption(window, "rate", &rate));
+    if (rate < 1)
+        rate = 1;
+    if (rate > 100)
+        rate = 100;
+
+    if (1 / rate / speed > 0.1) {
+        rate = 10.0 / speed;
+    }
+
+    tekChainThrow(tekSimulationSpeedEvent(rate, speed, window));
+
+    return SUCCESS;
+}
+
+static exception tekCreateRunnerMenu(struct TekGuiComponents* gui) {
+    tekChainThrow(tekGuiCreateOptionWindow("../res/windows/runner.yml", &gui->runner_window));
+    tekChainThrow(tekSimulationSpeedEvent(DEFAULT_RATE, DEFAULT_SPEED, &gui->runner_window));
+    gui->runner_window.callback = tekRunnerCallback;
+    return SUCCESS;
+}
+
+static exception tekDrawRunnerMenu(struct TekGuiComponents* gui) {
+    tekChainThrow(tekGuiDrawAllWindows());
+    return SUCCESS;
+}
 
 static exception tekCreateMenu(struct TekGuiComponents* gui) {
     // create version font + text.
@@ -583,6 +744,7 @@ static exception tekCreateMenu(struct TekGuiComponents* gui) {
 
     tekChainThrow(tekCreateMainMenu(WINDOW_WIDTH, WINDOW_HEIGHT, gui));
     tekChainThrow(tekCreateBuilderMenu(WINDOW_WIDTH, WINDOW_HEIGHT, gui));
+    tekChainThrow(tekCreateRunnerMenu(gui));
 
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/save.yml", &gui->save_window));
     gui->save_window.callback = tekSaveCallback;
@@ -608,9 +770,10 @@ static exception tekDrawMenu(struct TekGuiComponents* gui) {
         tekChainThrow(tekDrawMainMenu(gui));
         break;
     case MODE_RUNNER:
+        tekChainThrow(tekDrawRunnerMenu(gui));
         break;
     case MODE_BUILDER:
-        tekChainThrow(tekDrawBuilderMenu());
+        tekChainThrow(tekDrawBuilderMenu(gui));
         break;
     case MODE_SAVE:
     case MODE_LOAD:

@@ -22,3 +22,7 @@ options:
     label: "Will be saved as ../saves/<your-filename>.tscn"
     type: $tek_label
     index: 20
+  cancel:
+    label: "Cancel"
+    type: $tek_button_input
+    index: 20

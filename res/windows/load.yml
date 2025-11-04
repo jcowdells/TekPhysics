@@ -18,3 +18,7 @@ options:
     label: "Load"
     type: $tek_button_input
     index: 10
+  cancel:
+    label: "Cancel"
+    type: $tek_button_input
+    index: 20

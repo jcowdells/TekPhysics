@@ -14,6 +14,7 @@
 #define BODY_DELETE_EVENT  5
 #define BODY_UPDATE_EVENT  6
 #define CLEAR_EVENT        7
+#define TIME_EVENT         8
 
 #define MESSAGE_STATE       0
 #define EXCEPTION_STATE     1
@@ -42,6 +43,10 @@ typedef struct TekEvent {
             uint id;
         } body;
         flag mode;
+        struct {
+            double rate;
+            double speed;
+        } time;
     } data;
 } TekEvent;
 

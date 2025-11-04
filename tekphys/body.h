@@ -40,9 +40,8 @@ typedef struct TekBodySnapshot {
     float restitution;
     vec3 position;
     vec4 rotation;
-    vec4 velocity;
-    // TODO: add this "vec3 scale;"
-
+    vec3 velocity;
+    vec3 angular_velocity;
 } TekBodySnapshot;
 
 exception tekCreateBody(const char* mesh_filename, float mass, float friction, float restitution, vec3 position, vec4 rotation, vec3 scale, TekBody* body);

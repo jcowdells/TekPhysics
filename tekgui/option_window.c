@@ -614,7 +614,7 @@ static exception tekGuiCreateButtonOption(TekGuiOptionWindow* window, const char
     // set all the option data
     option->type = TEK_BUTTON_INPUT;
     tekChainThrow(tekGuiCreateTextButton(label, &option->display.button.button));
-    option->height = option->display.button.button.button.hitbox_height;
+    option->height = option->display.button.button.button.hitbox_height + 10; // fudge factor 🔥🔥
     option->display.button.name = name;
 
     // set up callbacks
@@ -708,7 +708,7 @@ static exception tekGuiDrawOptionInput(TekGuiOption* option, const int x_pos, co
  * @return
  */
 static exception tekGuiDrawButtonInput(TekGuiOption* option, const int x_pos, const int y_pos) {
-    tekChainThrow(tekGuiSetTextButtonPosition(&option->display.button.button, x_pos, y_pos));
+    tekChainThrow(tekGuiSetTextButtonPosition(&option->display.button.button, x_pos + option->height * 0.4f, y_pos + 5));
     tekChainThrow(tekGuiDrawTextButton(&option->display.button.button));
     return SUCCESS;
 }
