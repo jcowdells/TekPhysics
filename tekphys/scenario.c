@@ -2,12 +2,13 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <linux/limits.h>
 
 #include "../core/file.h"
 
-#define SNAPSHOT_WRITE_FORMAT "ID:%u\nNAME:%s\nPOSITION:%f %f %f\nROTATION:%f %f %f %f\nVELOCITY:%f %f %f\nMASS:%f\nCOEF_FRICTION:%f\nCOEF_RESTITUTION:%f\n"
-#define SNAPSHOT_READ_FORMAT  "ID:%u\nNAME:%[^\n]\nPOSITION:%f %f %f\nROTATION:%f %f %f %f\nVELOCITY:%f %f %f\nMASS:%f\nCOEF_FRICTION:%f\nCOEF_RESTITUTION:%f\n"
-#define SNAPSHOT_NUM_LINES 8
+#define SNAPSHOT_WRITE_FORMAT "ID:%u\nNAME:%s\nPOSITION:%f %f %f\nROTATION:%f %f %f %f\nVELOCITY:%f %f %f\nMASS:%f\nCOEF_FRICTION:%f\nCOEF_RESTITUTION:%f\nIMMOVABLE:%d\nMODEL:%s\nMATERIAL:%s\n"
+#define SNAPSHOT_READ_FORMAT  "ID:%u\nNAME:%[^\n]\nPOSITION:%f %f %f\nROTATION:%f %f %f %f\nVELOCITY:%f %f %f\nMASS:%f\nCOEF_FRICTION:%f\nCOEF_RESTITUTION:%f\nIMMOVABLE:%d\nMODEL:%[^\n]\nMATERIAL:%[^\n]\n"
+#define SNAPSHOT_NUM_LINES 11
 
 struct TekScenarioPair {
     TekBodySnapshot* snapshot;
@@ -239,7 +240,10 @@ static int tekScanSnapshot(const char* string, TekBodySnapshot* snapshot, uint* 
         &snapshot->velocity[0], &snapshot->velocity[1], &snapshot->velocity[2],
         &snapshot->mass,
         &snapshot->friction,
-        &snapshot->restitution
+        &snapshot->restitution,
+        &snapshot->immovable,
+        snapshot->model,
+        snapshot->material
     );
 }
 
@@ -264,11 +268,12 @@ exception tekReadScenario(const char* scenario_filepath, TekScenario* scenario) 
             TekBodySnapshot snapshot = {};
             uint snapshot_id = 0;
             char snapshot_name[256];
+            snapshot.model = malloc(256 * sizeof(char));
+            snapshot.material = malloc(256 * sizeof(char));
             if (tekScanSnapshot(scenario_start, &snapshot, &snapshot_id, snapshot_name) < 0) {
                 free(file);
                 tekThrow(FAILURE, "Failed to read snapshot file.");
             }
-            printf("---\n%s %f %f %f\n---\n", snapshot_name, EXPAND_VEC3(snapshot.position));
             tekChainThrowThen(tekScenarioPutSnapshot(scenario, &snapshot, snapshot_id, snapshot_name), {
                 free(file);
             });
@@ -292,7 +297,10 @@ static int tekWriteSnapshot(char* string, size_t max_length, const TekBodySnapsh
         EXPAND_VEC3(snapshot->velocity),
         snapshot->mass,
         snapshot->friction,
-        snapshot->restitution
+        snapshot->restitution,
+        snapshot->immovable,
+        snapshot->model,
+        snapshot->material
     );
 }
 

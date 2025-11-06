@@ -78,7 +78,6 @@ int hierarchy_index = -1;
 float width, height;
 mat4 perp_projection;
 ThreadQueue event_queue = {};
-TekEntity* last_entity = 0;
 
 uint depth = 0;
 char depth_message[64];
@@ -154,13 +153,40 @@ static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) 
     glm_vec3_zero(dummy.rotation);
     glm_vec3_zero(dummy.velocity);
     glm_vec3_zero(dummy.angular_velocity);
+    dummy.immovable = 0;
+
+    const char* default_model = "../res/rad1.tmsh";
+    const uint len_default_model = strlen(default_model) + 1;
+    const char* default_material = "../res/material.tmat";
+    const uint len_default_material = strlen(default_material) + 1;
+
+    dummy.model = malloc(len_default_model * sizeof(char));
+    if (!dummy.model)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for model filepath.");
+    dummy.material = malloc(len_default_material * sizeof(char));
+    if (!dummy.material) {
+        free(dummy.model);
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for material filepath");
+    }
+
+    memcpy(dummy.model, default_model, len_default_model);
+    memcpy(dummy.material, default_material, len_default_material);
 
     uint id;
-    tekChainThrow(tekScenarioGetNextId(scenario, &id));
-    tekChainThrow(tekScenarioPutSnapshot(scenario, &dummy, id, "New Object"));
+    tekChainThrowThen(tekScenarioGetNextId(scenario, &id), {
+        free(dummy.model);
+        free(dummy.material);
+    });
+    tekChainThrowThen(tekScenarioPutSnapshot(scenario, &dummy, id, "New Object"), {
+        free(dummy.model);
+        free(dummy.material);
+    });
     *snapshot_id = (int)id;
 
-    tekChainThrow(tekBodyCreateEvent(&dummy, id));
+    tekChainThrowThen(tekBodyCreateEvent(&dummy, id), {
+        free(dummy.model);
+        free(dummy.material);
+    });
 
     return SUCCESS;
 }
@@ -182,12 +208,59 @@ static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int sn
 }
 
 static exception tekDeleteBodySnapshot(TekScenario* scenario, const int snapshot_id) {
+    TekBodySnapshot* snapshot;
+    tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
+    free(snapshot->model);
+    free(snapshot->material);
+
     tekChainThrow(tekScenarioDeleteSnapshot(scenario, (uint)snapshot_id));
 
     TekEvent event = {};
     event.type = BODY_DELETE_EVENT;
     event.data.body.id = (uint)snapshot_id;
     tekChainThrow(pushEvent(&event_queue, event));
+
+    return SUCCESS;
+}
+
+static exception tekRecreateBodySnapshot(const TekBodySnapshot* snapshot, const int snapshot_id) {
+    TekEvent event = {};
+    event.type = BODY_DELETE_EVENT;
+    event.data.body.id = (uint)snapshot_id;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    tekChainThrow(tekBodyCreateEvent(snapshot, snapshot_id));
+    return SUCCESS;
+}
+
+static exception tekChangeBodySnapshotModel(const TekScenario* scenario, const int snapshot_id, const char* model) {
+    TekBodySnapshot* snapshot;
+    tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
+
+    const uint len_model = strlen(model) + 1;
+    char* new_model = realloc(snapshot->model, len_model);
+    if (!new_model)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for new model.");
+    memcpy(new_model, model, len_model);
+    snapshot->model = new_model;
+
+    tekChainThrow(tekRecreateBodySnapshot(snapshot, snapshot_id));
+
+    return SUCCESS;
+}
+
+static exception tekChangeBodySnapshotMaterial(const TekScenario* scenario, const int snapshot_id, const char* material) {
+    TekBodySnapshot* snapshot;
+    tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
+
+    const uint len_material = strlen(material) + 1;
+    char* new_material = realloc(snapshot->material, len_material);
+    if (!new_material)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for new material.");
+    memcpy(new_material, material, len_material);
+    snapshot->material = new_material;
+
+    tekChainThrow(tekRecreateBodySnapshot(snapshot, snapshot_id));
 
     return SUCCESS;
 }
@@ -400,6 +473,9 @@ static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const 
     tekChainThrow(tekGuiWriteNumberOption(editor_window, "mass", body->mass));
     tekChainThrow(tekGuiWriteNumberOption(editor_window, "friction", body->friction));
     tekChainThrow(tekGuiWriteNumberOption(editor_window, "restitution", body->restitution));
+    tekChainThrow(tekGuiWriteBooleanOption(editor_window, "immovable", (flag)body->immovable));
+    tekChainThrow(tekGuiWriteStringOption(editor_window, "model", body->model, strlen(body->model) + 1));
+    tekChainThrow(tekGuiWriteStringOption(editor_window, "material", body->material, strlen(body->material) + 1));
 
     return SUCCESS;
 }
@@ -465,6 +541,11 @@ static exception tekReadExistingFileInput(TekGuiOptionWindow* window, const char
         return tekDisplayOptionError(window, key, "ENTER FILE");
     }
 
+    if (fileExists(filename)) {
+        *filepath = 0;
+        return SUCCESS;
+    }
+
     tekChainThrow(addPathToFile(directory, filename, filepath));
 
     if (!fileExists(*filepath)) {
@@ -508,7 +589,7 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
         if (!filepath)
             return SUCCESS;
 
-        printf("New mesh: %s\n", filepath);
+        tekChainThrow(tekChangeBodySnapshotModel(&active_scenario, hierarchy_index, filepath));
 
         free(filepath);
 
@@ -521,7 +602,7 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
         if (!filepath)
             return SUCCESS;
 
-        printf("New material: %s\n", filepath);
+        tekChainThrow(tekChangeBodySnapshotMaterial(&active_scenario, hierarchy_index, filepath));
 
         free(filepath);
 
@@ -550,6 +631,10 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
         snapshot->friction = 1.0f;
     if (snapshot->friction < 0.0f)
         snapshot->friction = 0.0f;
+
+    flag immovable;
+    tekChainThrow(tekGuiReadBooleanOption(window, "immovable", &immovable));
+    snapshot->immovable = (int)immovable;
 
     tekChainThrow(tekUpdateEditorWindow(window, &active_scenario));
     tekChainThrow(tekUpdateBodySnapshot(&active_scenario, hierarchy_index));
@@ -695,9 +780,28 @@ static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
     return SUCCESS;
 }
 
+static exception tekPauseEvent(const flag paused) {
+    TekEvent event = {};
+    event.type = PAUSE_EVENT;
+    event.data.paused = paused;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    return SUCCESS;
+}
+
 static exception tekRunnerCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
-    if (callback_data.type == TEK_BUTTON_INPUT) {
+    if (!strcmp(callback_data.name, "stop")) {
         next_mode = MODE_BUILDER;
+        return SUCCESS;
+    }
+
+    if (!strcmp(callback_data.name, "pause")) {
+        tekChainThrow(tekPauseEvent(1));
+        return SUCCESS;
+    }
+
+    if (!strcmp(callback_data.name, "play")) {
+        tekChainThrow(tekPauseEvent(0));
         return SUCCESS;
     }
 
@@ -922,7 +1026,6 @@ exception run() {
                 vec3 default_scale = { 1.0f, 1.0f, 1.0f };
                 tekChainThrowThen(vectorGetItemPtr(&entities, state.object_id, &create_entity), { tekRunCleanup(); });
                 tekChainThrowThen(tekCreateEntity(state.data.entity.mesh_filename, state.data.entity.material_filename, state.data.entity.position, state.data.entity.rotation, default_scale, create_entity), { tekRunCleanup(); });
-                last_entity = create_entity;
                 break;
             case ENTITY_UPDATE_STATE:
                 TekEntity* update_entity = 0;

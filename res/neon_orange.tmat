@@ -1,0 +1,16 @@
+shaders:
+    vertex_shader: "../shader/vertex.glvs"
+    fragment_shader: "../shader/fragment.glfs"
+uniforms:
+    light_color:
+        r: 1.0
+        g: 0.4
+        b: 0.0
+    light_position:
+        x: 4.0
+        y: 12.0
+        z: 0.0
+    camera_pos: $tek_camera_position
+    model: $tek_model_matrix
+    view: $tek_view_matrix
+    projection: $tek_projection_matrix

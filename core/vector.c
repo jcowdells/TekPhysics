@@ -48,7 +48,6 @@ static exception vectorDoubleCapacity(Vector* vector) {
     if (!temp) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate more memory to grow vector.", free(internal));
     vector->internal = temp;
     vector->internal_size = new_size;
-    printf("grew in size, len=%u\n", vector->length);
     return SUCCESS;
 }
 

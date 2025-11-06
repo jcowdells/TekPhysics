@@ -330,6 +330,7 @@ static void tekEngine(void* args) {
     flag running = 1;
     uint counter = 0;
     flag mode = 0;
+    flag paused = 0;
 
     mat4 snapshot_rotation_matrix;
     vec4 snapshot_rotation_quat;
@@ -358,13 +359,14 @@ static void tekEngine(void* args) {
 
                 threadChainThrow(tekEngineCreateBody(
                     state_queue, &bodies, event.data.body.id,
-                    "../res/rad1.tmsh", "../res/material.tmat",
+                    event.data.body.snapshot.model, event.data.body.snapshot.material,
                     event.data.body.snapshot.mass, event.data.body.snapshot.friction, event.data.body.snapshot.restitution,
                     event.data.body.snapshot.position, snapshot_rotation_quat, (vec3){1.0f, 1.0f, 1.0f}
                     ));
 
                 threadChainThrow(vectorGetItemPtr(&bodies, event.data.body.id, &snapshot_body));
                 glm_vec3_copy(event.data.body.snapshot.velocity, snapshot_body->velocity);
+                snapshot_body->immovable = event.data.body.snapshot.immovable;
 
                 break;
             case BODY_UPDATE_EVENT:
@@ -381,6 +383,7 @@ static void tekEngine(void* args) {
                 snapshot_body->friction = event.data.body.snapshot.friction;
                 snapshot_body->restitution = event.data.body.snapshot.restitution;
                 threadChainThrow(tekBodySetMass(snapshot_body, event.data.body.snapshot.mass));
+                snapshot_body->immovable = event.data.body.snapshot.immovable;
 
                 threadChainThrow(tekEngineUpdateBody(
                     state_queue, &bodies, event.data.body.id,
@@ -400,6 +403,9 @@ static void tekEngine(void* args) {
                 step_time.tv_sec = (__time_t)(phys_period_s / event.data.time.speed);
                 step_time.tv_nsec = (__syscall_slong_t)(1e9 * (phys_period / event.data.time.speed - phys_period_s));
                 break;
+            case PAUSE_EVENT:
+                paused = event.data.paused;
+                break;
             default:
                 break;
             }
@@ -407,12 +413,14 @@ static void tekEngine(void* args) {
 
         if (!running) break;
 
-        if (mode == MODE_RUNNER) {
+        if (mode == MODE_RUNNER && !paused) {
             for (uint i = 0; i < bodies.length; i++) {
                 TekBody* body = 0;
                 threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
                 if (!body->num_vertices) continue;
-                tekBodyAdvanceTime(body, (float)phys_period);
+                if (!body->immovable) {
+                    tekBodyAdvanceTime(body, (float)phys_period);
+                }
                 threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
             }
 

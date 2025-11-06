@@ -204,7 +204,6 @@ exception tekGuiCreateListWindow(TekGuiListWindow* window, List* text_list) {
     window->window.draw_callback = tekGuiDrawListWindow;
     window->window.select_callback = tekGuiSelectListWindow;
 
-    printf("num: %u, size: %u, final: %u\n", window->num_visible, window->text_size, window->num_visible * window->text_size * 5 / 4);
     tekGuiSetWindowSize(&window->window, window->window.width, window->num_visible * window->text_size * 5 / 4);
 
     tekChainThrow(hashtableCreate(&window->text_lookup, 8));

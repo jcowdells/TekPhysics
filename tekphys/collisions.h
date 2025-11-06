@@ -12,9 +12,11 @@
 #define TANGENT_CONSTRAINT_2 2
 #define NUM_CONSTRAINTS 3
 
-#define NUM_ITERATIONS 32
+#define NUM_ITERATIONS 10
 
-#define BAUMGARTE_BETA 0.1f
+#define BAUMGARTE_BETA  0.1f
+#define MIN_PENETRATION 0.005f
+#define SLOP            0.0f
 
 typedef struct TekCollisionManifold {
     TekBody* bodies[2];

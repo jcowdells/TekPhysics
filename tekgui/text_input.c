@@ -193,7 +193,6 @@ static void tekGuiTextInputButtonCallback(TekGuiButton* button, TekGuiButtonCall
         if (selected_input)
             tekGuiFinishTextInput(selected_input);
         selected_input = text_input;
-        printf("SELECT: %u %u\n", text_input->cursor_index, text_input->text_start_index);
         break;
     default:
         break;

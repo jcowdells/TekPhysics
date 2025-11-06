@@ -32,6 +32,7 @@ typedef struct TekBody {
     mat3 inverse_inertia_tensor;
     mat4 transform;
     TekCollider collider;
+    int immovable;
 } TekBody;
 
 typedef struct TekBodySnapshot {
@@ -42,6 +43,9 @@ typedef struct TekBodySnapshot {
     vec4 rotation;
     vec3 velocity;
     vec3 angular_velocity;
+    int immovable;
+    char* model;
+    char* material;
 } TekBodySnapshot;
 
 exception tekCreateBody(const char* mesh_filename, float mass, float friction, float restitution, vec3 position, vec4 rotation, vec3 scale, TekBody* body);

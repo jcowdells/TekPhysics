@@ -14,6 +14,14 @@ options:
     label: "Simulation speed:"
     type: $tek_number_input
     index: 10
+  pause:
+    label: "Pause"
+    type: $tek_button_input
+    index: 11
+  play:
+    label: "Play"
+    type: $tek_button_input
+    index: 12
   stop:
     label: "Stop"
     type: $tek_button_input

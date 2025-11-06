@@ -459,7 +459,6 @@ static exception tekGuiWriteDefaultValue(TekGuiOptionWindow* window, const char*
 }
 
 static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const char* text, const uint len_text) {
-    printf("Callbackus\n");
     struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)text_input->data;
     TekGuiOptionWindow* window = option_pair->window;
     TekGuiOption* option = option_pair->option;
@@ -471,7 +470,6 @@ static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const ch
         tekChainThrow(tekGuiWriteStringOption(window, name, text, len_text));
         break;
     case TEK_NUMBER_INPUT:
-        printf("NUMBERINPUT...\n");
         tekChainThrow(tekGuiWriteNumberOptionString(window, name, text));
         break;
     case TEK_BOOLEAN_INPUT:
