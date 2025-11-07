@@ -518,7 +518,7 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     if (orient_c > 0) {
         if (orient_d > 0) {
             // edge of triangle a vs edge of triangle b
-            printf("case 1\n");
+            printf("case 1 ");
             tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold->contact_points[0]);
             tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold->contact_points[1]);
             vec3 edge_a, edge_b;
@@ -527,21 +527,22 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
             tekGetTriangleEdgeContactNormal(edge_b, edge_a, manifold->contact_normal);
         } else {
             // vertex of triangle a vs face of triangle b
-            printf("case 2\n");
+            printf("case 2 ");
             glm_vec3_copy(triangle_a[0], manifold->contact_points[0]);
             tekGetClosestPointOnTriangle(triangle_a[0], triangle_b, manifold->contact_points[1]);
+            printf("A: %f %f %f, B: %f %f %f\n", EXPAND_VEC3(manifold->contact_points[0]), EXPAND_VEC3(manifold->contact_points[1]));
             glm_vec3_negate_to(normal_b, manifold->contact_normal);
         }
     } else {
         if (orient_d > 0) {
             // face of triangle a vs vertex of triangle b
-            printf("case 3\n");
+            printf("case 3 ");
             tekGetClosestPointOnTriangle(triangle_b[0], triangle_a, manifold->contact_points[0]);
             glm_vec3_copy(triangle_b[0], manifold->contact_points[1]);
             glm_vec3_copy(normal_a, manifold->contact_normal);
         } else {
             // edge of triangle a vs edge of triangle b
-            printf("case 4\n");
+            printf("case 4 ");
             tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold->contact_points[0]);
             tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold->contact_points[1]);
             vec3 edge_a, edge_b;
@@ -567,13 +568,8 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     vec3 penetration_vector;
     glm_vec3_sub(manifold->contact_points[1], manifold->contact_points[0], penetration_vector);
 
-
     manifold->penetration_depth = -glm_vec3_dot(penetration_vector, manifold->contact_normal);
-
-    if (manifold->penetration_depth > 0.01f) {
-        printf("Pen Depth: %f\n", manifold->penetration_depth);
-        manifold->penetration_depth = 0.0f;
-    }
+    printf("P: %f\n", manifold->penetration_depth);
 
     for (uint i = 0; i < NUM_CONSTRAINTS; i++) {
         manifold->impulses[i] = 0.0f;
@@ -595,6 +591,32 @@ static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_tr
     return SUCCESS;
 }
 
+static int tekIsCoordinateEquivalent(vec3 point_a, vec3 point_b) {
+    vec3 delta;
+    glm_vec3_sub(point_b, point_a, delta);
+    return glm_vec3_norm2(delta) < POSITION_EPSILON;
+}
+
+static int tekIsManifoldEquivalent(TekCollisionManifold* manifold_a, TekCollisionManifold* manifold_b) {
+    return
+        tekIsCoordinateEquivalent(manifold_a->contact_points[0], manifold_b->contact_points[0])
+        && tekIsCoordinateEquivalent(manifold_a->contact_points[1], manifold_b->contact_points[1]);
+}
+
+static exception tekDoesManifoldContainContacts(const Vector* manifold_vector, TekCollisionManifold* manifold, flag* contained) {
+    *contained = 0;
+    for (uint i = 0; i < manifold_vector->length; i++) {
+        TekCollisionManifold* loop_manifold;
+        tekChainThrow(vectorGetItemPtr(manifold_vector, i, &loop_manifold));
+        if (tekIsManifoldEquivalent(manifold, loop_manifold)) {
+            *contained = 1;
+            return SUCCESS;
+        }
+    }
+
+    return SUCCESS;
+}
+
 #define getChild(collider_node, i) (i == LEFT) ? collider_node->data.node.left : collider_node->data.node.right
 
 exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* collision, Vector* manifold_vector) {
@@ -606,6 +628,8 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
     TekColliderNode* pair[2] = {
         body_a->collider, body_b->collider
     };
+    tekUpdateOBB(&body_a->collider->obb, body_a->transform);
+    tekUpdateOBB(&body_b->collider->obb, body_b->transform);
     tekChainThrow(vectorAddItem(&collider_buffer, &pair));
     while (vectorPopItem(&collider_buffer, &pair)) {
         if (pair[LEFT]->type == COLLIDER_NODE) {
@@ -618,8 +642,12 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
         }
 
         TekColliderNode* temp_pair[2];
-        for (uint i = 0; i < 2; i++) {
-            for (uint j = 0; j < 2; j++) {
+
+        const uint i_max = pair[LEFT]->type == COLLIDER_NODE ? 2 : 1;
+        const uint j_max = pair[RIGHT]->type == COLLIDER_NODE ? 2 : 1;
+
+        for (uint i = 0; i < i_max; i++) {
+            for (uint j = 0; j < j_max; j++) {
                 TekColliderNode* node_a = (pair[LEFT]->type == COLLIDER_NODE) ? getChild(pair[LEFT], i) : pair[LEFT];
                 TekColliderNode* node_b = (pair[RIGHT]->type == COLLIDER_NODE) ? getChild(pair[RIGHT], j) : pair[RIGHT];
 
@@ -628,8 +656,10 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
                 if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_NODE)) {
                     sub_collision = tekCheckOBBCollision(&node_a->obb, &node_b->obb);
                 } else if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_LEAF)) {
+                    tekUpdateLeaf(node_b, body_b->transform);
                     sub_collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
                 } else if ((node_a->type == COLLIDER_LEAF) && (node_b->type == COLLIDER_NODE)) {
+                    tekUpdateLeaf(node_a, body_a->transform);
                     sub_collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
                 } else {
                     tekUpdateLeaf(node_a, body_a->transform);
@@ -641,12 +671,15 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
                         &sub_collision,
                         &manifold
                         ));
+
                     if (sub_collision) {
                         sub_collision = 0;
                         manifold.bodies[0] = body_a;
                         manifold.bodies[1] = body_b;
 
-                        tekChainThrow(vectorAddItem(manifold_vector, &manifold));
+                        flag contained;
+                        tekChainThrow(tekDoesManifoldContainContacts(manifold_vector, &manifold, &contained));
+                        if (!contained) tekChainThrow(vectorAddItem(manifold_vector, &manifold));
                         *collision = 1;
                     }
                 }

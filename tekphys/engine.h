@@ -16,6 +16,7 @@
 #define CLEAR_EVENT        7
 #define TIME_EVENT         8
 #define PAUSE_EVENT        9
+#define STEP_EVENT         10
 
 #define MESSAGE_STATE       0
 #define EXCEPTION_STATE     1

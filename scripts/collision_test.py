@@ -532,15 +532,20 @@ def get_triangle_triangle_collision_normal(triangle_a: Triangle, triangle_b: Tri
 
     if sign_c > 0:
         if sign_d > 0:
+            print("case 1")
             edge_a = np.subtract(triangle_a.vertices[0], triangle_a.vertices[2])
             edge_b = np.subtract(triangle_b.vertices[0], triangle_b.vertices[2])
             return get_triangle_edge_contact_normal(edge_b, edge_a)
         else:
+            print("case 2")
+            print(triangle_a, triangle_b)
             return np.multiply(normal_b, -1.0)
     else:
         if sign_d > 0:
+            print("case 3")
             return normal_a
         else:
+            print("case 4")
             edge_a = np.subtract(triangle_a.vertices[0], triangle_a.vertices[1])
             edge_b = np.subtract(triangle_b.vertices[0], triangle_b.vertices[1])
             return get_triangle_edge_contact_normal(edge_a, edge_b)
@@ -878,12 +883,12 @@ collision_tests: list[TriangleCollisionTest] = list()
 
 def input(key):
     global triangle_index, num_triangles, collision_tests
-    collision_tests[triangle_index].set_visibility(False)
+    #collision_tests[triangle_index].set_visibility(False)
     if key == "up arrow up":
         triangle_index = triangle_index + 1 if triangle_index + 1 < num_triangles else triangle_index
     if key == "down arrow up":
         triangle_index = triangle_index - 1 if triangle_index > 0 else triangle_index
-    collision_tests[triangle_index].set_visibility(True)
+    #collision_tests[triangle_index].set_visibility(True)
 
 def main():
     global triangle_index, num_triangles, collision_tests
@@ -922,8 +927,8 @@ def main():
 
     # collision_test = OBBTriangleCollisionTest(np.array([0, -1, 0]), np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
 
-    # collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
-    #
+    collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
+
     # collision_test_3 = TriangleCollisionTest(np.array([-3.899999, 1.000000, 0.400000]),
     #                                          np.array([-3.899999, -1.000000, -1.600000]),
     #                                          np.array([-3.899999, -1.000000, 0.400000]),

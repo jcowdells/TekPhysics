@@ -805,6 +805,12 @@ static exception tekRunnerCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
         return SUCCESS;
     }
 
+    if (!strcmp(callback_data.name, "step")) {
+        TekEvent event = {};
+        event.type = STEP_EVENT;
+        tekChainThrow(pushEvent(&event_queue, event));
+    }
+
     double speed;
     tekChainThrow(tekGuiReadNumberOption(window, "speed", &speed));
     if (speed < 0.01)

@@ -22,6 +22,10 @@ options:
     label: "Play"
     type: $tek_button_input
     index: 12
+  step:
+    label: "Step"
+    type: $tek_button_input
+    index: 13
   stop:
     label: "Stop"
     type: $tek_button_input
