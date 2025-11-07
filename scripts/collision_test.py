@@ -550,6 +550,62 @@ def get_triangle_triangle_collision_normal(triangle_a: Triangle, triangle_b: Tri
             edge_b = np.subtract(triangle_b.vertices[0], triangle_b.vertices[1])
             return get_triangle_edge_contact_normal(edge_a, edge_b)
 
+def get_triangle_triangle_collision_sat(triangle_a: Triangle, triangle_b: Triangle) -> np.ndarray | None:
+    axes = list()
+
+    normal_a = get_triangle_normal(triangle_a)
+    normal_b = get_triangle_normal(triangle_b)
+
+    axes.append(normal_a)
+    axes.append(normal_b)
+
+    edges_a = list()
+    edges_b = list()
+
+    for i in range(3):
+        edges_a.append(np.subtract(triangle_a.vertices[(i + 1) % 3], triangle_a.vertices[i]))
+        edges_b.append(np.subtract(triangle_b.vertices[(i + 1) % 3], triangle_b.vertices[i]))
+
+    for i in range(3):
+        for j in range(3):
+            axes.append(np.cross(edges_a[i], edges_b[j]))
+
+    print(axes)
+
+    min_overlap = float("inf")
+    contact_axis = None
+
+    for axis in axes:
+        min_a, max_a = float("inf"), -float("inf")
+        min_b, max_b = float("inf"), -float("inf")
+
+        for vertex in triangle_a.vertices:
+            projection = float(np.dot(vertex, axis))
+            min_a = min(min_a, projection)
+            max_a = max(max_a, projection)
+
+        for vertex in triangle_b.vertices:
+            projection = float(np.dot(vertex, axis))
+            min_b = min(min_b, projection)
+            max_b = max(max_b, projection)
+
+        overlap = min(max_a, max_b) - max(min_a, min_b)
+        if overlap < 0:
+            print("Separated @", axis)
+            return None
+
+        if overlap < min_overlap:
+            min_overlap = overlap
+            contact_axis = axis
+
+    # let the normal be the face normal if its kinda close (stops flickering)
+    # if abs(np.dot(contact_axis, normal_a)) > 0.95:
+    #     contact_axis = normal_a
+    # elif abs(np.dot(contact_axis, normal_b)) > 0.95:
+    #     contact_axis = normal_b
+
+    return contact_axis
+
 class VectorDisplayEntity(Entity):
     def __update_world_position(self):
         self.world_position = np.add(self.__position, np.multiply(self.__vector, 0.5))
@@ -836,6 +892,20 @@ class OBBTriangleCollisionTest(Entity):
             self.obb.color_setter(NORMAL_COLOUR)
             self.triangle.color_setter(NORMAL_COLOUR)
 
+print_key = True
+
+def print_vertex(vertex, end="\n"):
+    print(str(vertex[0]) + "f, " + str(vertex[1]) + "f, " + str(vertex[2]) + "f", end=end)
+
+def print_triangle(name, triangle):
+    print("vec3 " + name + "[] = {")
+    for i in range(len(triangle.vertices)):
+        if i != 0:
+            print(",")
+        print("    ", end="")
+        print_vertex(triangle.vertices[i], end="")
+    print("\n};")
+
 class TriangleCollisionTest(Entity):
     def __init__(self, *vertices):
         if len(vertices) != 6:
@@ -849,6 +919,7 @@ class TriangleCollisionTest(Entity):
         super().__init__()
 
     def update(self):
+        global print_key
         collision = check_triangle_triangle_collision(self.triangle_a.get_triangle(), self.triangle_b.get_triangle())
         if collision:
             self.triangle_a.color_setter(TOUCH_COLOUR)
@@ -856,6 +927,12 @@ class TriangleCollisionTest(Entity):
         else:
             self.triangle_a.color_setter(NORMAL_COLOUR)
             self.triangle_b.color_setter(NORMAL_COLOUR)
+
+        if print_key:
+            print_triangle("triangle_a", self.triangle_a.get_triangle())
+            print_triangle("triangle_b", self.triangle_b.get_triangle())
+            print_key = False
+
 
     def set_visibility(self, visibility: bool):
         self.triangle_a.visible_setter(visibility)
@@ -877,18 +954,30 @@ class TriangleNormalTest(TriangleCollisionTest):
             self.__normal.set_vector(normal)
             self.__normal.set_position(get_triangle_centroid(self.triangle_a.get_triangle()))
 
+class TriangleNormalTestSAT(TriangleCollisionTest):
+    def __init__(self, *vertices):
+        super().__init__(*vertices)
+        self.triangle_a.color_setter(color.orange)
+        self.triangle_b.color_setter(color.blue)
+        self.__normal = VectorDisplayEntity(get_triangle_centroid(self.triangle_a.get_triangle()), np.array([0.0, 1.0, 0.0]), tube_radius=0.05)
+
+    def update(self):
+        normal = get_triangle_triangle_collision_sat(self.triangle_a.get_triangle(), self.triangle_b.get_triangle())
+        if normal is None:
+            self.__normal.visible_setter(False)
+        else:
+            self.__normal.visible_setter(True)
+            self.__normal.set_vector(normal)
+            self.__normal.set_position(get_triangle_centroid(self.triangle_a.get_triangle()))
+
 triangle_index = 0
 num_triangles = 0
 collision_tests: list[TriangleCollisionTest] = list()
 
 def input(key):
-    global triangle_index, num_triangles, collision_tests
-    #collision_tests[triangle_index].set_visibility(False)
-    if key == "up arrow up":
-        triangle_index = triangle_index + 1 if triangle_index + 1 < num_triangles else triangle_index
-    if key == "down arrow up":
-        triangle_index = triangle_index - 1 if triangle_index > 0 else triangle_index
-    #collision_tests[triangle_index].set_visibility(True)
+    global print_key
+    if key == "p":
+        print_key = True
 
 def main():
     global triangle_index, num_triangles, collision_tests
@@ -927,14 +1016,14 @@ def main():
 
     # collision_test = OBBTriangleCollisionTest(np.array([0, -1, 0]), np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
 
-    collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
+    # collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
 
-    # collision_test_3 = TriangleCollisionTest(np.array([-3.899999, 1.000000, 0.400000]),
-    #                                          np.array([-3.899999, -1.000000, -1.600000]),
-    #                                          np.array([-3.899999, -1.000000, 0.400000]),
-    #                                          np.array([1.000000, -1.000000, 1.000000]),
-    #                                          np.array([-1.000000, -1.000000, 1.000000]),
-    #                                          np.array([1.000000, -1.000000, -1.000000]))
+    collision_test_3 = TriangleCollisionTest(np.array([-3.899999, 1.000000, 0.400000]),
+                                             np.array([-3.899999, -1.000000, -1.600000]),
+                                             np.array([-3.899999, -1.000000, 0.400000]),
+                                             np.array([1.000000, -1.000000, 1.000000]),
+                                             np.array([-1.000000, -1.000000, 1.000000]),
+                                             np.array([1.000000, -1.000000, -1.000000]))
 
     EditorCamera()  # add camera controls for orbiting and moving the camera
 

@@ -467,90 +467,304 @@ static void tekGetClosestPointOnTriangle(vec3 point, vec3 triangle[3], vec3 clos
     glm_vec3_muladds(ac, w, closest_point);
 }
 
-exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, TekCollisionManifold* manifold) {
-    *collision = 0;
+/**
+ * Return the furthest point on a triangle in a given search direction.
+ * @param triangle[in] The triangle to search through.
+ * @param direction[in] The direction to search in.
+ * @return closest_point The index of the closest point on the triangle.
+ */
+static uint tekTriangleFurthestPoint(vec3 triangle[3], vec3 direction) {
+    // track which vertex is the best.
+    uint max_index = 0;
+    float max_value = -FLT_MAX;
 
-    // get the sign number, which represents which vertices are on opposite sides of the triangle to each other.
-    int sign_array_a[3];
-    tekCalculateSignArray(triangle_b, triangle_a, sign_array_a);
+    // for each vertex, project onto the direction to find which is furthest along axis.
+    for (uint i = 0; i < 3; i++) {
+        const float new_max_value = glm_vec3_dot(triangle[i], direction);
 
-    // if they're all positive or all negative, this means that all points are on the same side of the plane
-    // this means its truly impossible for there to be a collision, there needs to be a point that crosses the plane for an intersection to happen.
-    if ((sign_array_a[0] == sign_array_a[1]) && (sign_array_a[0] == sign_array_a[2])) {
-        *collision = 0;
-        return SUCCESS;
+        // if this vertex is further along than any other, update tracker variables.
+        if (new_max_value > max_value) {
+            max_index = i;
+            max_value = new_max_value;
+        }
     }
+    return max_index;
+}
 
-    // do the same for the other triangle, quitting early if there is a scenario where the planes of triangles have no intersection.
-    int sign_array_b[3];
-    tekCalculateSignArray(triangle_a, triangle_b, sign_array_b);
-    if ((sign_array_b[0] == sign_array_b[1]) && (sign_array_b[0] == sign_array_b[2])) {
-        *collision = 0;
-        return SUCCESS;
+/**
+ * Triangle support function. Finds a point of a Minkowski Difference that has the largest magnitude in a specified direction.
+ * @param triangle_a[in] The first triangle to check.
+ * @param triangle_b[in] The second triangle to check.
+ * @param direction[in] The direction to check in
+ * @param point[out] The outputted point of the Minkowski Difference.
+ */
+static void tekTriangleSupport(vec3 triangle_a[3], vec3 triangle_b[3], vec3 direction, vec3 point) {
+    // find the maximal point of triangle a, and the maximal point of triangle b in the other direction
+    // difference of these points will be the largest possible separation, and give the largest minkowski difference.
+
+    // find the opposite direction
+    vec3 opposite_direction;
+    glm_vec3_negate_to(direction, opposite_direction);
+
+    // find maximum points in this direction
+    const uint index_a = tekTriangleFurthestPoint(triangle_a, direction);
+    const uint index_b = tekTriangleFurthestPoint(triangle_b, opposite_direction);
+
+    // subtract to find minkowski difference.
+    glm_vec3_sub(triangle_a[index_a], triangle_b[index_b], point);
+}
+
+/**
+ * Update a simplex which has two points.
+ * @param direction[out] The direction which is being tested.
+ * @param simplex[in/out] The simplex to update.
+ * @return
+ */
+static void tekUpdateLineSimplex(vec3 direction, vec3 simplex[4]) {
+    // the new direction will be perpendicular to the line segment in the direction of the origin.
+    // the simplex cannot be reduced, if point A was closer to origin it would not pass over the origin, so would be rejected
+    // if B was closer, then A would not have been a possible point.
+    vec3 ao;
+    glm_vec3_negate_to(simplex[0], ao);
+    vec3 ab;
+    glm_vec3_sub(simplex[1], simplex[0], ab);
+    glm_vec3_cross(ab, ao, direction);
+    glm_vec3_cross(direction, ab, direction);
+}
+
+/**
+ * Helper function to remove duplicate code for case involving a line segment AB
+ * @param ao[in] The vector from simplex[0] to origin.
+ * @param ab[in] The vector from simplex[0] to simplex[1]
+ * @param direction[out] The new direction to check next time.
+ * @param len_simplex[out] A pointer to the length of the simplex.
+ */
+static void tekUpdateTriangleSimplexLineAB(vec3 ao, vec3 ab, vec3 direction, uint* len_simplex) {
+    // is the line AB in the direction of the origin?
+    if (glm_vec3_dot(ab, ao) > 0.0f) {
+        // new direction is perpendicular to AB towards origin
+        glm_vec3_cross(ab, ao, direction);
+        glm_vec3_cross(direction, ab, direction);
+
+        // update simplex, removing point C
+        *len_simplex = 2;
+    } else {
+        // new direction is pointing from A to origin.
+        glm_vec3_copy(ao, direction);
+
+        // update simplex, removing point B and C
+        *len_simplex = 1;
     }
+}
 
-    // now we need to permute the triangle vertices so that the point at index 0 is alone on it's side of the halfspace.
-    tekFindAndSwapTriangleVertices(triangle_a, sign_array_a);
-    tekFindAndSwapTriangleVertices(triangle_b, sign_array_b);
+/**
+ * Update a simplex which has three points. The final simplex could have between 1 and 3 points, and direction will be changed based on features of simplex.
+ * @param direction[out] The new direction of the simplex.
+ * @param simplex[in/out] The simplex to update.
+ * @param len_simplex[in/out] The length of the simplex.
+ * @return
+ */
+static void tekUpdateTriangleSimplex(vec3 direction, vec3 simplex[4], uint* len_simplex) {
+    // common vectors, used throughout
+    vec3 ao;
+    glm_vec3_negate_to(simplex[0], ao);
+    vec3 ab;
+    glm_vec3_sub(simplex[1], simplex[0], ab);
+    vec3 ac;
+    glm_vec3_sub(simplex[2], simplex[0], ac);
 
-    tekSwapToMakePositive(triangle_b, triangle_a);
-    tekSwapToMakePositive(triangle_a, triangle_b);
+    // find normal of triangle
+    vec3 triangle_normal;
+    glm_vec3_cross(ab, ac, triangle_normal);
 
-    const int orient_a = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[0], triangle_b[1]));
-    if (orient_a > 0) {
-        *collision = 0;
-        return SUCCESS;
-    }
-    const int orient_b = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[2], triangle_b[0]));
-    if (orient_b > 0) {
-        *collision = 0;
-        return SUCCESS;
-    }
-    *collision = 1;
+    // vector perpendicular to line AC and triangle normal
+    vec3 perp_ac;
+    glm_vec3_cross(triangle_normal, ac, perp_ac);
 
-    const int orient_c = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[2], triangle_b[1], triangle_b[0]));
-    const int orient_d = getSign(tekCalculateOrientationPoints(triangle_a[0], triangle_a[1], triangle_b[2], triangle_b[0]));
+    // is the perpendicular line to AC facing the origin?
+    if (glm_vec3_dot(perp_ac, ao) > 0.0f) {
+        // is the line AC itself facing the origin?
+        if (glm_vec3_dot(ac, ao) > 0.0f) {
+            // new direction is perpendicular to AC towards origin
+            glm_vec3_cross(ac, ao, direction);
+            glm_vec3_cross(direction, ac, direction);
 
-    vec3 normal_a, normal_b;
-    triangleNormal(triangle_a, normal_a);
-    triangleNormal(triangle_b, normal_b);
-
-    if (orient_c > 0) {
-        if (orient_d > 0) {
-            // edge of triangle a vs edge of triangle b
-            printf("case 1 ");
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[2], triangle_b[0], normal_b, manifold->contact_points[0]);
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[2], triangle_a[0], normal_a, manifold->contact_points[1]);
-            vec3 edge_a, edge_b;
-            glm_vec3_sub(triangle_a[0], triangle_a[2], edge_a);
-            glm_vec3_sub(triangle_b[0], triangle_b[2], edge_b);
-            tekGetTriangleEdgeContactNormal(edge_b, edge_a, manifold->contact_normal);
+            // update simplex, removing point B
+            glm_vec3_copy(simplex[2], simplex[1]);
+            *len_simplex = 2;
         } else {
-            // vertex of triangle a vs face of triangle b
-            printf("case 2 ");
-            glm_vec3_copy(triangle_a[0], manifold->contact_points[0]);
-            tekGetClosestPointOnTriangle(triangle_a[0], triangle_b, manifold->contact_points[1]);
-            printf("A: %f %f %f, B: %f %f %f\n", EXPAND_VEC3(manifold->contact_points[0]), EXPAND_VEC3(manifold->contact_points[1]));
-            glm_vec3_negate_to(normal_b, manifold->contact_normal);
+            // avoid repeated code by making a small function
+            tekUpdateTriangleSimplexLineAB(ao, ab, direction, len_simplex);
         }
     } else {
-        if (orient_d > 0) {
-            // face of triangle a vs vertex of triangle b
-            printf("case 3 ");
-            tekGetClosestPointOnTriangle(triangle_b[0], triangle_a, manifold->contact_points[0]);
-            glm_vec3_copy(triangle_b[0], manifold->contact_points[1]);
-            glm_vec3_copy(normal_a, manifold->contact_normal);
+        vec3 perp_ab;
+        glm_vec3_cross(ab, triangle_normal, perp_ab);
+        if (glm_vec3_dot(perp_ab, ao) > 0.0f) {
+            // avoid repeated code by making a small function
+            tekUpdateTriangleSimplexLineAB(ao, ab, direction, len_simplex);
         } else {
-            // edge of triangle a vs edge of triangle b
-            printf("case 4 ");
-            tekGetPlaneIntersection(triangle_a[0], triangle_a[1], triangle_b[0], normal_b, manifold->contact_points[0]);
-            tekGetPlaneIntersection(triangle_b[0], triangle_b[1], triangle_a[0], normal_a, manifold->contact_points[1]);
-            vec3 edge_a, edge_b;
-            glm_vec3_sub(triangle_a[0], triangle_a[1], edge_a);
-            glm_vec3_sub(triangle_b[0], triangle_b[1], edge_b);
-            tekGetTriangleEdgeContactNormal(edge_a, edge_b, manifold->contact_normal);
+            // is the origin above the triangle?
+            if (glm_vec3_dot(triangle_normal, ao) > 0.0f) {
+                // new direction is above the triangle
+                glm_vec3_copy(triangle_normal, direction);
+            } else {
+                // new direction is below the triangle.
+                glm_vec3_negate_to(triangle_normal, direction);
+
+                // swap winding order so that next test is consistent
+                vec3 temp;
+                glm_vec3_copy(simplex[1], temp);
+                glm_vec3_copy(simplex[2], simplex[1]);
+                glm_vec3_copy(temp, simplex[2]);
+            }
         }
     }
+}
+
+/**
+ * Update a simplex with 4 vertices. Tests each valid face as a separate triangle, and determines if origin is contained.
+ * @param direction[out] The new direction to test
+ * @param simplex[in/out] The simplex to update.
+ * @param len_simplex[in/out] The length of the simplex.
+ * @return 1 if the origin is contained, 0 if not
+ */
+static int tekUpdateTetrahedronSimplex(vec3 direction, vec3 simplex[4], uint* len_simplex) {
+    // create some commonly used vectors
+    vec3 ao;
+    glm_vec3_negate_to(simplex[0], ao);
+    vec3 ab;
+    glm_vec3_sub(simplex[1], simplex[0], ab);
+    vec3 ac;
+    glm_vec3_sub(simplex[2], simplex[0], ac);
+
+    // check the triangle abc
+    vec3 norm_abc;
+    glm_vec3_cross(ab, ac, norm_abc);
+
+    // is the origin above this triangle?
+    if (glm_vec3_dot(norm_abc, ao) > 0.0f) {
+        *len_simplex = 3;
+        tekUpdateTriangleSimplex(direction, simplex, len_simplex);
+        return 0;
+    }
+
+    // check the triangle acd
+    vec3 ad;
+    glm_vec3_sub(simplex[3], simplex[0], ad);
+    vec3 norm_acd;
+    glm_vec3_cross(ac, ad, norm_acd);
+
+    // is the origin above this triangle?
+    if (glm_vec3_dot(norm_acd, ao) > 0.0f) {
+        // update vertices so that the first 3 are the triangle
+        glm_vec3_copy(simplex[2], simplex[1]);
+        glm_vec3_copy(simplex[3], simplex[2]);
+        *len_simplex = 3;
+        tekUpdateTriangleSimplex(direction, simplex, len_simplex);
+        return 0;
+    }
+
+    // check the triangle adb
+    vec3 norm_adb;
+    glm_vec3_cross(ad, ab, norm_adb);
+
+    // is the origin above this triangle?
+    if (glm_vec3_dot(norm_adb, ao) > 0.0f) {
+        // update vertices
+        glm_vec3_copy(simplex[1], simplex[2]);
+        glm_vec3_copy(simplex[3], simplex[1]);
+        *len_simplex = 3;
+        tekUpdateTriangleSimplex(direction, simplex, len_simplex);
+        return 0;
+    }
+
+    // if the origin is not above any of the triangles, naturally it is below all of them.
+    // this means the origin must be contained within the tetrahedron, as previous tests have confirmed the origin is also behind the triangle bcd
+    // hence return true
+
+    return 1;
+}
+
+/**
+ * Call the correct update function based on the number of vertices in the simplex.
+ * @param direction[out] The new direction to travel in.
+ * @param simplex[in/out] The simplex to update.
+ * @param len_simplex[in/out] The number of vertices in the simplex.
+ * @return 1 if the origin is contained within the simplex, 0 if not or if the simplex is not a tetrahedron.
+ */
+static int tekUpdateSimplex(vec3 direction, vec3 simplex[4], uint* len_simplex) {
+    switch (*len_simplex) {
+    case 2:
+        // length doesn't change, so ignore the length
+        tekUpdateLineSimplex(direction, simplex);
+        break;
+    case 3:
+        tekUpdateTriangleSimplex(direction, simplex, len_simplex);
+        break;
+    case 4:
+        // a tetrahedron is required before we can determine if the simplex contains the origin.
+        return tekUpdateTetrahedronSimplex(direction, simplex, len_simplex);
+    default:
+        break;
+    }
+    return 0;
+}
+
+/**
+ * Check for a collision between two triangles using GJK algorithm
+ * @param triangle_a[in] One of the triangles to test.
+ * @param triangle_b[in] The other triangle to be tested against.
+ * @param simplex[out] The simplex created during the processing of the triangles. (required to exist beforehand)
+ * @param len_simplex[out] The number of vertices in the simplex. (required to exist beforehand)
+ * @return Whether or not the triangles are colliding (0 if not, 1 if they are)
+ */
+// TODO: make static
+int tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], vec3 simplex[4], uint* len_simplex) {
+    // to start GJK algorithm, pick an initial direction
+    // starting with vector between triangle centres is okay
+    vec3 sum_a;
+    sumVec3(sum_a, triangle_a[0], triangle_a[1], triangle_a[2]);
+    vec3 sum_b;
+    sumVec3(sum_b, triangle_b[0], triangle_b[1], triangle_b[2]);
+    vec3 direction;
+    glm_vec3_sub(sum_b, sum_a, direction);
+
+    // add an initial point to the simplex
+    // find this point by running support function on our initial direction
+    tekTriangleSupport(triangle_a, triangle_b, direction, simplex[0]);
+    *len_simplex = 1;
+
+    // the next direction to check is the opposite to what we started with
+    // this point is already the maximum of this direction, so if we kept going this way we'd find nothing
+    glm_vec3_negate(direction);
+
+    // find the second point of the simplex.
+    vec3 support;
+    tekTriangleSupport(triangle_a, triangle_b, direction, support);
+
+    // begin the iterative process
+    // if projecting the new support point against the direction yields a negative value,
+    // it means that the new support creates a simplex that does not contain the origin. so no collision.
+    while (glm_vec3_dot(support, direction) >= 0.0f) {
+        // if point is valid, add it to the start of the simplex.
+        // shift all the points backwards first
+        memmove(simplex[1], simplex[0], 3 * sizeof(vec3));
+        glm_vec3_copy(support, simplex[0]);
+        (*len_simplex)++;
+
+        // update simplex. if returns true, then the origin is contained so we can stop searching
+        if (tekUpdateSimplex(direction, simplex, len_simplex))
+            return 1;
+
+        // find the next support point.
+        tekTriangleSupport(triangle_a, triangle_b, direction, support);
+    }
+
+    return 0;
+}
+
+static void tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, TekCollisionManifold* manifold) {
+    *collision = 0;
 
     if (manifold->contact_normal[0] >= 0.57735f) { // ~= 1 / sqrt(3)
         manifold->tangent_vectors[0][0] = manifold->contact_normal[1];
@@ -574,8 +788,6 @@ exception tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag
     for (uint i = 0; i < NUM_CONSTRAINTS; i++) {
         manifold->impulses[i] = 0.0f;
     }
-
-    return SUCCESS;
 }
 
 static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_triangles_a, vec3* triangles_b, const uint num_triangles_b, flag* collision, TekCollisionManifold* manifold) {
