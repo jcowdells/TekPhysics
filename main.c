@@ -1117,27 +1117,32 @@ exception run() {
 }
 
 exception test() {
-    vec3 triangle_a[] = {
-        -1.0f, 0.0f, 0.0f,
-        1.0f, 0.0f, 0.0f,
-        1.0f, 1.0f, 0.0f
-    };
-    vec3 triangle_b[] = {
-        0.0f, 0.0f, -1.0f,
-        0.0f, 0.0f, 1.0f,
-        0.1f, 1.0f, 1.0f
-    };
-
-    flag collision;
-    tekTestTriangleCollision(triangle_a, triangle_b, &collision);
-
-    printf("Triangles %s collide.", collision ? "do" : "do not");
+    // collision, edge-edge
+    // vec3 triangle_a[] = {
+    //     -3.899998903274536f, 1.0f, 0.4000000059604645f,
+    //     -3.899998903274536f, -1.0f, -1.600000023841858f,
+    //     -3.899998903274536f, -1.0f, 0.4000000059604645f
+    // };
+    // vec3 triangle_b[] = {
+    //     -7.699529647827148f, -0.09204673767089844f, 1.138580322265625f,
+    //     -2.272846221923828f, -0.3501014709472656f, -0.9045963287353516f,
+    //     -3.4732666015625f, 1.5256071090698242f, -3.1470260620117188f
+    // };
+    //
+    // flag collision;
+    // tekTestTriangleCollision(triangle_a, triangle_b, &collision);
+    //
+    // printf("Triangles %s collide.\n", collision ? "do" : "do not");
+    //
+    // vec3 point;
+    // tekProjectOriginOnTriangle(triangle_b, point);
+    // printf("Point: %f %f %f\n", EXPAND_VEC3(point));
 
     return SUCCESS;
 }
 
 int main(void) {
     tekInitExceptions();
-    tekLog(test());
+    tekLog(run());
     tekCloseExceptions();
 }

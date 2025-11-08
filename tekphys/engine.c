@@ -421,19 +421,6 @@ static void tekEngine(void* args) {
         if (step) paused = 0;
 
         if (mode == MODE_RUNNER && !paused) {
-            for (uint i = 0; i < bodies.length; i++) {
-                TekBody* body = 0;
-                threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
-                if (!body->num_vertices) continue;
-                if (body->immovable) {
-                    glm_vec3_zero(body->velocity);
-                    glm_vec3_zero(body->angular_velocity);
-                } else {
-                    tekBodyAdvanceTime(body, (float)phys_period);
-                }
-                threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
-            }
-
             TekBody* body_id1;
             threadChainThrow(vectorGetItemPtr(&bodies, 1, &body_id1));
             if (body_id1->num_vertices) {
@@ -446,6 +433,19 @@ static void tekEngine(void* args) {
                 vec3 delta_velocity;
                 glm_vec3_sub(body_id1->velocity, initial_velocity, delta_velocity);
                 printf("Change in Velocity: %f %f %f\n", EXPAND_VEC3(delta_velocity));
+            }
+
+            for (uint i = 0; i < bodies.length; i++) {
+                TekBody* body = 0;
+                threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
+                if (!body->num_vertices) continue;
+                if (body->immovable) {
+                    glm_vec3_zero(body->velocity);
+                    glm_vec3_zero(body->angular_velocity);
+                } else {
+                    tekBodyAdvanceTime(body, (float)phys_period);
+                }
+                threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
             }
         }
 

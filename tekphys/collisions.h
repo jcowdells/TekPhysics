@@ -14,9 +14,9 @@
 
 #define NUM_ITERATIONS 20
 
-#define BAUMGARTE_BETA   0.2f
+#define BAUMGARTE_BETA   0.1f
 #define MIN_PENETRATION  0.005f
-#define SLOP             0.005f
+#define SLOP             0.01f
 #define POSITION_EPSILON 1e-4f
 
 typedef struct TekCollisionManifold {
@@ -31,7 +31,6 @@ typedef struct TekCollisionManifold {
     float impulses[NUM_CONSTRAINTS];
 } TekCollisionManifold;
 
-exception tekTestTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision);
 exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* collision, Vector* manifold_vector);
 exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifold* manifold);
 exception tekSolveCollisions(const Vector* bodies, float phys_period);

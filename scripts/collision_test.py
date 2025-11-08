@@ -1025,6 +1025,8 @@ def main():
                                              np.array([0.0, 0.0, 1.0]),
                                              np.array([0.0, 1.0, 1.0]))
 
+    vector = VectorDisplayEntity(np.array([0.0, 0.0, 0.0]), np.array([-1.0, 0.0, 1.0]))
+
     EditorCamera()  # add camera controls for orbiting and moving the camera
 
     app.run()
