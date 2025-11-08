@@ -155,6 +155,60 @@ exception bitsetGet(const BitSet* bitset, const uint index, flag* value) {
 }
 
 /**
+ * Helper function to get a 1D index from a 2D coordinate.
+ * The index snakes across a grid, so if the bitset expands, the coordinates still map to the same index in the array.
+ * All credit goes to me at 2:30am on a random saturday for this idea.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @return The 1D index.
+ */
+static uint bitsetGet1DIndex(const uint x, const uint y) {
+    if (y > x) {
+        return y * y + 2 * y - x;
+    }
+    return x * x + y;
+}
+
+/**
+ * Set the bitset at a coordinate (x, y)
+ * @param bitset The bitset to set
+ * @param x The x coordinate
+ * @param y The y coordinate
+ * @throws MEMORY_EXCEPTION if malloc() fails
+ *  * @throws BITSET_EXCEPTION if index out of range, and growth disabled.
+ */
+exception bitsetSet2D(BitSet* bitset, const uint x, const uint y) {
+    tekChainThrow(bitsetSet(bitset, bitsetGet1DIndex(x, y)));
+    return SUCCESS;
+}
+
+/**
+ * Unset the bitset at a coordinate (x, y)
+ * @param bitset The bitset to unset
+ * @param x The x coordinate
+ * @param y The y coordinate
+ * @throws MEMORY_EXCEPTION if malloc() fails
+ *  * @throws BITSET_EXCEPTION if index out of range, and growth disabled.
+ */
+exception bitsetUnset2D(BitSet* bitset, const uint x, const uint y) {
+    tekChainThrow(bitsetUnset(bitset, bitsetGet1DIndex(x, y)));
+    return SUCCESS;
+}
+
+/**
+ * Get the bitset at a coordinate (x, y)
+ * @param bitset The bitset to set
+ * @param x The x coordinate
+ * @param y The y coordinate
+ * @param value The value of the bitset at that coordinate.
+ * @throws BITSET_EXCEPTION if index out of range, and growth disabled.
+ */
+exception bitsetGet2D(const BitSet* bitset, const uint x, const uint y, flag* value) {
+    tekChainThrow(bitsetGet(bitset, bitsetGet1DIndex(x, y), value));
+    return SUCCESS;
+}
+
+/**
  * Set all bits to zero.
  * @param bitset The bitset to operate on.
  */

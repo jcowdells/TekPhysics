@@ -1117,22 +1117,21 @@ exception run() {
 }
 
 exception test() {
-    vec3 simplex[4];
-    uint len_simplex = 0;
-
-    // collision edge-edge thin triangle
     vec3 triangle_a[] = {
-        -4.045312881469727f, 1.3941442966461182f, -0.2711498737335205f,
-        -4.219749450683594f, -1.6143264770507812f, -1.8251595497131348f,
-        -4.2927398681640625f, -1.6425457000732422f, -1.27229642868042f
+        -1.0f, 0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f,
+        1.0f, 1.0f, 0.0f
     };
     vec3 triangle_b[] = {
-        -12.106782913208008f, -0.5466670989990234f, -1.669647216796875f,
-        -2.272846221923828f, -0.3501014709472656f, -0.9045963287353516f,
-        -5.756383895874023f, -0.3544025421142578f, -1.8286619186401367f
+        0.0f, 0.0f, -1.0f,
+        0.0f, 0.0f, 1.0f,
+        0.1f, 1.0f, 1.0f
     };
 
-    printf("Triangles %s collide.", tekCheckTriangleCollision(triangle_a, triangle_b, simplex, &len_simplex) ? "do" : "do not");
+    flag collision;
+    tekTestTriangleCollision(triangle_a, triangle_b, &collision);
+
+    printf("Triangles %s collide.", collision ? "do" : "do not");
 
     return SUCCESS;
 }

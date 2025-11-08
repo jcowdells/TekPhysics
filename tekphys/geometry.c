@@ -3,8 +3,14 @@
 #include "../tekgl.h"
 #include <cglm/vec4.h>
 #include <stdarg.h>
+#include <time.h>
 #include <cglm/mat3.h>
 #include <cglm/mat4.h>
+#include "../tekgl/manager.h"
+
+tek_init tekInitGeometry() {
+    srand(time(0));
+}
 
 /**
  * @brief Find the sum of a number of vec3s.
@@ -219,4 +225,8 @@ void triangleNormal(vec3 triangle[3], vec3 normal) {
     glm_vec3_sub(triangle[2], triangle[0], vec_ac);
     glm_vec3_cross(vec_ab, vec_ac, normal);
     glm_vec3_normalize(normal);
+}
+
+float randomFloat(const float min, const float max) {
+    return ((max - min) * ((float)rand() / (float)RAND_MAX)) + min;
 }

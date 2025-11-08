@@ -1018,12 +1018,12 @@ def main():
 
     # collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
 
-    collision_test_3 = TriangleCollisionTest(np.array([-3.899999, 1.000000, 0.400000]),
-                                             np.array([-3.899999, -1.000000, -1.600000]),
-                                             np.array([-3.899999, -1.000000, 0.400000]),
-                                             np.array([1.000000, -1.000000, 1.000000]),
-                                             np.array([-1.000000, -1.000000, 1.000000]),
-                                             np.array([1.000000, -1.000000, -1.000000]))
+    collision_test_3 = TriangleCollisionTest(np.array([-1.0, 0.0, 0.0]),
+                                             np.array([1.0, 0.0, 0.0]),
+                                             np.array([1.0, 1.0, 0.0]),
+                                             np.array([0.0, 0.0, -1.0]),
+                                             np.array([0.0, 0.0, 1.0]),
+                                             np.array([0.0, 1.0, 1.0]))
 
     EditorCamera()  # add camera controls for orbiting and moving the camera
 

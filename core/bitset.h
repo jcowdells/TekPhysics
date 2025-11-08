@@ -17,4 +17,9 @@ void bitsetDelete(BitSet* bitset);
 exception bitsetSet(BitSet* bitset, uint index);
 exception bitsetUnset(BitSet* bitset, uint index);
 exception bitsetGet(const BitSet* bitset, uint index, flag* value);
+
+exception bitsetSet2D(BitSet* bitset, uint x, uint y);
+exception bitsetUnset2D(BitSet* bitset, uint x, uint y);
+exception bitsetGet2D(const BitSet* bitset, uint x, uint y, flag* value);
+
 void bitsetClear(const BitSet* bitset);
