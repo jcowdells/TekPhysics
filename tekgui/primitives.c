@@ -40,12 +40,12 @@ static exception tekGuiCreateRectangularMesh(vec2 point_a, vec2 point_b, TekMesh
     return SUCCESS;
 }
 
-static exception tekGuiCreateImageMesh(vec2 point_a, vec2 point_b, TekMesh* mesh) {
+static exception tekGuiCreateImageMesh(const float width, const float height, TekMesh* mesh) {
     const float vertices[] = {
-        point_a[0], point_a[1], 0.0f, 1.0f,
-        point_a[0], point_b[1], 0.0f, 0.0f,
-        point_b[0], point_b[1], 1.0f, 0.0f,
-        point_b[0], point_a[1], 1.0f, 1.0f
+        0.0f, 0.0f, 0.0f, 1.0f,
+        0.0f, height, 0.0f, 0.0f,
+        width, height, 1.0f, 0.0f,
+        width, 0.0f, 1.0f, 1.0f
     };
 
     const uint indices[] = {
@@ -173,8 +173,8 @@ void tekGuiDeleteOval(const TekGuiOval* oval) {
     tekDeleteMesh(&oval->mesh);
 }
 
-exception tekGuiCreateImage(vec2 point_a, vec2 point_b, const char* texture_filename, TekGuiImage* image) {
-    tekChainThrow(tekGuiCreateImageMesh(point_a, point_b, &image->mesh));
+exception tekGuiCreateImage(const float width, const float height, const char* texture_filename, TekGuiImage* image) {
+    tekChainThrow(tekGuiCreateImageMesh(width, height, &image->mesh));
     tekChainThrowThen(tekCreateTexture(texture_filename, &image->texture_id), {
         tekDeleteMesh(&image->mesh);
     });
@@ -182,11 +182,12 @@ exception tekGuiCreateImage(vec2 point_a, vec2 point_b, const char* texture_file
     return SUCCESS;
 }
 
-exception tekGuiDrawImage(const TekGuiImage* image) {
+exception tekGuiDrawImage(const TekGuiImage* image, const float x, const float y) {
     tekBindShaderProgram(image_shader_program);
     tekBindTexture(image->texture_id, 0);
     tekChainThrow(tekShaderUniformMat4(image_shader_program, "projection", projection));
     tekChainThrow(tekShaderUniformInt(image_shader_program, "texture_sampler", 0));
+    tekChainThrow(tekShaderUniformVec2(image_shader_program, "start_position", (vec2){x, y}));
     tekDrawMesh(&image->mesh);
     return SUCCESS;
 }

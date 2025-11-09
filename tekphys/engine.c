@@ -315,13 +315,6 @@ static void tekEngine(void* args) {
     Queue unused_ids = {};
     queueCreate(&unused_ids);
 
-    flag mouse_moved = 0, mouse_moving = 0;
-    flag w = 0, a = 0, s = 0, d = 0, q = 0;
-    double prev_mx = 0.0, prev_my = 0.0, cur_mx = 0.0, cur_my = 0.0, delta_mx = 0.0, delta_my = 0.0;
-    flag cam_pos_changed = 0;
-    vec3 rotation = { 0.0f, 0.0f, 0.0f };
-    vec3 position = { 0.0f, 0.0f, 0.0f };
-
     struct timespec engine_time, step_time;
     double phys_period_s = floor(phys_period);
     step_time.tv_sec = (__time_t)phys_period_s;
@@ -332,10 +325,10 @@ static void tekEngine(void* args) {
     flag mode = 0;
     flag paused = 0;
     flag step = 0;
+    float gravity = 9.81f;
 
     mat4 snapshot_rotation_matrix;
     vec4 snapshot_rotation_quat;
-    uint snapshot_body_id;
     TekBody* snapshot_body;
 
     while (running) {
@@ -411,6 +404,8 @@ static void tekEngine(void* args) {
                 if (paused)
                     step = 1;
                 break;
+            case GRAVITY_EVENT:
+                gravity = event.data.gravity;
             default:
                 break;
             }
@@ -421,19 +416,7 @@ static void tekEngine(void* args) {
         if (step) paused = 0;
 
         if (mode == MODE_RUNNER && !paused) {
-            TekBody* body_id1;
-            threadChainThrow(vectorGetItemPtr(&bodies, 1, &body_id1));
-            if (body_id1->num_vertices) {
-                vec3 initial_velocity;
-                glm_vec3_copy(body_id1->velocity, initial_velocity);
-
-                printf("=== == === == === == ===\n");
-                threadChainThrow(tekSolveCollisions(&bodies, (float)phys_period));
-
-                vec3 delta_velocity;
-                glm_vec3_sub(body_id1->velocity, initial_velocity, delta_velocity);
-                printf("Change in Velocity: %f %f %f\n", EXPAND_VEC3(delta_velocity));
-            }
+            threadChainThrow(tekSolveCollisions(&bodies, (float)phys_period));
 
             for (uint i = 0; i < bodies.length; i++) {
                 TekBody* body = 0;
@@ -443,7 +426,7 @@ static void tekEngine(void* args) {
                     glm_vec3_zero(body->velocity);
                     glm_vec3_zero(body->angular_velocity);
                 }
-                tekBodyAdvanceTime(body, (float)phys_period);
+                tekBodyAdvanceTime(body, (float)phys_period, gravity);
                 threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
             }
         }

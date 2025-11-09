@@ -17,6 +17,7 @@
 #define TIME_EVENT         8
 #define PAUSE_EVENT        9
 #define STEP_EVENT         10
+#define GRAVITY_EVENT      11
 
 #define MESSAGE_STATE       0
 #define EXCEPTION_STATE     1
@@ -50,6 +51,7 @@ typedef struct TekEvent {
             double speed;
         } time;
         flag paused;
+        float gravity;
     } data;
 } TekEvent;
 

@@ -47,6 +47,12 @@
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT 480
 
+#define START_BUTTON_WIDTH  100
+#define START_BUTTON_HEIGHT 50
+
+#define LOGO_WIDTH 300.0f
+#define LOGO_HEIGHT 50.0f
+
 #define SAVE_OPTION 0
 #define LOAD_OPTION 1
 #define RUN_OPTION  2
@@ -59,6 +65,14 @@
 #define DEFAULT_RATE 100.0
 #define DEFAULT_SPEED  1.0
 
+struct TekScenarioOptions {
+    float gravity;
+    double rate;
+    double speed;
+    flag pause;
+    vec3 sky_colour;
+};
+
 struct TekGuiComponents {
     TekGuiTextButton start_button;
     TekGuiImage logo;
@@ -66,6 +80,7 @@ struct TekGuiComponents {
     TekGuiListWindow hierarchy_window;
     TekGuiOptionWindow editor_window;
     TekGuiListWindow action_window;
+    TekGuiOptionWindow scenario_window;
     TekGuiOptionWindow save_window;
     TekGuiOptionWindow load_window;
     TekGuiOptionWindow runner_window;
@@ -76,26 +91,13 @@ flag next_mode = -1;
 int hierarchy_index = -1;
 
 float width, height;
-mat4 perp_projection;
 ThreadQueue event_queue = {};
-
-uint depth = 0;
-char depth_message[64];
-flag text_init = 0;
-TekText depth_text = {};
-TekBitmapFont depth_font = {};
 
 double mouse_x = 0.0, mouse_y = 0.0;
 float mouse_dx = 0.0f, mouse_dy = 0.0f;
 flag mouse_moved = 0, mouse_right = 0;
 flag w_pressed = 0, a_pressed = 0, s_pressed = 0, d_pressed = 0;
 TekScenario active_scenario = {};
-
-void tekMainFramebufferCallback(const int fb_width, const int fb_height) {
-    width = (float)fb_width;
-    height = (float)fb_height;
-    glm_perspective(1.2f, width / height, 0.1f, 100.0f, perp_projection);
-}
 
 void tekMainKeyCallback(const int key, const int scancode, const int action, const int mods) {
     if (key == GLFW_KEY_W) {
@@ -314,17 +316,26 @@ static exception tekSimulationSpeedEvent(const double rate, const double speed, 
     return SUCCESS;
 }
 
+static exception tekPauseEvent(const flag paused) {
+    TekEvent event = {};
+    event.type = PAUSE_EVENT;
+    event.data.paused = paused;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    return SUCCESS;
+}
+
 static void tekHideAllWindows(struct TekGuiComponents* gui) {
     gui->hierarchy_window.window.visible = 0;
     gui->editor_window.window.visible = 0;
     gui->action_window.window.visible = 0;
+    gui->scenario_window.window.visible = 0;
     gui->save_window.window.visible = 0;
     gui->load_window.window.visible = 0;
     gui->runner_window.window.visible = 0;
 }
 
 static exception tekSwitchToMainMenu(struct TekGuiComponents* gui) {
-    tekSetWindowColour((vec3){0.3f, 0.3f, 0.3f});
     tekGuiBringButtonToFront(&gui->start_button.button);
     tekHideAllWindows(gui);
     return SUCCESS;
@@ -334,10 +345,17 @@ static exception tekSwitchToBuilderMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->hierarchy_window.window.visible = 1;
     gui->action_window.window.visible = 1;
+    gui->scenario_window.window.visible = 1;
     tekChainThrow(tekGuiBringWindowToFront(&gui->hierarchy_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->action_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->editor_window.window));
+    tekChainThrow(tekGuiBringWindowToFront(&gui->scenario_window.window));
     tekChainThrow(tekRestartScenario(&active_scenario));
+
+    flag begin_paused;
+    tekChainThrow(tekGuiReadBooleanOption(&gui->scenario_window, "pause", &begin_paused));
+    tekChainThrow(tekPauseEvent(begin_paused));
+
     return SUCCESS;
 }
 
@@ -373,7 +391,6 @@ static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->runner_window.window.visible = 1;
     tekChainThrow(tekGuiBringWindowToFront(&gui->runner_window.window));
-    tekChainThrow(tekSimulationSpeedEvent(DEFAULT_RATE, DEFAULT_SPEED, &gui->runner_window));
 
     return SUCCESS;
 }
@@ -425,28 +442,31 @@ static void tekStartButtonCallback(TekGuiTextButton* button, TekGuiButtonCallbac
 }
 
 static exception tekCreateMainMenu(const int window_width, const int window_height, struct TekGuiComponents* gui) {
-    tekChainThrow(tekGuiCreateTextButton("Start", &gui->start_button));
-    tekChainThrow(tekGuiSetTextButtonPosition(&gui->start_button, window_width / 2 - 100, window_height / 2 - 50));
+    tekChainThrow(tekGuiCreateTextButton("", &gui->start_button));
+    gui->start_button.text_height = 25;
+    tekChainThrow(tekGuiSetTextButtonText(&gui->start_button, "Start"));
+    tekChainThrow(tekGuiSetTextButtonSize(&gui->start_button, START_BUTTON_WIDTH, START_BUTTON_HEIGHT));
+    tekChainThrow(tekGuiSetTextButtonPosition(&gui->start_button, (window_width - START_BUTTON_WIDTH) / 2 , (window_height - START_BUTTON_HEIGHT) / 2));
     gui->start_button.text_height = 50;
     gui->start_button.callback = tekStartButtonCallback;
-    const float centre_x = (float)window_width / 2;
-    const float centre_y = 100.0f;
-    const float half_width = 150;
-    const float half_height = 25;
     tekChainThrow(tekGuiCreateImage(
-        (vec2){centre_x - half_width, centre_y - half_height},
-        (vec2){centre_x + half_width, centre_y + half_height},
+        LOGO_WIDTH, LOGO_HEIGHT,
         "../res/tekphysics.png",
         &gui->logo
     ));
     return SUCCESS;
 }
 
-static exception tekDrawMainMenu(const struct TekGuiComponents* gui) {
+static exception tekDrawMainMenu(struct TekGuiComponents* gui) {
     int window_width, window_height;
     tekGetWindowSize(&window_width, &window_height);
     tekGuiDrawTextButton(&gui->start_button);
-    tekGuiDrawImage(&gui->logo);
+
+    const float x = ((float)window_width - LOGO_WIDTH) / 2.0f;
+    const float y = (float)window_height / 4.0f - LOGO_HEIGHT / 2.0f;
+
+    tekGuiDrawImage(&gui->logo, x, y);
+    tekGuiSetTextButtonPosition(&gui->start_button, (window_width - START_BUTTON_WIDTH) / 2 , (window_height - START_BUTTON_HEIGHT) / 2);
     return SUCCESS;
 }
 
@@ -695,6 +715,26 @@ static exception tekCreateActionsList(List** actions_list) {
     return SUCCESS;
 }
 
+static exception tekScenarioCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
+    if (!strcmp(callback_data.name, "gravity")) {
+        return SUCCESS;
+    }
+
+    if (!strcmp(callback_data.name, "pause")) {
+        flag begin_paused;
+        tekChainThrow(tekGuiReadBooleanOption(window, "pause", &begin_paused));
+        tekChainThrow(tekPauseEvent(begin_paused));
+    }
+
+    if (!strcmp(callback_data.name, "sky_colour")) {
+        vec3 sky_colour;
+        tekChainThrow(tekGuiReadVec3Option(window, "sky_colour", sky_colour));
+        tekSetWindowColour(sky_colour);
+    }
+
+    return SUCCESS;
+}
+
 static exception tekCreateBuilderMenu(const int window_width, const int window_height, struct TekGuiComponents* gui) {
     tekCreateScenario(&active_scenario);
     tekChainThrow(tekGuiCreateListWindow(&gui->hierarchy_window, &active_scenario.names));
@@ -714,6 +754,17 @@ static exception tekCreateBuilderMenu(const int window_width, const int window_h
     tekChainThrow(tekGuiCreateListWindow(&gui->action_window, actions_list));
     tekChainThrow(tekGuiSetWindowTitle(&gui->action_window.window, "Actions"))
     tekGuiSetWindowPosition(&gui->action_window.window, 10, window_height - (int)gui->action_window.window.height - 10);
+
+    tekChainThrow(tekGuiCreateOptionWindow("../res/windows/scenario.yml", &gui->scenario_window));
+    tekChainThrow(tekGuiWriteNumberOption(&gui->scenario_window, "gravity", 9.81));
+    tekChainThrow(tekGuiWriteBooleanOption(&gui->scenario_window, "pause", 0));
+
+    vec3 sky_colour = {0.3f, 0.3f, 0.3f};
+    tekChainThrow(tekGuiWriteVec3Option(&gui->scenario_window, "sky_colour", sky_colour));
+    tekSetWindowColour(sky_colour);
+
+    gui->scenario_window.callback = tekScenarioCallback;
+    gui->scenario_window.data = &gui->runner_window;
 
     return SUCCESS;
 }
@@ -776,15 +827,6 @@ static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
 
         next_mode = MODE_BUILDER;
     }
-
-    return SUCCESS;
-}
-
-static exception tekPauseEvent(const flag paused) {
-    TekEvent event = {};
-    event.type = PAUSE_EVENT;
-    event.data.paused = paused;
-    tekChainThrow(pushEvent(&event_queue, event));
 
     return SUCCESS;
 }
@@ -973,8 +1015,6 @@ exception run() {
     // some random but useful values
     vec3 camera_position = {0.0f, 0.0f, 0.0f};
     vec3 camera_rotation = {0.0f, 0.0f, 0.0f};
-    const vec3 light_color = {0.4f, 0.4f, 0.4f};
-    const vec3 light_position = {4.0f, 12.0f, 0.0f};
 
     struct TekGuiComponents gui = {};
 
@@ -1119,14 +1159,14 @@ exception run() {
 exception test() {
     // no collision, flat above
     vec3 triangle_a[] = {
-        -3.899998903274536f, 1.0f, 0.4000000059604645f,
-        -3.899998903274536f, -1.0f, -1.600000023841858f,
-        -3.899998903274536f, -1.0f, 0.4000000059604645f
+        0.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f,
+        1.0f, 0.0f, 1.0f
     };
     vec3 triangle_b[] = {
-        -8.67393684387207f, 1.3345527648925781f, 1.2968101501464844f,
-        -2.1538352966308594f, 1.7920713424682617f, 0.4208393096923828f,
-        -3.4732666015625f, 1.5256071090698242f, -3.1470260620117188f
+        0.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.2f,
+        1.0f, 0.0f, 1.2f
     };
 
     int collision = tekTriangleTest(triangle_a, triangle_b);

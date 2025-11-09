@@ -183,10 +183,17 @@ exception tekCreateBody(const char* mesh_filename, const float mass, const float
  * @brief Simulate the effect of a certain amount of time passing on the body's position and rotation.
  * @note Simulate linearly, e.g. with constant acceleration between the two points in time.
  * @param body The body to advance forward in time.
- * @paran delta_time The length of time to advance by.
+ * @param delta_time The length of time to advance by.
+ * @param gravity The downwards acceleration due to gravity.
  */
-void tekBodyAdvanceTime(TekBody* body, const float delta_time) {
+void tekBodyAdvanceTime(TekBody* body, const float delta_time, const float gravity) {
+    if (body->immovable) {
+        tekBodyUpdateTransform(body);
+        return;
+    }
+
     vec3 delta_position = { 0.0f, 0.0f, 0.0f };
+    body->velocity[1] -= gravity * delta_time;
     glm_vec3_scale(body->velocity, delta_time, delta_position);
     glm_vec3_add(body->position, delta_position, body->position);
 

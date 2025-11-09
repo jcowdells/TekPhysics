@@ -1,0 +1,20 @@
+title: "Run Options"
+x_pos: 10
+y_pos: 30
+width: 240
+height: 410
+text_height: 16
+input_width: 100
+options:
+  gravity:
+    label: "Acceleration due to gravity:"
+    type: $tek_number_input
+    index: 0
+  pause:
+    label: "Begin paused?:"
+    type: $tek_boolean_input
+    index: 30
+  sky_colour:
+    label: "Sky colour:"
+    type: $tek_vec3_input
+    index: 40

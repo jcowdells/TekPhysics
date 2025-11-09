@@ -32,6 +32,6 @@ exception tekGuiCreateOval(vec2 point_a, vec2 point_b, float thickness, flag fil
 exception tekGuiDrawOval(const TekGuiOval* oval);
 void tekGuiDeleteOval(const TekGuiOval* oval);
 
-exception tekGuiCreateImage(vec2 point_a, vec2 point_b, const char* texture_filename, TekGuiImage* image);
-exception tekGuiDrawImage(const TekGuiImage* image);
+exception tekGuiCreateImage(float width, float height, const char* texture_filename, TekGuiImage* image);
+exception tekGuiDrawImage(const TekGuiImage* image, float x, float y);
 void tekGuiDeleteImage(const TekGuiImage* image);

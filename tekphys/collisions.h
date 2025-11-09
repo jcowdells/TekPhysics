@@ -14,7 +14,7 @@
 
 #define NUM_ITERATIONS 32
 
-#define BAUMGARTE_BETA   0.1f
+#define BAUMGARTE_BETA   0.2f
 #define MIN_PENETRATION  0.005f
 #define SLOP             0.01f
 #define POSITION_EPSILON 1e-4f

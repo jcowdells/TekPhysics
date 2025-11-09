@@ -49,7 +49,7 @@ typedef struct TekBodySnapshot {
 } TekBodySnapshot;
 
 exception tekCreateBody(const char* mesh_filename, float mass, float friction, float restitution, vec3 position, vec4 rotation, vec3 scale, TekBody* body);
-void tekBodyAdvanceTime(TekBody* body, float delta_time);
+void tekBodyAdvanceTime(TekBody* body, float delta_time, float gravity);
 void tekDeleteBody(const TekBody* body);
 void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse, float delta_time);
 exception tekBodySetMass(TekBody* body, float mass);
