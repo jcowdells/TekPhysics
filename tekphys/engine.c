@@ -442,9 +442,8 @@ static void tekEngine(void* args) {
                 if (body->immovable) {
                     glm_vec3_zero(body->velocity);
                     glm_vec3_zero(body->angular_velocity);
-                } else {
-                    tekBodyAdvanceTime(body, (float)phys_period);
                 }
+                tekBodyAdvanceTime(body, (float)phys_period);
                 threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
             }
         }

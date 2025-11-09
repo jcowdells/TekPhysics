@@ -1117,22 +1117,21 @@ exception run() {
 }
 
 exception test() {
-    // collision, edge-edge
-    // vec3 triangle_a[] = {
-    //     -3.899998903274536f, 1.0f, 0.4000000059604645f,
-    //     -3.899998903274536f, -1.0f, -1.600000023841858f,
-    //     -3.899998903274536f, -1.0f, 0.4000000059604645f
-    // };
-    // vec3 triangle_b[] = {
-    //     -7.699529647827148f, -0.09204673767089844f, 1.138580322265625f,
-    //     -2.272846221923828f, -0.3501014709472656f, -0.9045963287353516f,
-    //     -3.4732666015625f, 1.5256071090698242f, -3.1470260620117188f
-    // };
-    //
-    // flag collision;
-    // tekTestTriangleCollision(triangle_a, triangle_b, &collision);
-    //
-    // printf("Triangles %s collide.\n", collision ? "do" : "do not");
+    // no collision, flat above
+    vec3 triangle_a[] = {
+        -3.899998903274536f, 1.0f, 0.4000000059604645f,
+        -3.899998903274536f, -1.0f, -1.600000023841858f,
+        -3.899998903274536f, -1.0f, 0.4000000059604645f
+    };
+    vec3 triangle_b[] = {
+        -8.67393684387207f, 1.3345527648925781f, 1.2968101501464844f,
+        -2.1538352966308594f, 1.7920713424682617f, 0.4208393096923828f,
+        -3.4732666015625f, 1.5256071090698242f, -3.1470260620117188f
+    };
+
+    int collision = tekTriangleTest(triangle_a, triangle_b);
+
+    printf("Triangles %s collide.\n", collision ? "do" : "do not");
     //
     // vec3 point;
     // tekProjectOriginOnTriangle(triangle_b, point);
