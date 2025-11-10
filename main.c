@@ -1002,7 +1002,6 @@ exception run() {
     // initialise the engine.
     TekEvent quit_event;
     quit_event.type = QUIT_EVENT;
-    quit_event.data.message = 0;
     unsigned long long engine_thread;
     tekChainThrowThen(tekInitEngine(&event_queue, &state_queue, 1.0 / 30.0, &engine_thread), {
         vectorDelete(&bodies);

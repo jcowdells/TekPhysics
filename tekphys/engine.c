@@ -80,22 +80,6 @@ static exception func_name(ThreadQueue* state_queue, const vec3 param_name) { \
 } \
 
 /**
- * @brief Send a state that updates the camera position.
- * @param state_queue The state queue (ThreadQueue) to push the state to.
- * @param cam_position The new position of the camera.
- * @throws MEMORY_EXCEPTION if malloc() fails.
- */
-CAM_UPDATE_FUNC(tekUpdateCamPos, cam_position, CAMERA_MOVE_STATE);
-
-/**
- * @brief Send a state that updates the camera rotation.
- * @param state_queue The state queue (ThreadQueue) to push the camera rotation to.
- * @param cam_rotation The new rotation of the camera.
- * @throws MEMORY_EXCEPTION if malloc() fails.
- */
-CAM_UPDATE_FUNC(tekUpdateCamRot, cam_rotation, CAMERA_ROTATE_STATE);
-
-/**
  * @brief Send a print message through the state queue.
  * @param state_queue The state queue to send the message through.
  * @param format The message to send + formatting e.g. "string: %s"
