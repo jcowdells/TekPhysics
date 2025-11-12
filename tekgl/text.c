@@ -200,6 +200,42 @@ exception tekDrawColouredText(const TekText* tek_text, const float x, const floa
     return SUCCESS;
 }
 
+exception tekDrawColouredRotatedText(const TekText* tek_text, const float x, const float y, const vec4 colour, const float rot_x, const float rot_y, const float angle) {
+    // make sure that text engine has been initialised, and bind it
+    if (!text_shader_program_id) tekThrow(OPENGL_EXCEPTION, "No text shader is available to use.");
+    tekBindShaderProgram(text_shader_program_id);
+
+    // create a rotation matrix
+    const float sin_angle = sinf(angle);
+    const float cos_angle = cosf(angle);
+
+    mat4 rotation;
+    glm_mat4_identity(rotation);
+    rotation[0][0] = cos_angle;
+    rotation[1][0] = -sin_angle;
+    rotation[3][0] = rot_x * (1 - cos_angle) + rot_y * sin_angle;
+    rotation[0][1] = sin_angle;
+    rotation[1][1] = cos_angle;
+    rotation[3][1] = rot_y * (1 - cos_angle) - rot_x * sin_angle;
+
+    glm_mat4_mul(text_projection, rotation, rotation);
+
+    // bind font atlas texture
+    tekBindTexture(tek_text->font->atlas_id, 0);
+
+    // set all of our shader uniforms for drawing text
+    tekChainThrow(tekShaderUniformMat4(text_shader_program_id, "projection", rotation));
+    tekChainThrow(tekShaderUniformInt(text_shader_program_id, "atlas", 0));
+    tekChainThrow(tekShaderUniformFloat(text_shader_program_id, "draw_x", x));
+    tekChainThrow(tekShaderUniformFloat(text_shader_program_id, "draw_y", y));
+    tekChainThrow(tekShaderUniformVec4(text_shader_program_id, "text_colour", colour));
+
+    // draw mesh
+    tekDrawMesh(&tek_text->mesh);
+
+    return SUCCESS;
+}
+
 exception tekDrawText(const TekText* tek_text, const float x, const float y) {
     tekChainThrow(tekDrawColouredText(tek_text, x, y, (vec4){1.0f, 1.0f, 1.0f, 1.0f}));
     return SUCCESS;

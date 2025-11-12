@@ -83,6 +83,8 @@ add_executable(
         tekgui/box_manager.h
         tekphys/scenario.c
         tekphys/scenario.h
+        tests/unit_test.c
+        tests/unit_test.h
 )
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${OpenBLAS_INCLUDE_DIR})

@@ -20,6 +20,13 @@ static struct TekGuiTextButtonDefaults text_button_defaults;
 static struct TekGuiTextInputDefaults text_input_defaults;
 static TekBitmapFont default_font;
 
+/**
+ * Get a colour from the options.yml file.
+ * @param option_name The name of the option where the colour is stored.
+ * @param colour_name The name of the colour.
+ * @param colour The colour that is contained there.
+ * @throws YML_EXCEPTION if either of the keys does not exist or does not point to a colour.
+ */
 static exception tekGuiGetOptionsColour(const char* option_name, const char* colour_name, vec4 colour) {
     YmlData* yml_data;
     double yml_float;
@@ -43,6 +50,11 @@ static exception tekGuiGetOptionsColour(const char* option_name, const char* col
     return SUCCESS;
 }
 
+/**
+ * Load the default values for a window into a struct. Has default values if nothing specified in options.yml
+ * @param defaults A pointer to an empty TekGuiWindowDefaults struct.
+ * @throws YML_EXCEPTION if the yml is invalid.
+ */
 static exception tekGuiLoadWindowDefaults(struct TekGuiWindowDefaults* defaults) {
     YmlData* yml_data;
 
@@ -97,6 +109,11 @@ static exception tekGuiLoadWindowDefaults(struct TekGuiWindowDefaults* defaults)
     return SUCCESS;
 }
 
+/**
+ * Load the default values from options.yml into a struct. Has default values if nothing specified in options.yml
+ * @param defaults A pointer to a TekGuiListWindowDefaults struct.
+ * @throws YML_EXCEPTION if the yml file is invalid.
+ */
 static exception tekGuiLoadListWindowDefaults(struct TekGuiListWindowDefaults* defaults) {
     YmlData* yml_data;
 
@@ -121,6 +138,11 @@ static exception tekGuiLoadListWindowDefaults(struct TekGuiListWindowDefaults* d
     tekChainThrow(tekGuiGetOptionsColour("list_window_defaults", "text_colour", defaults->text_colour));
 }
 
+/**
+ * Load the default values for a text button from the options.yml file. Has some default values if none found.
+ * @param defaults A pointer to a TekGuiTextButtonDefaults struct that is filled with the data.
+ * @YML_EXCEPTION if the yml file is invalid.
+ */
 static exception tekGuiLoadTextButtonDefaults(struct TekGuiTextButtonDefaults* defaults) {
     YmlData* yml_data;
 
@@ -172,6 +194,11 @@ static exception tekGuiLoadTextButtonDefaults(struct TekGuiTextButtonDefaults* d
     return SUCCESS;
 }
 
+/**
+ * Load the text input default values from the options.yml file. Has some default values
+ * @param defaults
+ * @return
+ */
 static exception tekGuiLoadTextInputDefaults(struct TekGuiTextInputDefaults* defaults) {
     YmlData* yml_data;
 

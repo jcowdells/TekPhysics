@@ -1,12 +1,8 @@
-// main.c
 #include <stdio.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <cglm/mat4.h>
 #include "core/exception.h"
-#include "tekgl/mesh.h"
-#include "tekgl/shader.h"
-#include "tekgl/texture.h"
 #include "tekgl/font.h"
 #include "tekgl/text.h"
 
@@ -15,8 +11,6 @@
 #include "core/list.h"
 #include "tekgl/manager.h"
 #include "tekgui/primitives.h"
-#include "core/yml.h"
-#include "tekgl/material.h"
 
 #include "tekgl/camera.h"
 
@@ -24,15 +18,11 @@
 #include <math.h>
 #include <unistd.h>
 
-#include "core/bitset.h"
 #include "core/file.h"
-#include "core/priorityqueue.h"
-#include "core/queue.h"
 #include "core/threadqueue.h"
 #include "core/vector.h"
 #include "tekphys/engine.h"
 #include "tekphys/body.h"
-#include "tekphys/collider.h"
 #include "tekphys/collisions.h"
 
 #include "tekgui/tekgui.h"
@@ -40,9 +30,9 @@
 #include "tekgui/button.h"
 #include "tekgui/list_window.h"
 #include "tekgui/text_button.h"
-#include "tekgui/text_input.h"
 #include "tekgui/option_window.h"
 #include "tekphys/scenario.h"
+#include "tests/unit_test.h"
 
 #define WINDOW_WIDTH  640
 #define WINDOW_HEIGHT 480
@@ -53,6 +43,7 @@
 #define LOGO_WIDTH 300.0f
 #define LOGO_HEIGHT 50.0f
 
+// indices of possible options
 #define SAVE_OPTION 0
 #define LOAD_OPTION 1
 #define RUN_OPTION  2
@@ -77,6 +68,7 @@ struct TekGuiComponents {
     TekGuiTextButton start_button;
     TekGuiImage logo;
     TekText version_text;
+    TekText splash_text;
     TekGuiListWindow hierarchy_window;
     TekGuiOptionWindow editor_window;
     TekGuiListWindow action_window;
@@ -99,6 +91,13 @@ flag mouse_moved = 0, mouse_right = 0;
 flag w_pressed = 0, a_pressed = 0, s_pressed = 0, d_pressed = 0;
 TekScenario active_scenario = {};
 
+/**
+ * The main key callback of the program. Listens for the W, A, S and D keys to allow for camera to move.
+ * @param key The keycode of the key that was pressed.
+ * @param scancode The scancode of the key.
+ * @param action The action of the key - pressed, released, repeated.
+ * @param mods Any modifiers on the key e.g. shift.
+ */
 void tekMainKeyCallback(const int key, const int scancode, const int action, const int mods) {
     if (key == GLFW_KEY_W) {
         if (action == GLFW_RELEASE) w_pressed = 0;
@@ -118,6 +117,11 @@ void tekMainKeyCallback(const int key, const int scancode, const int action, con
     }
 }
 
+/**
+ * The main mouse position callback of the program. Used to update the camera rotation.
+ * @param x The new x position of the mouse relative to the window.
+ * @param y The new y position of the mouse relative to the window.
+ */
 void tekMainMousePosCallback(const double x, const double y) {
     if (mouse_moved) return;
     mouse_dx = (float)(x - mouse_x);
@@ -127,6 +131,12 @@ void tekMainMousePosCallback(const double x, const double y) {
     mouse_moved = 1;
 }
 
+/**
+ * The main mouse button callback of the program. Used to track if the right mouse button is pressed, which would determine if the camera should rotate or not.
+ * @param button The mouse button being pressed.
+ * @param action The action - press or release.
+ * @param mods Any modifiers on this action.
+ */
 void tekMainMouseButtonCallback(const int button, const int action, const int mods) {
     if (button == GLFW_MOUSE_BUTTON_RIGHT) {
         if (action == GLFW_PRESS) {
@@ -137,6 +147,13 @@ void tekMainMouseButtonCallback(const int button, const int action, const int mo
     }
 }
 
+/**
+ * Push a body create event to the event queue.
+ * @param snapshot A pointer to a body snapshot.
+ * @param snapshot_id The id of the body to update using this snapshot.
+ * @note The body snapshot is copied into the event.
+ * @throws MEMORY_EXCEPTION if the event could not be added to the queue.
+ */
 static exception tekBodyCreateEvent(const TekBodySnapshot* snapshot, const int snapshot_id) {
     TekEvent event = {};
     event.type = BODY_CREATE_EVENT;
@@ -146,6 +163,12 @@ static exception tekBodyCreateEvent(const TekBodySnapshot* snapshot, const int s
     return SUCCESS;
 }
 
+/**
+ * Create a body snapshot filled with default values and add it to a scenario. Also chooses a new ID for the created body.
+ * @param scenario The scenario for which to add the new snapshot.
+ * @param snapshot_id A pointer to where the newly created ID is to be written to.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) {
     TekBodySnapshot dummy = {};
     dummy.mass = 1.0f;
@@ -193,6 +216,13 @@ static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) 
     return SUCCESS;
 }
 
+/**
+ * Push a body update event to the event queue. Uses the body snapshot data stored at the specified ID in the scenario.
+ * @param scenario The scenario where the body is stored.
+ * @param snapshot_id The ID of this body.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FAILURE if the body snapshot was not found in the scenario.
+ */
 static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int snapshot_id) {
     if (snapshot_id < 0)
         return SUCCESS;
@@ -209,6 +239,13 @@ static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int sn
     return SUCCESS;
 }
 
+/**
+ * Delete a body snapshot from a scenario, and push a body delete event to the event queue.
+ * @param scenario The scenario from which to delete the body.
+ * @param snapshot_id The ID of the snapshot to be deleted.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FAILURE if a snapshot with that ID was not found.
+ */
 static exception tekDeleteBodySnapshot(TekScenario* scenario, const int snapshot_id) {
     TekBodySnapshot* snapshot;
     tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
@@ -225,6 +262,13 @@ static exception tekDeleteBodySnapshot(TekScenario* scenario, const int snapshot
     return SUCCESS;
 }
 
+/**
+ * Recreate a body from a body snapshot. This should be called if a large change happens to a body, such as changing the model so that a new collision structure can be made.
+ * @param snapshot The body snapshot that should be used to recreate the body.
+ * @param snapshot_id The ID of the snapshot that should be recreated.
+ * @note Functionally this is the same as deleting the body and making a new one with the same ID.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekRecreateBodySnapshot(const TekBodySnapshot* snapshot, const int snapshot_id) {
     TekEvent event = {};
     event.type = BODY_DELETE_EVENT;
@@ -235,6 +279,14 @@ static exception tekRecreateBodySnapshot(const TekBodySnapshot* snapshot, const 
     return SUCCESS;
 }
 
+/**
+ * Change the model of a snapshot body. This needs a separate function as changing a model requires the physics body to be recreated.
+ * @param scenario The scenario that contains the body snapshot that needs a new model.
+ * @param snapshot_id The ID of the snapshot that needs to be changed.
+ * @param model The filename of the new model.
+ * @throws MEMORY_EXCEPTION if realloc() fails.
+ * @throws FAILURE if a snapshot with that ID could not be found.
+ */
 static exception tekChangeBodySnapshotModel(const TekScenario* scenario, const int snapshot_id, const char* model) {
     TekBodySnapshot* snapshot;
     tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
@@ -251,6 +303,14 @@ static exception tekChangeBodySnapshotModel(const TekScenario* scenario, const i
     return SUCCESS;
 }
 
+/**
+ * Change the material of a snapshot body. This requires a separate function because the buffer containing the material filename needs to be reallocated.
+ * @param scenario The scenario that contains the body snapshot to be updated.
+ * @param snapshot_id The ID of the snapshot to be updated.
+ * @param material The filename of the material to be used.
+ * @throws MEMORY_EXCEPTION if realloc() fails.
+ * @throws FAILURE if a body with that ID could not be found.
+ */
 static exception tekChangeBodySnapshotMaterial(const TekScenario* scenario, const int snapshot_id, const char* material) {
     TekBodySnapshot* snapshot;
     tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
@@ -267,6 +327,11 @@ static exception tekChangeBodySnapshotMaterial(const TekScenario* scenario, cons
     return SUCCESS;
 }
 
+/**
+ * Reset the scenario so that there are no bodies left, and it is back to its original state.
+ * @param scenario The scenario to reset.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekResetScenario(const TekScenario* scenario) {
     TekEvent event = {};
     event.type = CLEAR_EVENT;
@@ -288,6 +353,11 @@ static exception tekResetScenario(const TekScenario* scenario) {
     return SUCCESS;
 }
 
+/**
+ * Restart a scenario, updating all bodies to the values specified by the scenario.
+ * @param scenario The scenario to use to reset the bodies back to their original positions.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekRestartScenario(const TekScenario* scenario) {
     uint* ids;
     uint num_ids;
@@ -302,6 +372,13 @@ static exception tekRestartScenario(const TekScenario* scenario) {
     return SUCCESS;
 }
 
+/**
+ * Push a time event to the event queue, which will change the rate and speed of the simulation.
+ * @param rate The rate of the simulation, the number of updates per second.
+ * @param speed The speed of the simulation relative to real life.
+ * @param runner_window The runner window that should be updated with the new values.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekSimulationSpeedEvent(const double rate, const double speed, TekGuiOptionWindow* runner_window) {
     TekEvent event = {};
     event.type = TIME_EVENT;
@@ -316,6 +393,28 @@ static exception tekSimulationSpeedEvent(const double rate, const double speed, 
     return SUCCESS;
 }
 
+/**
+ * Push a gravity event to the event queue, which will change the acceleration due to gravity.
+ * @param gravity The new acceleration due to gravity.
+ * @param runner_window The runner window to update with the new value.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
+static exception tekGravityEvent(const double gravity, TekGuiOptionWindow* runner_window) {
+    TekEvent event = {};
+    event.type = GRAVITY_EVENT;
+    event.data.gravity = (float)gravity;
+    tekChainThrow(pushEvent(&event_queue, event));
+
+    tekChainThrow(tekGuiWriteNumberOption(runner_window, "gravity", gravity));
+
+    return SUCCESS;
+}
+
+/**
+ * Push a pause event to the event queue, which will stop the simulation temporarily.
+ * @param paused 1 if paused, 0 if not
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekPauseEvent(const flag paused) {
     TekEvent event = {};
     event.type = PAUSE_EVENT;
@@ -325,6 +424,10 @@ static exception tekPauseEvent(const flag paused) {
     return SUCCESS;
 }
 
+/**
+ * Hide all the possible windows from each menu mode.
+ * @param gui The gui components.
+ */
 static void tekHideAllWindows(struct TekGuiComponents* gui) {
     gui->hierarchy_window.window.visible = 0;
     gui->editor_window.window.visible = 0;
@@ -335,12 +438,22 @@ static void tekHideAllWindows(struct TekGuiComponents* gui) {
     gui->runner_window.window.visible = 0;
 }
 
+/**
+ * Switches the menu mode into the main menu mode. Brings the start button to the front.
+ * @param gui The gui components.
+ * @return
+ */
 static exception tekSwitchToMainMenu(struct TekGuiComponents* gui) {
-    tekGuiBringButtonToFront(&gui->start_button.button);
+    tekChainThrow(tekGuiBringButtonToFront(&gui->start_button.button));
     tekHideAllWindows(gui);
     return SUCCESS;
 }
 
+/**
+ * Switches the menu mode into the builder menu mode. Makes all relevant windows visible and brings them to the front.
+ * @param gui The gui components.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekSwitchToBuilderMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->hierarchy_window.window.visible = 1;
@@ -359,6 +472,11 @@ static exception tekSwitchToBuilderMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Switches the menu mode to the save menu mode. Brings the save window to the front and re-centres it.
+ * @param gui The gui components.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekSwitchToSaveMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->save_window.window.visible = 1;
@@ -373,6 +491,11 @@ static exception tekSwitchToSaveMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Switches the menu mode to the load menu mode. Brings the load window to the front and re-centres it.
+ * @param gui The gui components.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekSwitchToLoadMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->load_window.window.visible = 1;
@@ -387,6 +510,11 @@ static exception tekSwitchToLoadMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Switches the menu mode to the runner menu mode. Displays the runner window and brings it to the front.
+ * @param gui The gui components.
+ * @throws LIST_EXCEPTION if there was a cosmic bit flip that changed a variable somewhere.
+ */
 static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->runner_window.window.visible = 1;
@@ -395,6 +523,12 @@ static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Switches the menu mode based on what the next menu mode is specified to be. Resets the next mode to -1.
+ * @param gui The gui components.
+ * @note Uses the static variables mode and next_mode, this allows different callbacks to edit the mode.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekChangeMenuMode(struct TekGuiComponents* gui) {
     TekEvent event = {};
     event.type = MODE_CHANGE_EVENT;
@@ -428,6 +562,11 @@ static exception tekChangeMenuMode(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * The callback for the start button. If the button was left-clicked, the mode is changed to builder.
+ * @param button The start button / button being pressed.
+ * @param callback_data Callback data from this button such as mouse position.
+ */
 static void tekStartButtonCallback(TekGuiTextButton* button, TekGuiButtonCallbackData callback_data) {
     if (mode != MODE_MAIN_MENU)
         return;
@@ -441,6 +580,14 @@ static void tekStartButtonCallback(TekGuiTextButton* button, TekGuiButtonCallbac
     next_mode = MODE_BUILDER;
 }
 
+/**
+ * Create the main menu, this includes creating the logo, the start button and the splash text.
+ * @param window_width The width of the window.
+ * @param window_height The height of the window.
+ * @param gui The gui components.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FILE_EXCEPTION if the logo couldn't be found.
+ */
 static exception tekCreateMainMenu(const int window_width, const int window_height, struct TekGuiComponents* gui) {
     tekChainThrow(tekGuiCreateTextButton("", &gui->start_button));
     gui->start_button.text_height = 25;
@@ -457,24 +604,61 @@ static exception tekCreateMainMenu(const int window_width, const int window_heig
     return SUCCESS;
 }
 
+/**
+ * Draw the main menu. Draws the logo, start button and splash text.
+ * @param gui The gui components.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws OPENGL_EXCEPTION if OpenGL fails.
+ * @throws VECTOR_EXCEPTION if a vector is written out of range.
+ */
 static exception tekDrawMainMenu(struct TekGuiComponents* gui) {
     int window_width, window_height;
     tekGetWindowSize(&window_width, &window_height);
-    tekGuiDrawTextButton(&gui->start_button);
+    tekChainThrow(tekGuiDrawTextButton(&gui->start_button));
 
     const float x = ((float)window_width - LOGO_WIDTH) / 2.0f;
     const float y = (float)window_height / 4.0f - LOGO_HEIGHT / 2.0f;
 
-    tekGuiDrawImage(&gui->logo, x, y);
-    tekGuiSetTextButtonPosition(&gui->start_button, (window_width - START_BUTTON_WIDTH) / 2 , (window_height - START_BUTTON_HEIGHT) / 2);
+    tekChainThrow(tekGuiDrawImage(&gui->logo, x, y));
+    tekChainThrow(tekGuiSetTextButtonPosition(&gui->start_button, (window_width - START_BUTTON_WIDTH) / 2 , (window_height - START_BUTTON_HEIGHT) / 2));
+
+    struct timespec curr_time;
+    clock_gettime(CLOCK_MONOTONIC, &curr_time);
+
+    const double progression = (double)(curr_time.tv_sec % 4) + (double)curr_time.tv_nsec / (double)BILLION;
+    const double angle = progression * CGLM_PI_2;
+    const double sin_angle = sin(angle);
+    const double max_angle = CGLM_PI / 12.0;
+    tekChainThrow(tekDrawColouredRotatedText(
+        &gui->splash_text,
+        x + LOGO_WIDTH - gui->splash_text.width / 2.0f, y + LOGO_HEIGHT - gui->splash_text.height / 2.0,
+        (vec4){1.0f, 1.0f, 0.0f, 1.0f},
+        x + LOGO_WIDTH,
+        y + LOGO_HEIGHT,
+        sin_angle * max_angle
+        ));
+
     return SUCCESS;
 }
 
+/**
+ * Delete the main menu, clearing any memory from the gui components used.
+ * @param gui The gui components.
+ */
 static void tekDeleteMainMenu(const struct TekGuiComponents* gui) {
     tekGuiDeleteTextButton(&gui->start_button);
     tekGuiDeleteImage(&gui->logo);
+    tekDeleteText(&gui->splash_text);
 }
 
+/**
+ * Update the editor window with the current values of a body snapshot.
+ * @param editor_window The editor window which to update.
+ * @param scenario The scenario that contains the body snapshot.
+ * @note Uses the currently selected object in the hierarchy window as the ID.
+ * @throws LIST_EXCEPTION if the currently selected ID doesn't exist
+ * @throws HASHTABLE_EXCEPTION if one of the option keys doesn't exist.
+ */
 static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const TekScenario* scenario) {
     if (hierarchy_index < 0) {
         editor_window->window.visible = 0;
@@ -500,6 +684,10 @@ static exception tekUpdateEditorWindow(TekGuiOptionWindow* editor_window, const 
     return SUCCESS;
 }
 
+/**
+ * The callback for any updates to the hierarchy window. Updates the currently selected body snapshot.
+ * @param hierarchy_window The list window that was updated / the hierarchy window.
+ */
 static void tekHierarchyCallback(TekGuiListWindow* hierarchy_window) {
     if (mode != MODE_BUILDER)
         return;
@@ -517,11 +705,29 @@ static void tekHierarchyCallback(TekGuiListWindow* hierarchy_window) {
     tekUpdateEditorWindow(editor_window, &active_scenario);
 }
 
+/**
+ * Set a string input to display an error.
+ * @param window The option window to apply the function to.
+ * @param key The name of the option.
+ * @param error_message The error message to write into the option.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekDisplayOptionError(TekGuiOptionWindow* window, const char* key, const char* error_message) {
     tekChainThrow(tekGuiWriteStringOption(window, key, error_message, strlen(error_message) + 1))
     return SUCCESS;
 }
 
+/**
+ * Read a filename for a new, unwritten file. Checks to make sure the input is not empty, but will allow any filename otherwise.
+ * If the inputted filename ends with the requested extension, it is not appended.
+ * @param window The window to read the input from.
+ * @param key The key of where to find the input data.
+ * @param directory The base directory of where the file should be stored.
+ * @param extension The extension that should be added to the file if not already added.
+ * @param filepath The outputted filepath
+ * @note "filepath" is allocated, so needs to be freed by the caller.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekReadNewFileInput(TekGuiOptionWindow* window, const char* key, const char* directory, const char* extension, char** filepath) {
     char* filename;
     tekChainThrow(tekGuiReadStringOption(window, key, &filename));
@@ -553,6 +759,17 @@ static exception tekReadNewFileInput(TekGuiOptionWindow* window, const char* key
     return SUCCESS;
 }
 
+/**
+ * Get the name of an existing file. The function will reject any inputs if the file specified does not exist, or if the input string is empty.
+ * If a filename exists with the same name but the real file includes the specified extension, then this input is accepted.
+ * @param window The window which contains the file input.
+ * @param key The name of the option which has the input.
+ * @param directory The base directory of the file.
+ * @param extension The extension to be added to the file.
+ * @param filepath The outputted filepath.
+ * @note The filepath is allocated, and needs to be freed by the caller.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekReadExistingFileInput(TekGuiOptionWindow* window, const char* key, const char* directory, const char* extension, char** filepath) {
     char* filename;
     tekChainThrow(tekGuiReadStringOption(window, key, &filename));
@@ -583,6 +800,12 @@ static exception tekReadExistingFileInput(TekGuiOptionWindow* window, const char
     return SUCCESS;
 }
 
+/**
+ * The callback for the editor window. This is called whenever a user updates a body snapshot's properties or deletes it.
+ * @param window The option window / editor window in this case.
+ * @param callback_data The callback data containing the name of the option and its type + data.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (mode != MODE_BUILDER)
         return SUCCESS;
@@ -662,6 +885,10 @@ static exception tekEditorCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     return SUCCESS;
 }
 
+/**
+ * The callback for the action window. Called whenever the user selects an option like "save", "load" "run" or "quit".
+ * @param window The list window / action window.
+ */
 static void tekActionCallback(TekGuiListWindow* window) {
     if (mode != MODE_BUILDER)
         return;
@@ -684,8 +911,15 @@ static void tekActionCallback(TekGuiListWindow* window) {
     }
 }
 
+/**
+ * Create the list of possible actions for the action window.
+ * @param actions_list A pointer to a list of actions that will be allocated. This needs to be freed.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekCreateActionsList(List** actions_list) {
     *actions_list = (List*)malloc(sizeof(List));
+    if (!*actions_list)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for action list.");
     listCreate(*actions_list);
 
     for (uint i = 0; i < NUM_OPTIONS; i++) {
@@ -715,8 +949,23 @@ static exception tekCreateActionsList(List** actions_list) {
     return SUCCESS;
 }
 
+/**
+ * The callback for the scenario options window. Called when options such as gravity, sky colour and start paused are changed.
+ * @param window The option window / scenario window.
+ * @param callback_data The callback data including the option name that was changed and the type of data.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekScenarioCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (!strcmp(callback_data.name, "gravity")) {
+        double gravity;
+        tekChainThrow(tekGuiReadNumberOption(window, "gravity", &gravity));
+        if (gravity < 0.0) {
+            gravity = 0.0;
+        }
+        if (gravity > 100.0) {
+            gravity = 100.0;
+        }
+        tekChainThrow(tekGravityEvent(gravity, window));
         return SUCCESS;
     }
 
@@ -735,6 +984,13 @@ static exception tekScenarioCallback(TekGuiOptionWindow* window, TekGuiOptionWin
     return SUCCESS;
 }
 
+/**
+ * Create the builder menu, this includes creating all the windows related to the object hierarchy, the options menu, the editor window and the scenario window.
+ * @param window_width The width of the window.
+ * @param window_height The height of the window.
+ * @param gui The gui components.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekCreateBuilderMenu(const int window_width, const int window_height, struct TekGuiComponents* gui) {
     tekCreateScenario(&active_scenario);
     tekChainThrow(tekGuiCreateListWindow(&gui->hierarchy_window, &active_scenario.names));
@@ -769,6 +1025,11 @@ static exception tekCreateBuilderMenu(const int window_width, const int window_h
     return SUCCESS;
 }
 
+/**
+ * Draw the builder menu. Draws all visible windows, and hides the editor window if the hierarchy index is less than 0.
+ * @param gui The gui components.
+ * @throws OPENGL_EXCEPTION if there was a rendering error.
+ */
 static exception tekDrawBuilderMenu(struct TekGuiComponents* gui) {
     if (hierarchy_index < 0) {
         gui->editor_window.window.visible = 0;
@@ -777,14 +1038,25 @@ static exception tekDrawBuilderMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Delete the builder menu, freeing any memory that was allocated by its gui components.
+ * @param gui The gui components.
+ */
 static void tekDeleteBuilderMenu(struct TekGuiComponents* gui) {
     tekGuiDeleteListWindow(&gui->hierarchy_window);
     tekGuiDeleteOptionWindow(&gui->editor_window);
     listFreeAllData(gui->action_window.text_list);
     listDelete(gui->action_window.text_list);
     tekGuiDeleteListWindow(&gui->action_window);
+    tekGuiDeleteOptionWindow(&gui->scenario_window);
 }
 
+/**
+ * The callback for the save window. Called when the user updates the save location or presses the save button.
+ * @param window The option window / save window.
+ * @param callback_data The callback data containing the name of the edited option and its type.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekSaveCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (callback_data.type != TEK_BUTTON_INPUT) {
         return SUCCESS;
@@ -806,6 +1078,12 @@ static exception tekSaveCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
     return SUCCESS;
 }
 
+/**
+ * The callback for the load window. Called when the user updates the load location or presses the load button.
+ * @param window The option window / load window.
+ * @param callback_data The callback data containing the name of the edited option and its type.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (callback_data.type != TEK_BUTTON_INPUT) {
         return SUCCESS;
@@ -831,6 +1109,12 @@ static exception tekLoadCallback(TekGuiOptionWindow* window, TekGuiOptionWindowC
     return SUCCESS;
 }
 
+/**
+ * The callback for the runner window, called when user updates the speed or rate of the simulation, or when they press play, pause, stop or step.
+ * @param window The option window / runner window.
+ * @param callback_data The callback data containing the name of the option and its type.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekRunnerCallback(TekGuiOptionWindow* window, TekGuiOptionWindowCallbackData callback_data) {
     if (!strcmp(callback_data.name, "stop")) {
         next_mode = MODE_BUILDER;
@@ -876,6 +1160,12 @@ static exception tekRunnerCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
     return SUCCESS;
 }
 
+/**
+ * Create the runner menu, which has options related to controlling the running of the scenario such as speed and time controls.
+ * @param gui The gui components.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FILE_EXCEPTION if the runner window file does not exist.
+ */
 static exception tekCreateRunnerMenu(struct TekGuiComponents* gui) {
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/runner.yml", &gui->runner_window));
     tekChainThrow(tekSimulationSpeedEvent(DEFAULT_RATE, DEFAULT_SPEED, &gui->runner_window));
@@ -883,16 +1173,91 @@ static exception tekCreateRunnerMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Draw the runner menu to the screen.
+ * @param gui The gui components.
+ * @throws OPENGL_EXCEPTION if there was a rendering error.
+ */
 static exception tekDrawRunnerMenu(struct TekGuiComponents* gui) {
     tekChainThrow(tekGuiDrawAllWindows());
     return SUCCESS;
 }
 
+/**
+ * Choose a random line from the splash.txt file and allocate a new buffer to store the line in.
+ * @param buffer A pointer to where the new buffer is to be allocated.
+ * @throws MEMORY_EXCEPTION if either of alloca() or malloc() fails.
+ * @throws LIST_EXCEPTION if attempted to pick a splash out of range.
+ */
+static exception tekGetSplashText(char** buffer) {
+    const char* splash_file = "../res/splash.txt";
+
+    uint len_file;
+    tekChainThrow(getFileSize(splash_file, &len_file));
+
+    // i just discovered this "alloca", it automatically frees after function returns
+    // so sick
+    char* file_buffer = alloca(len_file * sizeof(char));
+    if (!file_buffer)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory to read splash text file.");
+
+    tekChainThrow(readFile(splash_file, len_file, file_buffer));
+
+    // list to store the indices of the start of each line
+    List line_start_indices = {};
+    listCreate(&line_start_indices);
+
+    // always going to be a line to start with.
+    tekChainThrow(listAddItem(&line_start_indices, 0));
+    for (uint i = 0; i < len_file; i++) {
+        if (file_buffer[i] == '\n')
+            tekChainThrowThen(listAddItem(&line_start_indices, (void*)(i + 1)), { listDelete(&line_start_indices); });
+    }
+
+    // add an index at the end of the file
+    // because to get the line we are going to substring from current index to next index.
+    // this will be the next index if the last line is chosen
+    tekChainThrowThen(listAddItem(&line_start_indices, (void*)len_file), { listDelete(&line_start_indices); });
+
+    // generate random number
+    srand(time(0));
+    const uint list_index = (uint)rand() % (line_start_indices.length - 1);
+    printf("Len list: %u, index: %u\n", line_start_indices.length, list_index);
+
+    // get the line that was randomly picked
+    void* line_start_index, * line_end_index;
+    tekChainThrowThen(listGetItem(&line_start_indices, list_index, &line_start_index), { listDelete(&line_start_indices); });
+    printf("Len list: %u, index: %u\n", line_start_indices.length, list_index);
+    tekChainThrowThen(listGetItem(&line_start_indices, list_index + 1, &line_end_index), { listDelete(&line_start_indices); });
+    listDelete(&line_start_indices);
+
+    const uint len_line = (uint)line_end_index - (uint)line_start_index;
+
+    // make buffer for splash text.
+    *buffer = malloc(len_line * sizeof(char));
+    if (!*buffer)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate buffer for splash text line.");
+    memcpy(*buffer, file_buffer + (uint)line_start_index, len_line);
+    (*buffer)[len_line - 1] = 0;
+
+    return SUCCESS;
+}
+
+/**
+ * Create the menus system. Will call all the sub menu creation functions.
+ * @param gui The gui components
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekCreateMenu(struct TekGuiComponents* gui) {
     // create version font + text.
     TekBitmapFont* font;
     tekChainThrow(tekGuiGetDefaultFont(&font));
     tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, font, &gui->version_text));
+
+    char* splash_text;
+    tekChainThrow(tekGetSplashText(&splash_text));
+    tekChainThrowThen(tekCreateText(splash_text, 20, font, &gui->splash_text), { free(splash_text); });
+    free(splash_text);
 
     tekChainThrow(tekCreateMainMenu(WINDOW_WIDTH, WINDOW_HEIGHT, gui));
     tekChainThrow(tekCreateBuilderMenu(WINDOW_WIDTH, WINDOW_HEIGHT, gui));
@@ -907,6 +1272,11 @@ static exception tekCreateMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Draws the menu. Decides which draw function to call based on the current mode.
+ * @param gui The gui components.
+ * @throws OPENGL_EXCEPTION if there was a rendering error.
+ */
 static exception tekDrawMenu(struct TekGuiComponents* gui) {
     int window_width, window_height;
     tekGetWindowSize(&window_width, &window_height);
@@ -942,12 +1312,20 @@ static exception tekDrawMenu(struct TekGuiComponents* gui) {
     return SUCCESS;
 }
 
+/**
+ * Delete the menu system and call the delete functions of the sub menus.
+ * @param gui The gui components to delete.
+ */
 static void tekDeleteMenu(struct TekGuiComponents* gui) {
     tekDeleteText(&gui->version_text);
     tekDeleteMainMenu(gui);
     tekDeleteBuilderMenu(gui);
+    tekGuiDeleteOptionWindow(&gui->save_window);
+    tekGuiDeleteOptionWindow(&gui->load_window);
+    tekGuiDeleteOptionWindow(&gui->runner_window);
 }
 
+/// Clean up everything that was allocated for the program.
 #define tekRunCleanup() \
 pushEvent(&event_queue, quit_event); \
 tekAwaitEngineStop(engine_thread); \
@@ -957,7 +1335,11 @@ vectorDelete(&bodies); \
 vectorDelete(&entities); \
 tekDelete() \
 
-exception run() {
+/**
+ * The actual main function of the program. Sets up the window, the rendering loop, the gui, the physics engine, and everything else.
+ * @throws EXCEPTION Can throw all exceptions for many different reasons.
+ */
+static exception run() {
     // set up GLFW window and other utilities.
     tekChainThrow(tekInit("TekPhysics", WINDOW_WIDTH, WINDOW_HEIGHT));
 
@@ -1155,32 +1537,14 @@ exception run() {
     return SUCCESS;
 }
 
-exception test() {
-    // no collision, flat above
-    vec3 triangle_a[] = {
-        0.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f,
-        1.0f, 0.0f, 1.0f
-    };
-    vec3 triangle_b[] = {
-        0.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.2f,
-        1.0f, 0.0f, 1.2f
-    };
-
-    int collision = tekTriangleTest(triangle_a, triangle_b);
-
-    printf("Triangles %s collide.\n", collision ? "do" : "do not");
-    //
-    // vec3 point;
-    // tekProjectOriginOnTriangle(triangle_b, point);
-    // printf("Point: %f %f %f\n", EXPAND_VEC3(point));
-
-    return SUCCESS;
-}
-
+/**
+ * The entrypoint of the code. Mostly just a wrapper around the \ref run function.
+ * @return The exception code, or 0 if there were no exceptions.
+ */
 int main(void) {
     tekInitExceptions();
-    tekLog(run());
+    const exception tek_exception = tekUnitTest();
+    tekLog(tek_exception);
     tekCloseExceptions();
+    return tek_exception;
 }

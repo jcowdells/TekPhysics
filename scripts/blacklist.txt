@@ -3,6 +3,7 @@ func_name
 foreach
 #### exception wrappers
 tekThrow
+tekThrowThen
 tekChainThrow
 tekChainBreak
 tekChainThrowThen
