@@ -528,7 +528,7 @@ tekTestFunc(queue, peek_item) (TestContext* test_context) {
     tekChainThrow(queuePeek(&test_context->queue, (void**)&peeked));
     tekAssert(&first, peeked);
 
-    // make sure it didn’t secretly dequeue it
+    // make sure it didn't secretly dequeue it
     tekAssert(1, test_context->queue.length);
     return SUCCESS;
 }
@@ -609,12 +609,12 @@ tekTestFunc(priority_queue, peek_item) (TestContext* test_context) {
     tekChainThrow(priorityQueueEnqueue(&test_context->priority_queue, 1.0, &low));
     tekChainThrow(priorityQueueEnqueue(&test_context->priority_queue, 50.0, &high));
 
-    // have a play (should get low since it’s got better priority)
+    // have a play (should get low since it's got better priority)
     int* peeked = NULL;
     tekAssert(1, priorityQueuePeek(&test_context->priority_queue, (void**)&peeked));
     tekAssert(&low, peeked);
 
-    // make sure it didn’t bugger up
+    // make sure it didn't bugger up
     tekAssert(2, test_context->priority_queue.length);
     return SUCCESS;
 }
@@ -686,7 +686,7 @@ tekTestFunc(bitset, set_and_get_bits) (TestContext* test_context) {
     tekChainThrow(bitsetGet(&test_context->bitset, 120, &value));
     tekAssert(0, value);
 
-    // unset one and make sure it’s unset
+    // unset one and make sure it's unset
     tekChainThrow(bitsetUnset(&test_context->bitset, 64));
     tekChainThrow(bitsetGet(&test_context->bitset, 64, &value));
     tekAssert(0, value);
@@ -738,7 +738,7 @@ tekTestFunc(bitset, grows_flag_test) (TestContext* test_context) {
     // setting inside range should work
     tekChainThrow(bitsetSet(&test_context->bitset, 10));
 
-    // this should bugger up since it can’t grow
+    // this should bugger up since it can't grow
     exception tek_exception = bitsetSet(&test_context->bitset, 999);
     tekAssert(BITSET_EXCEPTION, tek_exception);
 
@@ -756,7 +756,7 @@ tekTestFunc(bitset, grows_flag_test) (TestContext* test_context) {
 tekTestFunc(bitset, two_d_functions) (TestContext* test_context) {
     flag value;
 
-    // set a few coordinates, this’ll test the zig-zag conversion
+    // set a few coordinates, this'll test the zig-zag conversion
     tekChainThrow(bitsetSet2D(&test_context->bitset, 0, 0));
     tekChainThrow(bitsetSet2D(&test_context->bitset, 3, 2));
     tekChainThrow(bitsetSet2D(&test_context->bitset, 15, 15));
@@ -830,7 +830,7 @@ tekTestFunc(hashtable, remove_and_haskey_tests) (TestContext* test_context) {
     tekAssert(0, hashtableHasKey(&test_context->hashtable, "foo"));
     tekAssert(1, hashtableHasKey(&test_context->hashtable, "bar"));
 
-    // try to remove something that doesn’t exist (shouldn’t bugger up)
+    // try to remove something that doesn't exist (shouldn't bugger up)
     const exception tek_exception = hashtableRemove(&test_context->hashtable, "idontexist");
     tekAssert(FAILURE, tek_exception);
 
@@ -930,7 +930,7 @@ static void* threadQueueProducer(void* arg) {
     for (uint i = 0; i < THREAD_QUEUE_ITEMS; i++) {
         data->produced[i] = i * 5; // some obvious pattern
         while (!threadQueueEnqueue(data->queue, &data->produced[i])) {
-            // queue full, spin until it’s ready
+            // queue full, spin until it's ready
         }
     }
     return NULL;
