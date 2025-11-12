@@ -16,12 +16,14 @@
 #define PAUSE_EVENT        7
 #define STEP_EVENT         8
 #define GRAVITY_EVENT      9
+#define INSPECT_EVENT     10
 
 #define MESSAGE_STATE       0
 #define EXCEPTION_STATE     1
 #define ENTITY_CREATE_STATE 2
 #define ENTITY_DELETE_STATE 3
 #define ENTITY_UPDATE_STATE 4
+#define INSPECT_STATE       5
 
 typedef struct TekEvent {
     flag type;
@@ -58,6 +60,11 @@ typedef struct TekState {
             vec4 rotation;
             vec3 scale;
         } entity_update;
+        struct {
+            float time;
+            vec3 position;
+            vec3 velocity;
+        } inspect;
     } data;
 } TekState;
 

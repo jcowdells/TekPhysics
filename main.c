@@ -76,20 +76,31 @@ struct TekGuiComponents {
     TekGuiOptionWindow save_window;
     TekGuiOptionWindow load_window;
     TekGuiOptionWindow runner_window;
+    TekGuiWindow inspect_window;
+    TekText inspect_text;
 };
 
-flag mode = MODE_MAIN_MENU;
-flag next_mode = -1;
-int hierarchy_index = -1;
+static flag mode = MODE_MAIN_MENU;
+static flag next_mode = -1;
+static int hierarchy_index = -1, inspect_index = -1;
 
-float width, height;
+static float width, height;
 ThreadQueue event_queue = {};
 
 double mouse_x = 0.0, mouse_y = 0.0;
 float mouse_dx = 0.0f, mouse_dy = 0.0f;
 flag mouse_moved = 0, mouse_right = 0;
-flag w_pressed = 0, a_pressed = 0, s_pressed = 0, d_pressed = 0;
+flag w_pressed = 0, a_pressed = 0, s_pressed = 0, d_pressed = 0, up_pressed = 0, down_pressed = 0;
 TekScenario active_scenario = {};
+
+static exception tekPushInspectEvent(const uint inspect_id) {
+    TekEvent event = {};
+    event.type = INSPECT_EVENT;
+    event.data.body.id = inspect_id;
+
+    tekChainThrow(pushEvent(&event_queue, event));
+    return SUCCESS;
+}
 
 /**
  * The main key callback of the program. Listens for the W, A, S and D keys to allow for camera to move.
@@ -115,6 +126,22 @@ void tekMainKeyCallback(const int key, const int scancode, const int action, con
         if (action == GLFW_RELEASE) d_pressed = 0;
         else d_pressed = 1;
     }
+
+    if (key == GLFW_KEY_UP && action == GLFW_RELEASE) {
+        if (inspect_index > -1) {
+            inspect_index--;
+            if (inspect_index == -1) tekPushInspectEvent(0);
+            else tekPushInspectEvent((uint)inspect_index);
+        }
+    }
+
+    if (key == GLFW_KEY_DOWN && action == GLFW_RELEASE) {
+        if (inspect_index + 2 < active_scenario.names.length) {
+            inspect_index++;
+            tekPushInspectEvent((uint)inspect_index);
+        }
+    }
+
 }
 
 /**
@@ -436,6 +463,7 @@ static void tekHideAllWindows(struct TekGuiComponents* gui) {
     gui->save_window.window.visible = 0;
     gui->load_window.window.visible = 0;
     gui->runner_window.window.visible = 0;
+    gui->inspect_window.visible = 0;
 }
 
 /**
@@ -518,7 +546,11 @@ static exception tekSwitchToLoadMenu(struct TekGuiComponents* gui) {
 static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
     tekHideAllWindows(gui);
     gui->runner_window.window.visible = 1;
+    gui->inspect_window.visible = 1;
     tekChainThrow(tekGuiBringWindowToFront(&gui->runner_window.window));
+    tekChainThrow(tekGuiBringWindowToFront(&gui->inspect_window));
+    inspect_index = -1;
+    tekChainThrow(tekPushInspectEvent(0));
 
     return SUCCESS;
 }
@@ -1161,6 +1193,41 @@ static exception tekRunnerCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
 }
 
 /**
+ * The window draw callback for the inspect window. Called every frame that the window is drawn.
+ * @param window The window / inspect window.
+ */
+static tekInspectDrawCallback(TekGuiWindow* window) {
+    TekText* inspect_text = window->data;
+    tekChainThrow(tekDrawText(inspect_text, (float)(window->x_pos + 10), (float)(window->y_pos + 10)));
+
+    return SUCCESS;
+}
+
+
+static int tekWriteInspectText(char* string, size_t max_length, const float time, const float fps, const char* name, const vec3 position, const vec3 velocity) {
+    return snprintf(
+        string, max_length,
+        "Time: %f\nFPS: %f\nObject Name: %s\nPosition: (%f, %f, %f)\nVelocity: (%f, %f, %f)",
+        time, fps, name, EXPAND_VEC3(position), EXPAND_VEC3(velocity)
+    );
+    return 1;
+}
+
+static exception tekUpdateInspectText(TekText* inspect_text, const float time, const float fps, const char* name, const vec3 position, const vec3 velocity) {
+    const int len_buffer = tekWriteInspectText(NULL, 0, time, fps, name, position, velocity) + 1;
+    char* buffer = alloca(len_buffer * sizeof(char));
+    if (!buffer)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for inspect text.");
+
+    tekWriteInspectText(buffer, len_buffer, time, fps, name, position, velocity);
+    buffer[len_buffer - 1] = 0;
+
+    tekChainThrow(tekUpdateText(inspect_text, buffer, 16));
+
+    return SUCCESS;
+}
+
+/**
  * Create the runner menu, which has options related to controlling the running of the scenario such as speed and time controls.
  * @param gui The gui components.
  * @throws MEMORY_EXCEPTION if malloc() fails.
@@ -1170,6 +1237,16 @@ static exception tekCreateRunnerMenu(struct TekGuiComponents* gui) {
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/runner.yml", &gui->runner_window));
     tekChainThrow(tekSimulationSpeedEvent(DEFAULT_RATE, DEFAULT_SPEED, &gui->runner_window));
     gui->runner_window.callback = tekRunnerCallback;
+
+    TekBitmapFont* font;
+    tekChainThrow(tekGuiGetDefaultFont(&font));
+    tekChainThrow(tekCreateText("", 16, font, &gui->inspect_text));
+
+    tekChainThrow(tekGuiCreateWindow(&gui->inspect_window));
+    tekChainThrow(tekGuiSetWindowTitle(&gui->inspect_window, "Inspect"));
+    gui->inspect_window.draw_callback = tekInspectDrawCallback;
+    gui->inspect_window.data = &gui->inspect_text;
+
     return SUCCESS;
 }
 
@@ -1181,6 +1258,16 @@ static exception tekCreateRunnerMenu(struct TekGuiComponents* gui) {
 static exception tekDrawRunnerMenu(struct TekGuiComponents* gui) {
     tekChainThrow(tekGuiDrawAllWindows());
     return SUCCESS;
+}
+
+/**
+ * Delete the runner memory, freeing any allocated memory for this section of the gui.
+ * @param gui The gui components.
+ */
+static void tekDeleteRunnerMenu(struct TekGuiComponents* gui) {
+    tekGuiDeleteOptionWindow(&gui->runner_window);
+    tekGuiDeleteWindow(&gui->inspect_window);
+    tekDeleteText(&gui->inspect_text);
 }
 
 /**
@@ -1322,7 +1409,7 @@ static void tekDeleteMenu(struct TekGuiComponents* gui) {
     tekDeleteBuilderMenu(gui);
     tekGuiDeleteOptionWindow(&gui->save_window);
     tekGuiDeleteOptionWindow(&gui->load_window);
-    tekGuiDeleteOptionWindow(&gui->runner_window);
+    tekDeleteRunnerMenu(gui);
 }
 
 /// Clean up everything that was allocated for the program.
@@ -1418,10 +1505,9 @@ static exception run() {
         tekRunCleanup();
     });
 
-    // tekSetMouseMode(MOUSE_MODE_CAMERA);
-
     struct timespec curr_time, prev_time;
-    float delta_time = 0.0f;
+    float delta_time = 0.0f, frame_time = 0.0f, fps = 0.0f;
+    uint frame_count = 0;
     clock_gettime(CLOCK_MONOTONIC, &prev_time);
     flag force_exit = 0;
     TekState state = {};
@@ -1464,6 +1550,24 @@ static exception run() {
                 tekChainThrowThen(vectorGetItemPtr(&entities, state.object_id, &delete_entity), { tekRunCleanup(); });
                 memset(delete_entity, 0, sizeof(TekEntity));
                 break;
+            case INSPECT_STATE:
+                char* inspect_name;
+                vec3 position, velocity;
+                if (inspect_index < 0) {
+                    inspect_name = "<no body selected>";
+                    glm_vec3_zero(position);
+                    glm_vec3_zero(velocity);
+                } else {
+                    tekChainThrow(tekScenarioGetName(&active_scenario, (uint)inspect_index, &inspect_name));
+                    glm_vec3_copy(state.data.inspect.position, position);
+                    glm_vec3_copy(state.data.inspect.velocity, velocity);
+                }
+                tekChainThrow(tekUpdateInspectText(
+                    &gui.inspect_text,
+                    state.data.inspect.time, fps,
+                    inspect_name, position, velocity
+                ));
+                break;
             }
 
             if (force_exit) break;
@@ -1497,6 +1601,15 @@ static exception run() {
 
         clock_gettime(CLOCK_MONOTONIC, &curr_time);
         delta_time = (float)(curr_time.tv_sec - prev_time.tv_sec) + (float)(curr_time.tv_nsec - prev_time.tv_nsec) / (float)BILLION;
+        frame_time += delta_time;
+
+        if (frame_count == 10) {
+            frame_count = 0;
+            fps = 10.0f / frame_time;
+            frame_time = 0.0f;
+        }
+        frame_count++;
+
         memcpy(&prev_time, &curr_time, sizeof(struct timespec));
 
         if (mouse_moved) {
@@ -1543,7 +1656,7 @@ static exception run() {
  */
 int main(void) {
     tekInitExceptions();
-    const exception tek_exception = tekUnitTest();
+    const exception tek_exception = run();
     tekLog(tek_exception);
     tekCloseExceptions();
     return tek_exception;

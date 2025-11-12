@@ -272,6 +272,18 @@ static exception tekEngineDeleteAllBodies(ThreadQueue* state_queue, const Vector
     return SUCCESS;
 }
 
+static exception tekPushInspectState(ThreadQueue* state_queue, const float time, vec3 position, vec3 velocity) {
+    TekState state = {};
+    state.type = INSPECT_STATE;
+    state.data.inspect.time = time;
+    glm_vec3_copy(position, state.data.inspect.position);
+    glm_vec3_copy(velocity, state.data.inspect.velocity);
+
+    tekChainThrow(pushState(state_queue, state));
+
+    return SUCCESS;
+}
+
 /// Store the args to link physics thread to graphics thread, so it can be passed as a single pointer to the thread procedure.
 struct TekEngineArgs {
     ThreadQueue* event_queue;
@@ -310,6 +322,8 @@ static void tekEngine(void* args) {
     flag paused = 0;
     flag step = 0;
     float gravity = 9.81f;
+    uint inspect_index = 0;
+    float time_elapsed = 0.0f;
 
     mat4 snapshot_rotation_matrix;
     vec4 snapshot_rotation_quat;
@@ -329,6 +343,8 @@ static void tekEngine(void* args) {
                 break;
             case MODE_CHANGE_EVENT:
                 mode = event.data.mode;
+                if (mode == MODE_RUNNER)
+                    time_elapsed = 0.0f;
                 break;
             case BODY_CREATE_EVENT:
                 // cannot convert directly for some reason
@@ -390,6 +406,8 @@ static void tekEngine(void* args) {
                 break;
             case GRAVITY_EVENT:
                 gravity = event.data.gravity;
+            case INSPECT_EVENT:
+                inspect_index = (uint)event.data.body.id;
             default:
                 break;
             }
@@ -413,12 +431,26 @@ static void tekEngine(void* args) {
                 tekBodyAdvanceTime(body, (float)phys_period, gravity);
                 threadChainThrow(tekEngineUpdateBody(state_queue, &bodies, i, body->position, body->rotation, body->scale));
             }
+
+            time_elapsed += phys_period;
         }
 
         if (step) {
             paused = 1;
             step = 0;
         }
+
+        vec3 inspect_position, inspect_velocity;
+        if (inspect_index < bodies.length) {
+            TekBody* inspect_body = 0;
+            threadChainThrow(vectorGetItemPtr(&bodies, inspect_index, &inspect_body));
+            glm_vec3_copy(inspect_body->position, inspect_position);
+            glm_vec3_copy(inspect_body->velocity, inspect_velocity);
+        } else {
+            glm_vec3_zero(inspect_position);
+            glm_vec3_zero(inspect_velocity);
+        }
+        tekChainThrow(tekPushInspectState(state_queue, time_elapsed, inspect_position, inspect_velocity));
 
         engine_time.tv_sec += step_time.tv_sec;
         engine_time.tv_nsec += step_time.tv_nsec;

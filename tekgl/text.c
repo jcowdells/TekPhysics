@@ -80,6 +80,14 @@ static exception tekGenerateTextMeshData(const char* text, const uint len_text, 
             x = 0;
             y += (float)size;
             tek_text->height += (float)size;
+
+            // add bogus indices to the array to stop weird buggering
+            uint index_data[] = {
+                0, 0, 0,
+                0, 0, 0
+            };
+            memcpy(*indices + i * 6, &index_data, sizeof(index_data));
+
             continue;
         }
 
