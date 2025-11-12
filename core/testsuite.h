@@ -19,6 +19,10 @@ tekChainThrow(__tekDelete_##test_name(test_context)); \
 if ((expected) == (actual)) { \
     printf("    Test Passed: %s == %s\n", #expected, #actual); \
 } else { \
-    printf("    ASSERTION EXCEPTION in line %d, function %s\n    Test Failed: %s != %s\n", __LINE__, __FUNCTION__, #expected, #actual); \
-    return SUCCESS; \
+    tekThrow(ASSERT_EXCEPTION, "Test Failed: " #expected " != " #actual "\n"); \
+}
+
+#define tekSilentAssert(expected, actual) \
+if ((expected) != (actual)) { \
+    tekThrow(ASSERT_EXCEPTION, "Test Failed: " #expected " != " #actual "\n"); \
 }

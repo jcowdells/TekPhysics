@@ -34,8 +34,8 @@
 #include "tekphys/scenario.h"
 #include "tests/unit_test.h"
 
-#define WINDOW_WIDTH  640
-#define WINDOW_HEIGHT 480
+#define WINDOW_WIDTH  1280
+#define WINDOW_HEIGHT 720
 
 #define START_BUTTON_WIDTH  100
 #define START_BUTTON_HEIGHT 50
@@ -84,7 +84,6 @@ static flag mode = MODE_MAIN_MENU;
 static flag next_mode = -1;
 static int hierarchy_index = -1, inspect_index = -1;
 
-static float width, height;
 ThreadQueue event_queue = {};
 
 double mouse_x = 0.0, mouse_y = 0.0;
@@ -551,6 +550,9 @@ static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
     tekChainThrow(tekGuiBringWindowToFront(&gui->inspect_window));
     inspect_index = -1;
     tekChainThrow(tekPushInspectEvent(0));
+
+    // restart again because sometimes the velocities remain.
+    tekChainThrow(tekRestartScenario(&active_scenario));
 
     return SUCCESS;
 }
@@ -1041,7 +1043,7 @@ static exception tekCreateBuilderMenu(const int window_width, const int window_h
     gui->action_window.callback = tekActionCallback;
     tekChainThrow(tekGuiCreateListWindow(&gui->action_window, actions_list));
     tekChainThrow(tekGuiSetWindowTitle(&gui->action_window.window, "Actions"))
-    tekGuiSetWindowPosition(&gui->action_window.window, 10, window_height - (int)gui->action_window.window.height - 10);
+    tekGuiSetWindowPosition(&gui->action_window.window, 10, (int)(gui->hierarchy_window.window.height + gui->hierarchy_window.window.title_width + gui->action_window.window.title_width) + 20);
 
     tekChainThrow(tekGuiCreateOptionWindow("../res/windows/scenario.yml", &gui->scenario_window));
     tekChainThrow(tekGuiWriteNumberOption(&gui->scenario_window, "gravity", 9.81));
@@ -1196,7 +1198,7 @@ static exception tekRunnerCallback(TekGuiOptionWindow* window, TekGuiOptionWindo
  * The window draw callback for the inspect window. Called every frame that the window is drawn.
  * @param window The window / inspect window.
  */
-static tekInspectDrawCallback(TekGuiWindow* window) {
+static exception tekInspectDrawCallback(TekGuiWindow* window) {
     TekText* inspect_text = window->data;
     tekChainThrow(tekDrawText(inspect_text, (float)(window->x_pos + 10), (float)(window->y_pos + 10)));
 
@@ -1207,10 +1209,9 @@ static tekInspectDrawCallback(TekGuiWindow* window) {
 static int tekWriteInspectText(char* string, size_t max_length, const float time, const float fps, const char* name, const vec3 position, const vec3 velocity) {
     return snprintf(
         string, max_length,
-        "Time: %f\nFPS: %f\nObject Name: %s\nPosition: (%f, %f, %f)\nVelocity: (%f, %f, %f)",
+        "Time: %.3f\nFPS: %.3f\n\nObject Name: %s\nPosition: (%.5f, %.5f, %.5f)\nVelocity: (%.5f, %.5f, %.5f)\n\nUse up and down arrows to switch.",
         time, fps, name, EXPAND_VEC3(position), EXPAND_VEC3(velocity)
     );
-    return 1;
 }
 
 static exception tekUpdateInspectText(TekText* inspect_text, const float time, const float fps, const char* name, const vec3 position, const vec3 velocity) {
@@ -1309,12 +1310,10 @@ static exception tekGetSplashText(char** buffer) {
     // generate random number
     srand(time(0));
     const uint list_index = (uint)rand() % (line_start_indices.length - 1);
-    printf("Len list: %u, index: %u\n", line_start_indices.length, list_index);
 
     // get the line that was randomly picked
     void* line_start_index, * line_end_index;
     tekChainThrowThen(listGetItem(&line_start_indices, list_index, &line_start_index), { listDelete(&line_start_indices); });
-    printf("Len list: %u, index: %u\n", line_start_indices.length, list_index);
     tekChainThrowThen(listGetItem(&line_start_indices, list_index + 1, &line_end_index), { listDelete(&line_start_indices); });
     listDelete(&line_start_indices);
 
@@ -1339,7 +1338,7 @@ static exception tekCreateMenu(struct TekGuiComponents* gui) {
     // create version font + text.
     TekBitmapFont* font;
     tekChainThrow(tekGuiGetDefaultFont(&font));
-    tekChainThrow(tekCreateText("TekPhysics vI.D.K Alpha", 16, font, &gui->version_text));
+    tekChainThrow(tekCreateText("TekPhysics v1.0 Release", 16, font, &gui->version_text));
 
     char* splash_text;
     tekChainThrow(tekGetSplashText(&splash_text));
@@ -1392,7 +1391,7 @@ static exception tekDrawMenu(struct TekGuiComponents* gui) {
         break;
     }
 
-    tekChainThrow(tekDrawText(&gui->version_text, (float)window_width - 185.0f, (float)window_height - 20.0f));
+    tekChainThrow(tekDrawText(&gui->version_text, (float)window_width - gui->version_text.width - 5.0f, (float)window_height - gui->version_text.height - 5.0f));
 
     tekSetDrawMode(DRAW_MODE_NORMAL);
 
@@ -1656,7 +1655,7 @@ static exception run() {
  */
 int main(void) {
     tekInitExceptions();
-    const exception tek_exception = run();
+    const exception tek_exception = tekUnitTest();
     tekLog(tek_exception);
     tekCloseExceptions();
     return tek_exception;

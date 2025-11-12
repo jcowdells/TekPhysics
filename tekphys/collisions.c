@@ -598,8 +598,8 @@ int tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], struct Tek
     *separation = 0.0f;
     float sep;
     glm_vec3_normalize(direction);
+    uint num_iterations = 0;
     while ((sep = glm_vec3_dot(support.support, direction)) >= 0.0f) {
-        printf("Support: %f %f %f, direction: %f %f %f -> %f\n", EXPAND_VEC3(support.support), EXPAND_VEC3(direction), sep);
         *separation = sep;
 
         // if point is valid, add it to the start of the simplex.
@@ -620,6 +620,9 @@ int tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], struct Tek
         // find the next support point.
         tekTriangleSupport(triangle_a, triangle_b, direction, &support);
         glm_vec3_normalize(direction);
+
+        // prevent infinite loop
+        if (num_iterations++ > 20) return 0;
     }
 
     return 0;
@@ -1025,11 +1028,6 @@ static exception tekPrintPolytope(const Vector* vertices, const Vector* faces) {
         tekChainThrow(vectorGetItemPtr(vertices, indices[0], &vertex_a));
         tekChainThrow(vectorGetItemPtr(vertices, indices[1], &vertex_b));
         tekChainThrow(vectorGetItemPtr(vertices, indices[2], &vertex_c));
-
-        printf("------------------\n");
-        printf("triangle((%f, %f, %f), (%f, %f, %f), (%f, %f, %f))\n", EXPAND_VEC3(vertex_a->support), EXPAND_VEC3(vertex_b->support), EXPAND_VEC3(vertex_c->support));
-        printf("triangle((%f, %f, %f), (%f, %f, %f), (%f, %f, %f))\n", EXPAND_VEC3(vertex_a->a), EXPAND_VEC3(vertex_b->a), EXPAND_VEC3(vertex_c->a));
-        printf("triangle((%f, %f, %f), (%f, %f, %f), (%f, %f, %f))\n", EXPAND_VEC3(vertex_a->b), EXPAND_VEC3(vertex_b->b), EXPAND_VEC3(vertex_c->b));
     }
 
     return SUCCESS;
@@ -1098,10 +1096,7 @@ static exception tekGetTriangleCollisionPoints(vec3 triangle_a[3], vec3 triangle
 
         tekChainThrow(tekGetClosestFace(&vertex_buffer, &face_buffer, &face_index, &min_distance, face_normal));
 
-        printf("Normal: %f %f %f\n", EXPAND_VEC3(face_normal));
-
         if (num_iterations > 20) {
-            printf("Too many!\n");
             break;
         }
 
@@ -1139,12 +1134,8 @@ static exception tekGetTriangleCollisionPoints(vec3 triangle_a[3], vec3 triangle
     vec3 barycentric;
     tekProjectOriginToBarycentric(vertex_a->support, vertex_b->support, vertex_c->support, barycentric);
 
-    printf("bary: %f %f %f\n", EXPAND_VEC3(barycentric));
-
     tekCreatePointFromBarycentric(vertex_a->a, vertex_b->a, vertex_c->a, barycentric, contact_a);
     tekCreatePointFromBarycentric(vertex_a->b, vertex_b->b, vertex_c->b, barycentric, contact_b);
-
-    printf("Contacts %f %f %f and %f %f %f\n", EXPAND_VEC3(contact_a), EXPAND_VEC3(contact_b));
 
     glm_vec3_copy(face_normal, contact_normal);
     *contact_depth = min_distance;
@@ -1470,8 +1461,6 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
         vec3 ab;
         glm_vec3_sub(centre_b, centre_a, ab);
 
-        printf("Pen Depth: %f\n", manifold->penetration_depth);
-
         manifold->baumgarte_stabilisation = -BAUMGARTE_BETA / phys_period * fmaxf(manifold->penetration_depth - SLOP, 0.0f);
         float restitution = fminf(body_a->restitution, body_b->restitution);
 
@@ -1493,8 +1482,6 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
 
         manifold->baumgarte_stabilisation += restitution;
     }
-
-    printf("Num contacts: %u\n",contact_buffer.length);
 
     for (uint s = 0; s < NUM_ITERATIONS; s++) {
         for (uint i = 0; i < contact_buffer.length; i++) {

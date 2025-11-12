@@ -5,7 +5,7 @@
 
 typedef struct QueueItem {
     void* data;
-    struct QueueItem* prev;
+    struct QueueItem* next;
 } QueueItem;
 
 typedef struct Queue {

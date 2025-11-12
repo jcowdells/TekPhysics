@@ -177,7 +177,6 @@ exception tekScenarioDeleteSnapshot(TekScenario* scenario, const uint snapshot_i
     flag found = 0;
     foreach(item, (&scenario->snapshots), {
         struct TekScenarioPair* pair = item->data;
-        printf("%u %u\n", pair->id, snapshot_id);
         if (pair->id == snapshot_id) {
             tekChainThrow(listRemoveItem(&scenario->snapshots, index, NULL));
             tekChainThrow(queueEnqueue(&scenario->unused_ids, (void*)snapshot_id));

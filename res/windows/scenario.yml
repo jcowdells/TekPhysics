@@ -1,8 +1,8 @@
 title: "Run Options"
 x_pos: 10
-y_pos: 30
+y_pos: 485
 width: 240
-height: 410
+height: 170
 text_height: 16
 input_width: 100
 options:

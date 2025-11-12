@@ -450,7 +450,7 @@ static void tekEngine(void* args) {
             glm_vec3_zero(inspect_position);
             glm_vec3_zero(inspect_velocity);
         }
-        tekChainThrow(tekPushInspectState(state_queue, time_elapsed, inspect_position, inspect_velocity));
+        threadChainThrow(tekPushInspectState(state_queue, time_elapsed, inspect_position, inspect_velocity));
 
         engine_time.tv_sec += step_time.tv_sec;
         engine_time.tv_nsec += step_time.tv_nsec;

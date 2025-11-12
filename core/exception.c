@@ -49,6 +49,7 @@ void tekInitExceptions() {
     tekAddException(VECTOR_EXCEPTION, "Vector Exception");
     tekAddException(ENGINE_EXCEPTION, "Engine Exception");
     tekAddException(BITSET_EXCEPTION, "BitSet Exception");
+    tekAddException(ASSERT_EXCEPTION, "Assertion Exception");
     initialised = 1;
 }
 

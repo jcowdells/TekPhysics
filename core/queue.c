@@ -21,7 +21,7 @@ void queueDelete(Queue* queue) {
     QueueItem* item = queue->front;
     while (item) {
         // essentially, go to each item starting from the front, store the item before it, then free itself.
-        QueueItem* prev = item->prev;
+        QueueItem* prev = item->next;
         free(item);
         item = prev;
     }
@@ -47,12 +47,12 @@ exception queueEnqueue(Queue* queue, void* data) {
     queue->rear->data = data;
 
     // as this is the last item, there is nothing before it in the queue.
-    queue->rear->prev = 0;
+    queue->rear->next = 0;
 
     // depending on whether there was a last item before we added this one, we need to act differently.
     if (item) {
         // if we have changed the last item, then the old last item has now got a previous item to point to, which is this new one.
-        item->prev = queue->rear;
+        item->next = queue->rear;
     } else {
         //if there wasn't a last item before, this new item is also the first item (as it is the only item right now)
         queue->front = queue->rear;
@@ -74,7 +74,7 @@ exception queueDequeue(Queue* queue, void** data) {
     *data = queue->front->data;
 
     // set the front to the item before the old front.
-    QueueItem* prev = queue->front->prev;
+    QueueItem* prev = queue->front->next;
     free(queue->front);
     queue->front = prev;
 

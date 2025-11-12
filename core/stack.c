@@ -75,6 +75,8 @@ exception stackPop(Stack* stack, void** data) {
     stack->data = item->next;
     free(item);
 
+    // decrement length
+    stack->length--;
     return SUCCESS;
 }
 

@@ -55,7 +55,7 @@ exception hashtableCreate(HashTable* hashtable, const unsigned int length) {
  * @param[out] hash The returned hash value.
  * @throws HASHTABLE_EXCEPTION if the hashtable is empty.
  */
-exception hashtableHash(HashTable* hashtable, const char* key, unsigned int* hash) {
+static exception hashtableHash(HashTable* hashtable, const char* key, unsigned int* hash) {
     // make sure we dont have bogus data
     if (!hashtable || !key || !hash) tekThrow(NULL_PTR_EXCEPTION, "Cannot hash key from null ptr.");
     if (!hashtable->length) tekThrow(HASHTABLE_EXCEPTION, "Cannot get hash index for an empty hashtable.");
@@ -77,7 +77,7 @@ exception hashtableHash(HashTable* hashtable, const char* key, unsigned int* has
  * @param[out] out_ptr A pointer to store a reference to the created node for further use.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
-exception hashtableCreateNode(const HashTable* hashtable, const char* key, const unsigned int hash, HashNode** out_ptr) {
+static exception hashtableCreateNode(const HashTable* hashtable, const char* key, const unsigned int hash, HashNode** out_ptr) {
     // ensure there isn't a null ptr
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot create node from null ptr.");
 
@@ -119,7 +119,7 @@ exception hashtableCreateNode(const HashTable* hashtable, const char* key, const
  * @throws NULL_PTR_EXCEPTION if hashtable is NULL
  * @returns SUCCESS if the node was found, FAILURE if it was not.
  */
-exception hashtableGetNode(HashTable* hashtable, const char* key, HashNode** node_ptr) {
+static exception hashtableGetNode(HashTable* hashtable, const char* key, HashNode** node_ptr) {
     // ensure not a null ptr
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get node from null ptr.");
 
@@ -207,7 +207,7 @@ exception hashtableGetValues(const HashTable* hashtable, void*** values) {
  * @param new_length The new length required by the hashtable.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
-exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
+static exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot rehash from null ptr.");
 
     // make room to copy the keys and values of the hash table
@@ -275,7 +275,7 @@ exception hashtableRehash(HashTable* hashtable, const unsigned int new_length) {
  * @param hashtable A pointer to the hashtable.
  * @return
  */
-flag hashtableTooFull(const HashTable* hashtable) {
+static flag hashtableTooFull(const HashTable* hashtable) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot check if null ptr is full.");
     // return true if the hashtable is more than 75% full
     return (flag)((4 * hashtable->num_items) >= (3 * hashtable->length));
@@ -348,6 +348,7 @@ exception hashtableSet(HashTable* hashtable, const char* key, void* data) {
  * @param hashtable A pointer to the hashtable.
  * @param key The key to remove.
  * @throws HASHTABLE_EXCEPTION if the hashtable is empty.
+ * @throws FAILURE if the key does not exist.
  */
 exception hashtableRemove(HashTable* hashtable, const char* key) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot remove from null ptr.");
