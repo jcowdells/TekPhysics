@@ -1,0 +1,22 @@
+name: "Test YML"
+id: 5698
+properties:
+    mass: 10.32
+    volume: 434.1
+    position:
+        x: 10.0
+        y: 11.1
+        z: 4.31
+    neighbours:
+        - 4121
+        - 1123
+        - 3435
+addition:
+  new_indent: 2
+  works: true
+addition2:
+   new_indent: 3
+   test:
+                      random_indent: true
+                      works: true
+finished: yes

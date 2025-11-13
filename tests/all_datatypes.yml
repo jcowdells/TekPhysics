@@ -1,0 +1,16 @@
+string: "A test string."
+integer: 12345
+float: 0.12345
+string_list:
+    - "A test string 0"
+    - "A test string 1"
+    - "A test string 2"
+integer_list:
+    - 0
+    - 100
+    - 200
+float_list:
+    - 0.0
+    - 0.1
+    - 0.2
+
