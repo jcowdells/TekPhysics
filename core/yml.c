@@ -19,6 +19,7 @@
 #define LIST_TOKEN   0b010
 #define IN_TOKEN     0b011
 #define OUT_TOKEN    0b100
+#define MODE_MASK    0b111
 
 #define STRING_TOKEN  0b00001000
 #define INTEGER_TOKEN 0b00010000
@@ -664,6 +665,10 @@ exception ymlSetList(YmlFile* yml, YmlData* data, const List* keys) {
             }
         }
 
+        // make sure key isn't already there
+        if (hashtableHasKey(hashtable, key->data))
+            tekThrow(YML_EXCEPTION, "Duplicate key.");
+
         // set the hashtable at this index
         tekChainThrowThen(hashtableSet(hashtable, key->data, yml_data), {
             hashtableDelete(next_hashtable);
@@ -675,6 +680,10 @@ exception ymlSetList(YmlFile* yml, YmlData* data, const List* keys) {
         hashtable = next_hashtable;
         key = key->next;
     }
+
+    // make sure key isn't already there
+    if (hashtableHasKey(hashtable, key->data))
+        tekThrow(YML_EXCEPTION, "Duplicate key.");
 
     // check for errors, and then set the data at the correct key
     tekChainThrow(hashtableSet(hashtable, key->data, data));
@@ -1136,7 +1145,7 @@ exception ymlFromTokensListAddList(const ListItem** prev_item, const ListItem** 
     while (*item) {
         // loop until we find a non list item in the tokens
         const Token* list_token = (Token*)(*item)->data;
-        if ((list_token->type & LIST_TOKEN) != LIST_TOKEN) break;
+        if ((list_token->type & MODE_MASK) != LIST_TOKEN) break;
 
         // attempt to fill list with yml data from tokens.
         YmlData* list_data;
@@ -1174,6 +1183,7 @@ exception ymlFromTokensList(const List* tokens, YmlFile* yml, List* keys_list) {
     const ListItem* item = tokens->data;
     while (item) {
         const Token* token = item->data;
+
         // using ymlSetList requires a list of keys, in the order of access, so:
         // material:
         //   color: "red"
@@ -1192,7 +1202,7 @@ exception ymlFromTokensList(const List* tokens, YmlFile* yml, List* keys_list) {
         // if going "out", or extending the depth of the data, add a null to signify another layer of depth
         if (token->type == OUT_TOKEN) {
             tekChainThrow(listAddItem(keys_list, 0));
-            item = item->next;
+            item = item->next;  
             continue;
         }
         // if going "in", or reducing the depth, pop the item to signify a smaller depth
@@ -1235,8 +1245,9 @@ exception ymlFromTokensList(const List* tokens, YmlFile* yml, List* keys_list) {
             });
             item = prev_item;
         // non list tokens should just be added normally
-        } else
+        } else {
             tekChainThrow(ymlCreateAutoDataToken(token, &yml_data));
+        }
 
         // either list or not, something should have been written to yml_data that we can add to the structure
         if (!yml_data)
@@ -1284,7 +1295,6 @@ void ymlPrintData(const YmlData* data) {
          memcpy(&number, &data->value, sizeof(void*));
          printf("%f\n", number);
      }
-
 }
 
 /**

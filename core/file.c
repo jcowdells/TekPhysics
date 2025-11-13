@@ -16,7 +16,7 @@ exception getFileSize(const char* filename, uint* file_size) {
     struct stat file_stat;
     if (stat(filename, &file_stat) == -1) tekThrow(FILE_EXCEPTION, "Could not read file stat.");
 
-    // add one to size of file returned to allow for terminating character to be added.
+    // file size includes the EOF character, so this already includes room for a null at the end.
     *file_size = file_stat.st_size + 1;
 
     return SUCCESS;

@@ -1655,7 +1655,7 @@ static exception run() {
  */
 int main(void) {
     tekInitExceptions();
-    const exception tek_exception = tekUnitTest();
+    const exception tek_exception = run();
     tekLog(tek_exception);
     tekCloseExceptions();
     return tek_exception;

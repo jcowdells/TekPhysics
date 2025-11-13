@@ -15,6 +15,7 @@
 #include "../core/bitset.h"
 #include "../core/hashtable.h"
 #include "../core/threadqueue.h"
+#include "../core/yml.h"
 
 typedef union TestContext {
     Vector vector;
@@ -25,6 +26,8 @@ typedef union TestContext {
     BitSet bitset;
     HashTable hashtable;
     ThreadQueue thread_queue;
+    char* file;
+    YmlFile yml;
 } TestContext;
 
 tekTestCreate(vector) (TestContext* test_context) {
@@ -1035,6 +1038,228 @@ tekTestFunc(thread_queue, stress_test) (TestContext* test_context) {
     return SUCCESS;
 }
 
+tekTestCreate(file) (TestContext* test_context) {
+    return SUCCESS;
+}
+
+tekTestDelete(file) (TestContext* test_context) {
+    return SUCCESS;
+}
+
+
+tekTestFunc(file, len_file) (TestContext* test_context) {
+    const char* filename = "../tests/ten_chars.bin";
+
+    uint len_file;
+    tekChainThrow(getFileSize(filename, &len_file));
+
+    // 10 characters + null terminator character
+    // took ages to even make a file that has ten characters and doesnt automatically have a newline
+    tekAssert(10 + 1, len_file);
+
+    return SUCCESS;
+}
+
+tekTestFunc(file, read) (TestContext* test_context) {
+    // read the file and make sure that the contents match what we expect
+    const char* filename = "../tests/take_me_away.txt";
+    const char* expected = 
+        "Come with me to the dancefloor\n"
+        "You and me, cause that's what it's for.\n"
+        "Show me now what it is\n"
+        "You've got to be doing\n"
+        "'Cause the music in the house is so soothing.\n"
+        "I wanna dance the night away, you see\n"
+        "It's just a party and now come with me.\n"
+        "Take me away...\n"
+        "Take me away...\n";
+
+    uint len_file;
+    tekChainThrow(getFileSize(filename, &len_file));
+
+    char* file = alloca(len_file * sizeof(char));
+    if (!file)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for file.");
+
+    tekChainThrow(readFile(filename, len_file, file));
+
+    tekAssert(0, strcmp(file, expected));
+
+    return SUCCESS;
+}
+
+tekTestFunc(file, empty) (TestContext* test_context) {
+    const char* filename = "../tests/empty.txt";
+
+    uint len_file;
+    tekChainThrow(getFileSize(filename, &len_file));
+
+    // single null char
+    tekAssert(1, len_file);
+
+    char* file = alloca(len_file * sizeof(char));
+    if (!file)
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for file.");
+
+    tekChainThrow(readFile(filename, len_file, file));
+
+    // make sure that the string is just the null char
+    tekAssert(0, file[0]);
+
+    return SUCCESS;
+}
+
+tekTestCreate(yml) (TestContext* test_context) {
+    return SUCCESS;
+}
+
+tekTestDelete(yml) (TestContext* test_context) {
+    ymlDelete(&test_context->yml);
+    return SUCCESS;
+}
+
+tekTestFunc(yml, single_datatypes) (TestContext* test_context) {
+    const char* filename = "../tests/all_datatypes.yml";
+    tekChainThrow(ymlReadFile(filename, &test_context->yml));
+
+    YmlData* yml_data;
+
+    // testing string data, get data stored under the key "string" and convert
+    char* string;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "string"));
+    tekChainThrow(ymlDataToString(yml_data, &string));
+    tekAssert(0, strcmp(string, "A test string."));
+
+    free(string);
+
+    // testing integer data, get data stored under key "integer" and convert.
+    long integer;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "integer"));
+    tekChainThrow(ymlDataToInteger(yml_data, &integer));
+    tekAssert(12345, integer);
+
+    // testing floating point data, get data stored under key "float" and convert.
+    double floating;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "float"));
+    tekChainThrow(ymlDataToFloat(yml_data, &floating));
+
+    tekAssert(0.12345, floating);
+
+    return SUCCESS;
+}
+
+tekTestFunc(yml, list_datatypes) (TestContext* test_context) {
+    const char* filename = "../tests/all_datatypes.yml";
+    tekChainThrow(ymlReadFile(filename, &test_context->yml));
+
+    YmlData* yml_data;
+
+    // testing string list
+    char* string;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "string_list"));
+
+    // check a couple items
+    tekChainThrow(ymlListGetString(yml_data, 0, &string));
+    tekAssert(0, strcmp("A test string 0", string));
+    free(string);
+
+    tekChainThrow(ymlListGetString(yml_data, 2, &string));
+    tekAssert(0, strcmp("A test string 2", string));
+    free(string);
+
+    // testing integer list
+    long integer;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "integer_list"));
+
+    // check a couple items
+    tekChainThrow(ymlListGetInteger(yml_data, 0, &integer));
+    tekAssert(0, integer);
+
+    tekChainThrow(ymlListGetInteger(yml_data, 2, &integer));
+    tekAssert(200, integer);
+
+    // testing floating point list
+    double floating;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "float_list"));
+
+    // check a couple items
+    tekChainThrow(ymlListGetFloat(yml_data, 0, &floating));
+    tekAssert(0.0, floating);
+
+    tekChainThrow(ymlListGetFloat(yml_data, 1, &floating));
+    tekAssert(0.1, floating);
+
+
+    return SUCCESS;
+}
+
+tekTestFunc(yml, empty) (TestContext* test_context) {
+    const char* filename = "../tests/empty.yml";
+    exception tek_exception = ymlReadFile(filename, &test_context->yml);
+    tekAssert(SUCCESS, tek_exception);
+
+    // make sure that we cant actually get anything out cuz it should be empty
+    YmlData* yml_data;
+    tek_exception = ymlGet(&test_context->yml, &yml_data, "anything", "whatsoever");
+    tekAssert(tek_exception, YML_EXCEPTION);
+
+    return SUCCESS;
+}
+
+tekTestFunc(yml, typical) (TestContext* test_context) {
+    // bogstandard yml file, has some "additions" where people have used different indents
+    const char* filename = "../tests/typical.yml";
+    exception tek_exception = ymlReadFile(filename, &test_context->yml);
+    tekAssert(SUCCESS, tek_exception);
+
+    YmlData* yml_data;
+
+    // testing double indentation
+    double volume;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "properties", "volume"));
+    tekChainThrow(ymlDataToFloat(yml_data, &volume));
+    tekAssert(434.1, volume);
+
+    // testing triple indentation
+    double x;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "properties", "position", "x"));
+    tekChainThrow(ymlDataToFloat(yml_data, &x));
+    tekAssert(10.0, x);
+
+    // testing list
+    long* neighbours;
+    uint len_neighbours;
+    tekChainThrow(ymlGet(&test_context->yml, &yml_data, "properties", "neighbours"));
+    tekChainThrow(ymlListToIntegerArray(yml_data, &neighbours, &len_neighbours));
+
+    tekAssert(3, len_neighbours);
+    tekAssert(4121, neighbours[0]);
+    tekAssert(1123, neighbours[1]);
+    tekAssert(3435, neighbours[2]);
+
+    // testing with different indentation
+    tek_exception = ymlGet(&test_context->yml, &yml_data, "addition", "new_indent");
+    tekAssert(SUCCESS, tek_exception);
+
+    tek_exception = ymlGet(&test_context->yml, &yml_data, "addition2", "test", "random_indent");
+    tekAssert(SUCCESS, tek_exception);
+
+    return SUCCESS;
+}
+
+tekTestFunc(yml, syntax_errors) (TestContext* test_context) {
+    // bad indentation
+    tekAssert(YML_EXCEPTION, ymlReadFile("../tests/bad_indent.yml", &test_context->yml));
+
+    // two duplicated keys
+    tekAssert(YML_EXCEPTION, ymlReadFile("../tests/duplicate_key.yml", &test_context->yml));
+
+    // space in key
+    tekAssert(YML_EXCEPTION, ymlReadFile("../tests/key_space.yml", &test_context->yml));
+
+    return SUCCESS;
+}
+
 exception tekUnitTest() {
     TestContext test_context = {};
 
@@ -1097,6 +1322,18 @@ exception tekUnitTest() {
     tekRunSuite(thread_queue, multithread_transfer, &test_context);
     tekRunSuite(thread_queue, boundary_and_invalid_tests, &test_context);
     tekRunSuite(thread_queue, stress_test, &test_context);
+
+    // file
+    tekRunSuite(file, len_file, &test_context);
+    tekRunSuite(file, read, &test_context);
+    tekRunSuite(file, empty, &test_context);
+
+    // yml file
+    tekRunSuite(yml, single_datatypes, &test_context);
+    tekRunSuite(yml, list_datatypes, &test_context);
+    tekRunSuite(yml, empty, &test_context);
+    tekRunSuite(yml, typical, &test_context);
+    tekRunSuite(yml, syntax_errors, &test_context);
 
     return SUCCESS;
 }

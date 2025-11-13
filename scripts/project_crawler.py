@@ -367,10 +367,12 @@ def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
             for use in usage:
                 function_dict[use].append(function)
 
+    print(function_dict)
+
     root = Node("TekPhysics")
 
-    display_function_list(("main",), function_dict, parent=root)
-    DotExporter(root).to_picture("hierarchy.png")
+    display_function_list(("tekSolveCollisions",), function_dict, parent=root)
+    DotExporter(root).to_picture("hierarchy.jpg")
 
 """
     display_type: bool
@@ -419,5 +421,5 @@ def main():
     generate_project_data(generate_file_tree(), report_options)
 
 if __name__ == "__main__":
-    main()
-    # generate_function_list(generate_file_tree())
+    # main()
+    generate_function_list(generate_file_tree())
