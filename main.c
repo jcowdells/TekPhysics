@@ -92,11 +92,18 @@ flag mouse_moved = 0, mouse_right = 0;
 flag w_pressed = 0, a_pressed = 0, s_pressed = 0, d_pressed = 0, up_pressed = 0, down_pressed = 0;
 TekScenario active_scenario = {};
 
+/**
+ * Push an inspect event to the event queue. Changes which body is shown to the display.
+ * @param inspect_id The ID of the body to inspect.
+ */
 static exception tekPushInspectEvent(const uint inspect_id) {
+    // create event
     TekEvent event = {};
     event.type = INSPECT_EVENT;
     event.data.body.id = inspect_id;
 
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
     return SUCCESS;
 }
@@ -149,11 +156,16 @@ void tekMainKeyCallback(const int key, const int scancode, const int action, con
  * @param y The new y position of the mouse relative to the window.
  */
 void tekMainMousePosCallback(const double x, const double y) {
+    // if the mouse has already been moved since last checked, then dont update again
     if (mouse_moved) return;
+
+    // update positions and deltas
     mouse_dx = (float)(x - mouse_x);
     mouse_dy = (float)(y - mouse_y);
     mouse_x = x;
     mouse_y = y;
+
+    // mark that there has been a mouse update
     mouse_moved = 1;
 }
 
@@ -181,10 +193,13 @@ void tekMainMouseButtonCallback(const int button, const int action, const int mo
  * @throws MEMORY_EXCEPTION if the event could not be added to the queue.
  */
 static exception tekBodyCreateEvent(const TekBodySnapshot* snapshot, const int snapshot_id) {
+    // create event
     TekEvent event = {};
     event.type = BODY_CREATE_EVENT;
     memcpy(&event.data.body.snapshot, snapshot, sizeof(TekBodySnapshot));
     event.data.body.id = snapshot_id;
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
     return SUCCESS;
 }
@@ -196,7 +211,10 @@ static exception tekBodyCreateEvent(const TekBodySnapshot* snapshot, const int s
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) {
+    // make a dummy snapshot
     TekBodySnapshot dummy = {};
+
+    // default values
     dummy.mass = 1.0f;
     dummy.friction = 0.5f;
     dummy.restitution = 0.5f;
@@ -206,11 +224,13 @@ static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) 
     glm_vec3_zero(dummy.angular_velocity);
     dummy.immovable = 0;
 
+    // default strings - need to be copied
     const char* default_model = "../res/rad1.tmsh";
     const uint len_default_model = strlen(default_model) + 1;
     const char* default_material = "../res/material.tmat";
     const uint len_default_material = strlen(default_material) + 1;
 
+    // allocate buffer for strings
     dummy.model = malloc(len_default_model * sizeof(char));
     if (!dummy.model)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for model filepath.");
@@ -220,9 +240,11 @@ static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) 
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for material filepath");
     }
 
+    // copy into buffers
     memcpy(dummy.model, default_model, len_default_model);
     memcpy(dummy.material, default_material, len_default_material);
 
+    // find next id, could include gaps where bodies were deleted.
     uint id;
     tekChainThrowThen(tekScenarioGetNextId(scenario, &id), {
         free(dummy.model);
@@ -234,6 +256,7 @@ static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) 
     });
     *snapshot_id = (int)id;
 
+    // push event to event queue
     tekChainThrowThen(tekBodyCreateEvent(&dummy, id), {
         free(dummy.model);
         free(dummy.material);
@@ -250,16 +273,21 @@ static exception tekCreateBodySnapshot(TekScenario* scenario, int* snapshot_id) 
  * @throws FAILURE if the body snapshot was not found in the scenario.
  */
 static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int snapshot_id) {
+    // in case no body selected
     if (snapshot_id < 0)
         return SUCCESS;
 
+    // get snapshot with that id
     TekBodySnapshot* body_snapshot;
     tekChainThrow(tekScenarioGetSnapshot(scenario, snapshot_id, &body_snapshot));
 
+    // create event
     TekEvent event = {};
     event.type = BODY_UPDATE_EVENT;
     memcpy(&event.data.body.snapshot, body_snapshot, sizeof(TekBodySnapshot));
     event.data.body.id = (uint)snapshot_id;
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
 
     return SUCCESS;
@@ -273,16 +301,23 @@ static exception tekUpdateBodySnapshot(const TekScenario* scenario, const int sn
  * @throws FAILURE if a snapshot with that ID was not found.
  */
 static exception tekDeleteBodySnapshot(TekScenario* scenario, const int snapshot_id) {
+    // get snapshot by id
     TekBodySnapshot* snapshot;
     tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
+
+    // free model and material strings that got allocated
     free(snapshot->model);
     free(snapshot->material);
 
+    // delete snapshot from scenario
     tekChainThrow(tekScenarioDeleteSnapshot(scenario, (uint)snapshot_id));
 
+    // create event
     TekEvent event = {};
     event.type = BODY_DELETE_EVENT;
     event.data.body.id = (uint)snapshot_id;
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
 
     return SUCCESS;
@@ -296,11 +331,13 @@ static exception tekDeleteBodySnapshot(TekScenario* scenario, const int snapshot
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekRecreateBodySnapshot(const TekBodySnapshot* snapshot, const int snapshot_id) {
+    // create event
     TekEvent event = {};
     event.type = BODY_DELETE_EVENT;
     event.data.body.id = (uint)snapshot_id;
     tekChainThrow(pushEvent(&event_queue, event));
 
+    // push event to event queue
     tekChainThrow(tekBodyCreateEvent(snapshot, snapshot_id));
     return SUCCESS;
 }
@@ -314,9 +351,11 @@ static exception tekRecreateBodySnapshot(const TekBodySnapshot* snapshot, const 
  * @throws FAILURE if a snapshot with that ID could not be found.
  */
 static exception tekChangeBodySnapshotModel(const TekScenario* scenario, const int snapshot_id, const char* model) {
+    // get body snapshot
     TekBodySnapshot* snapshot;
     tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
 
+    // need to copy the model string, find length, allocate buffer and copy
     const uint len_model = strlen(model) + 1;
     char* new_model = realloc(snapshot->model, len_model);
     if (!new_model)
@@ -324,6 +363,7 @@ static exception tekChangeBodySnapshotModel(const TekScenario* scenario, const i
     memcpy(new_model, model, len_model);
     snapshot->model = new_model;
 
+    // push event to event queue
     tekChainThrow(tekRecreateBodySnapshot(snapshot, snapshot_id));
 
     return SUCCESS;
@@ -338,9 +378,11 @@ static exception tekChangeBodySnapshotModel(const TekScenario* scenario, const i
  * @throws FAILURE if a body with that ID could not be found.
  */
 static exception tekChangeBodySnapshotMaterial(const TekScenario* scenario, const int snapshot_id, const char* material) {
+    // get body snapshot by id
     TekBodySnapshot* snapshot;
     tekChainThrow(tekScenarioGetSnapshot(scenario, (uint)snapshot_id, &snapshot));
 
+    // copy string in case original string gets deallocated. find length - allocate mem - copy into buffer
     const uint len_material = strlen(material) + 1;
     char* new_material = realloc(snapshot->material, len_material);
     if (!new_material)
@@ -348,6 +390,7 @@ static exception tekChangeBodySnapshotMaterial(const TekScenario* scenario, cons
     memcpy(new_material, material, len_material);
     snapshot->material = new_material;
 
+    // push event to event queue
     tekChainThrow(tekRecreateBodySnapshot(snapshot, snapshot_id));
 
     return SUCCESS;
@@ -359,14 +402,20 @@ static exception tekChangeBodySnapshotMaterial(const TekScenario* scenario, cons
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekResetScenario(const TekScenario* scenario) {
+    // firstly, delete all bodies in the scenario
+    // create event
     TekEvent event = {};
     event.type = CLEAR_EVENT;
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
 
+    // get all snapshot ids
     uint* ids;
     uint num_ids;
     tekChainThrow(tekScenarioGetAllIds(scenario, &ids, &num_ids));
 
+    // for each id, push a create event to rebuild the new scenario
     for (uint i = 0; i < num_ids; i++) {
         const uint id = ids[i];
         TekBodySnapshot* snapshot;
@@ -374,6 +423,7 @@ static exception tekResetScenario(const TekScenario* scenario) {
         tekChainThrow(tekBodyCreateEvent(snapshot, id));
     }
 
+    // cuz they got allocated before
     free(ids);
 
     return SUCCESS;
@@ -385,15 +435,18 @@ static exception tekResetScenario(const TekScenario* scenario) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekRestartScenario(const TekScenario* scenario) {
+    // get all ids
     uint* ids;
     uint num_ids;
     tekChainThrow(tekScenarioGetAllIds(scenario, &ids, &num_ids));
 
+    // for each id, update scenario
     for (uint i = 0; i < num_ids; i++) {
         const uint id = ids[i];
         tekChainThrow(tekUpdateBodySnapshot(scenario, id));
     }
 
+    // ids got allocated so free them
     free(ids);
     return SUCCESS;
 }
@@ -406,13 +459,16 @@ static exception tekRestartScenario(const TekScenario* scenario) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekSimulationSpeedEvent(const double rate, const double speed, TekGuiOptionWindow* runner_window) {
+    // create an event
     TekEvent event = {};
     event.type = TIME_EVENT;
     event.data.time.rate = rate;
     event.data.time.speed = speed;
 
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
 
+    // update gui to show new speed and rate
     tekChainThrow(tekGuiWriteNumberOption(runner_window, "rate", rate));
     tekChainThrow(tekGuiWriteNumberOption(runner_window, "speed", speed));
 
@@ -426,11 +482,15 @@ static exception tekSimulationSpeedEvent(const double rate, const double speed, 
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekGravityEvent(const double gravity, TekGuiOptionWindow* runner_window) {
+    // create event
     TekEvent event = {};
     event.type = GRAVITY_EVENT;
     event.data.gravity = (float)gravity;
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
 
+    // write new gravity to the gui
     tekChainThrow(tekGuiWriteNumberOption(runner_window, "gravity", gravity));
 
     return SUCCESS;
@@ -442,9 +502,12 @@ static exception tekGravityEvent(const double gravity, TekGuiOptionWindow* runne
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekPauseEvent(const flag paused) {
+    // create event
     TekEvent event = {};
     event.type = PAUSE_EVENT;
     event.data.paused = paused;
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
 
     return SUCCESS;
@@ -455,6 +518,7 @@ static exception tekPauseEvent(const flag paused) {
  * @param gui The gui components.
  */
 static void tekHideAllWindows(struct TekGuiComponents* gui) {
+    // do i really need to explain this?
     gui->hierarchy_window.window.visible = 0;
     gui->editor_window.window.visible = 0;
     gui->action_window.window.visible = 0;
@@ -471,7 +535,10 @@ static void tekHideAllWindows(struct TekGuiComponents* gui) {
  * @return
  */
 static exception tekSwitchToMainMenu(struct TekGuiComponents* gui) {
+    // bring button to front so it isn't obscured by other buttons
     tekChainThrow(tekGuiBringButtonToFront(&gui->start_button.button));
+
+    // hide everything else
     tekHideAllWindows(gui);
     return SUCCESS;
 }
@@ -482,18 +549,28 @@ static exception tekSwitchToMainMenu(struct TekGuiComponents* gui) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekSwitchToBuilderMenu(struct TekGuiComponents* gui) {
+    // hide all windows
     tekHideAllWindows(gui);
+
+    // show the relevant windows for this menu
     gui->hierarchy_window.window.visible = 1;
     gui->action_window.window.visible = 1;
     gui->scenario_window.window.visible = 1;
+
+    // bring relevant windows to front
     tekChainThrow(tekGuiBringWindowToFront(&gui->hierarchy_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->action_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->editor_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->scenario_window.window));
+
+    // restart scenario, so that all the bodies are in their starting positions
     tekChainThrow(tekRestartScenario(&active_scenario));
 
+    // read the begin paused value
     flag begin_paused;
     tekChainThrow(tekGuiReadBooleanOption(&gui->scenario_window, "pause", &begin_paused));
+
+    // if begin paused, then the simulation should begin paused, so pre-empt the pause event.
     tekChainThrow(tekPauseEvent(begin_paused));
 
     return SUCCESS;
@@ -505,15 +582,24 @@ static exception tekSwitchToBuilderMenu(struct TekGuiComponents* gui) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekSwitchToSaveMenu(struct TekGuiComponents* gui) {
+    // hide all windows
     tekHideAllWindows(gui);
+
+    // show only the save window
     gui->save_window.window.visible = 1;
+
+    // get the size of the save window
     int window_width, window_height;
     tekGetWindowSize(&window_width, &window_height);
+
+    // change the window position so its centred.
     tekGuiSetWindowPosition(
         &gui->save_window.window,
         (window_width - (int)gui->save_window.window.width) / 2,
         (window_height - (int)gui->save_window.window.height) / 2
     );
+
+    // bring it to the front so other buttons dont go on top of it.
     tekChainThrow(tekGuiBringWindowToFront(&gui->save_window.window));
     return SUCCESS;
 }
@@ -524,15 +610,24 @@ static exception tekSwitchToSaveMenu(struct TekGuiComponents* gui) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekSwitchToLoadMenu(struct TekGuiComponents* gui) {
+    // hide all windows
     tekHideAllWindows(gui);
+
+    // show only the load window
     gui->load_window.window.visible = 1;
+
+    // get size of load window
     int window_width, window_height;
     tekGetWindowSize(&window_width, &window_height);
+
+    // update position so it's centred
     tekGuiSetWindowPosition(
         &gui->load_window.window,
         (window_width - (int)gui->load_window.window.width) / 2,
         (window_height - (int)gui->load_window.window.height) / 2
     );
+
+    // bring window to the front
     tekChainThrow(tekGuiBringWindowToFront(&gui->load_window.window));
     return SUCCESS;
 }
@@ -543,11 +638,18 @@ static exception tekSwitchToLoadMenu(struct TekGuiComponents* gui) {
  * @throws LIST_EXCEPTION if there was a cosmic bit flip that changed a variable somewhere.
  */
 static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
+    // hide all windows
     tekHideAllWindows(gui);
+
+    // set runner window and inspect window to be visible
     gui->runner_window.window.visible = 1;
     gui->inspect_window.visible = 1;
+
+    // bring both windows to the front
     tekChainThrow(tekGuiBringWindowToFront(&gui->runner_window.window));
     tekChainThrow(tekGuiBringWindowToFront(&gui->inspect_window));
+
+    // reset inspect index in case the inspect index points to an object that has since been deleted
     inspect_index = -1;
     tekChainThrow(tekPushInspectEvent(0));
 
@@ -564,11 +666,15 @@ static exception tekSwitchToRunnerMenu(struct TekGuiComponents* gui) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekChangeMenuMode(struct TekGuiComponents* gui) {
+    // create event
     TekEvent event = {};
     event.type = MODE_CHANGE_EVENT;
     event.data.mode = next_mode;
+
+    // push event to event queue
     tekChainThrow(pushEvent(&event_queue, event));
 
+    /// basically check which mode it is and run the correct change function
     switch (next_mode) {
     case MODE_MAIN_MENU:
         tekChainThrow(tekSwitchToMainMenu(gui));
@@ -591,6 +697,7 @@ static exception tekChangeMenuMode(struct TekGuiComponents* gui) {
         return SUCCESS;
     }
 
+    // update the mode
     mode = next_mode;
     next_mode = -1;
     return SUCCESS;

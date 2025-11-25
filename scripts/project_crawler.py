@@ -421,5 +421,5 @@ def main():
     generate_project_data(generate_file_tree(), report_options)
 
 if __name__ == "__main__":
-    # main()
-    generate_function_list(generate_file_tree())
+    main()
+    # generate_function_list(generate_file_tree())
