@@ -2,11 +2,57 @@
 import tkinter as tk
 import tkinter.ttk as ttk
 from dataclasses import dataclass
+import re
+from enum import Enum
+
+class HighlighterMode(Enum):
+    KEYWORD = 0
+    TYPE    = 1
+    MACRO   = 2
+    STRING  = 3
+
+class Highlighter:
+    @staticmethod
+    def split_text(text):
+        text += "\0"
+        start_index = -1
+        word_builder = ""
+        word_list = list()
+        delimiters = (" ", "\n", ";", ",", ".", "(", ")", "{", "}", "\0")
+        for i, char in enumerate(text):
+            if char in delimiters:
+                if word_builder == "":
+                    continue
+                word_list.append((word_builder, start_index, i))
+                word_builder = ""
+            else:
+                if word_builder == "":
+                    start_index = i
+                word_builder += char
+
+        return word_list
+
+    def __init__(self):
+        self.rules = dict()
+
+    def add_rule(self, rule, colour):
+        pass
+
+    def __generate_keywords(self, word_list):
+        word_list = self.split_text(text)
+        
+
+    def generate_tags(self, text):
+
+        for rule, colour in self.rules.items():
+            if 
+        word_list = self.split_text(text)
+
 
 class EditorPanel(ttk.Frame):
     HEIGHT = 20
 
-    def __init__(self, root, title="Default Title", editable=False):
+    def __init__(self, root, title="Default Title", editable=False, highlighter=None):
         super().__init__(root)
         self.title = ttk.Label(self, text=title)
         self.text = tk.Text(self)
@@ -17,14 +63,33 @@ class EditorPanel(ttk.Frame):
         self.title.pack(side=tk.TOP)
         self.scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.text.pack(expand=True, fill=tk.Y)
+        self.highlighter = highlighter
 
-    def write(self, text):
+    def __guard(self, func, *args, **kwargs):
         if not self.editable:
             self.text.config(state=tk.NORMAL)
-        self.text.clear()
-        self.text.insert(0, text)
+        func(*args, **kwargs)
         if not self.editable:
             self.text.config(state=tk.DISABLED)
+
+    def __write(self, text):
+        self.text.delete("1.0", tk.END)
+        self.text.insert(tk.INSERT, text)
+
+    def write(self, text):
+        self.__guard(self.__write, text)
+
+    def __str__(self):
+        return self.text.get("1.0", "end-1c")
+
+    def __highlight(self):
+        text = str(self)
+        print(self.split_text(text))
+
+    def highlight(self):
+        if self.highlighter is None:
+            return
+        self.__guard(self.__highlight)
 
 class Window(tk.Tk):
     def __init__(self):
@@ -34,7 +99,10 @@ class Window(tk.Tk):
 
         self.editor = ttk.Frame(self)
 
-        self.original = EditorPanel(self.editor, title="Original Code")
+        highlighter = Highlighter()
+        highlighter.add_rule(None, "int")
+
+        self.original = EditorPanel(self.editor, title="Original Code", highlighter=highlighter)
         self.editing = EditorPanel(self.editor, title="Edited Version")
         self.final = EditorPanel(self.editor, title="Final Version", editable=True)
 
@@ -55,9 +123,12 @@ class Window(tk.Tk):
         self.controller.pack(expand=True, fill=tk.Y, side=tk.RIGHT)
         self.editor.pack(expand=True, fill=tk.BOTH, side=tk.LEFT)
 
+        self.original.write("#include <something.h>\n\nint main(int argc, char** argv) {\n    printf(\"Hello World!\");\n    return 0;\n}\n");
+        self.original.highlight()
+
 def main():
     window = Window()
-    window.mainloop()
+    # window.mainloop()
 
 if __name__ == "__main__":
     main()
