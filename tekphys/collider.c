@@ -61,13 +61,15 @@ static exception symmetricMatrixCalculateEigenvectors(mat3 matrix, vec3 eigenvec
     float w[3];      // eigenvalues storage
     float work[8];   // workspace buffer
     int lwork = 8;   // size of aforementioned buffer
-    int info;        // the output
+    int info = 0;        // the output
 
     // call Fortran function...
     // took 4 hours of messing with cmakelists.txt to make this work.
     ssyev_(&jobz, &uplo, &n, &matrix_copy, &n, &w, &work, &lwork, &info);
-    if (info)
-        tekThrow(FAILURE, "Failed to calculate eigenvectors.");
+    if (info > 0)
+        tekThrow(FAILURE, "Failed to calculate eigenvectors - failed to converge.");
+    if (info < 0)
+        tekThrow(FAILURE, "Failed to calculate eigenvectors - illegal value");
 
     // now, copy eigenvalues into output array.
     for (uint i = 0; i < 3; i++) {
@@ -423,7 +425,6 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
         tekColliderCleanup();
     });
 
-    // TODO: remove some debugging prints
     while (vectorPopItem(&collider_stack, &collider_node)) {
         // create an indices buffer, this will organise indices into left and right of the dividing axis.
         uint* indices_buffer = (uint*)malloc(collider_node->num_indices * sizeof(uint));

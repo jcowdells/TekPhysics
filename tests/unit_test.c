@@ -16,6 +16,7 @@
 #include "../core/hashtable.h"
 #include "../core/threadqueue.h"
 #include "../core/yml.h"
+#include "../core/file.h"
 
 typedef union TestContext {
     Vector vector;

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -5,7 +6,8 @@ from enum import Enum, auto
 import argparse
 from more_itertools import unique_everseen
 from anytree import Node, RenderTree
-from anytree.exporter import DotExporter
+from anytree.exporter import DotExporter, UniqueDotExporter
+
 
 @dataclass
 class Parameter:
@@ -40,6 +42,11 @@ class ReportOptions:
     warn_comment_ratio: bool
     warn_length: bool
     warn_only: bool
+
+class FunctionNode(Node):
+    def __init__(self, name, parent=None, children=None, **kwargs):
+        super().__init__(name, parent, children, **kwargs)
+        self.fillcolor = "white"
 
 macro_func_pattern = re.compile(
     r'^\s*#define\s+([A-Za-z_]\w*)\s*\(([^)]*)\)',
@@ -295,7 +302,7 @@ def find_function_usage(file, function_name, blacklist) -> list[str]:
     for i, line in enumerate(file_lines):
         function_data = get_function_data(line)
         new_data = False
-        if function_data is not None:
+        if function_data is not None and function_data[0] == ReportType.FUNCTION:
             current_function = function_data[1]
             new_data = True
 
@@ -321,15 +328,20 @@ def find_function_usage(file, function_name, blacklist) -> list[str]:
     usage = [u[1] for u in usage]
     return list(unique_everseen(usage))
 
-def display_function_list(function_call_stack, function_dict, depth=0, parent=None):
+def display_function_list(function_call_stack, function_dict, sub_functions, split_functions, depth=0, parent=None):
     function_name = function_call_stack[-1]
-    print(f"{"  " * depth}{function_name}")
+    # print(f"{"  " * depth}{function_name}")
     for function in function_dict[function_name]:
         if function in function_call_stack:
-            Node("Recursive call", parent=parent)
+            Node("Recursive call.red", parent=parent)
             continue
-        child = Node(function, parent=parent)
-        display_function_list((*function_call_stack, function), function_dict, depth=depth+1, parent=child)
+        if function in sub_functions:
+            Node(f"{function}.lightblue", parent=parent)
+        elif function in split_functions:
+            Node(f"{function}.lightgreen", parent=parent)
+        else:
+            child = Node(f"{function}.white", parent=parent)
+            display_function_list((*function_call_stack, function), function_dict, sub_functions, split_functions, depth=depth+1, parent=child)
 
 def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
     file_queue = list()
@@ -350,6 +362,7 @@ def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
                 file_list.append((file_data, read_file(file_data)))
 
     function_dict = dict()
+    function_count = dict()
     for file_name, file in file_list:
         file_lines = file.split("\n")
         for i in range(len(file_lines)):
@@ -358,6 +371,7 @@ def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
             if function_data is None:
                 continue
             function_dict[function_data[1]] = list()
+            function_count[function_data[1]] = 0
 
     for function in function_dict.keys():
         if function in blacklist:
@@ -366,13 +380,84 @@ def generate_function_list(file_tree, blacklist_file="blacklist.txt"):
             usage = find_function_usage(file, function, blacklist)
             for use in usage:
                 function_dict[use].append(function)
+            function_count[function] += len(usage)
 
-    print(function_dict)
+    with open("function_dict.json", "w") as function_dict_file:
+        json.dump(function_dict, function_dict_file)
 
-    root = Node("TekPhysics")
+    with open("function_count.json", "w") as function_count_file:
+        json.dump(function_count, function_count_file)
 
-    display_function_list(("tekSolveCollisions",), function_dict, parent=root)
-    DotExporter(root).to_picture("hierarchy.jpg")
+    # root = Node("TekPhysics")
+
+    # display_function_list(("main",), function_dict, parent=root)
+    # UniqueDotExporter(root).to_dotfile("hierarchy.dot")
+
+# Node styling function
+def mynode(node):
+    # Example: color and shape based on the node name
+    name, colour = node.name.split(".")
+    dot = f"shape=box, style=filled, fillcolor={colour}, label=\"{name}\""
+    return dot
+
+# Edge styling (optional)
+def myedge(parent, child):
+    return 'color=gray'   # simple example
+
+def generate_function_list_from_cache():
+    function_dict = None
+    function_count = None
+    with open("function_dict.json", "r") as function_dict_file:
+        function_dict = json.load(function_dict_file)
+
+    with open("function_count.json", "r") as function_count_file:
+        function_count = json.load(function_count_file)
+
+    sub_functions = list()
+    split_functions = list()
+
+    for function, count in function_count.items():
+        num_calls = len(function_dict[function])
+
+        if num_calls == 0: continue
+        if count < 2 and num_calls <= 2: continue
+
+        if len(function_dict[function]) > 5:
+            new_functions = list()
+            for i in range(5, num_calls, 5):
+                split_function = f"{function} (Part {chr(ord("A") + int(i / 5) - 1)})"
+                new_functions.append(split_function)
+                function_dict[split_function] = function_dict[function][i-5:i]
+                split_functions.append(split_function)
+            function_dict[function][:num_calls - (num_calls % 5)] = new_functions
+
+        sub_functions.append(function)
+
+    root = Node("main.white")
+    display_function_list(("main",), function_dict, sub_functions, split_functions, parent=root)
+    UniqueDotExporter(
+        root,
+        nodeattrfunc=mynode,
+        edgeattrfunc=myedge
+    ).to_picture("hierarchy/main.png")
+
+    for sub_function in sub_functions:
+        root = Node(f"{sub_function}.lightblue")
+        display_function_list((sub_function,), function_dict, sub_functions, split_functions, parent=root)
+        UniqueDotExporter(
+            root,
+            nodeattrfunc=mynode,
+            edgeattrfunc=myedge
+        ).to_picture(f"hierarchy/{sub_function}.png")
+
+    for sub_function in split_functions:
+        root = Node(f"{sub_function}.lightgreen")
+        display_function_list((sub_function,), function_dict, sub_functions, split_functions, parent=root)
+        UniqueDotExporter(
+            root,
+            nodeattrfunc=mynode,
+            edgeattrfunc=myedge
+        ).to_picture(f"hierarchy/{sub_function}.png")
 
 """
     display_type: bool
@@ -421,5 +506,5 @@ def main():
     generate_project_data(generate_file_tree(), report_options)
 
 if __name__ == "__main__":
-    main()
-    # generate_function_list(generate_file_tree())
+    # main()
+    generate_function_list_from_cache()

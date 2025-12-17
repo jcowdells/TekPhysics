@@ -116,6 +116,7 @@ static void threadPrint(ThreadQueue* state_queue, const char* format, ...) {
  */
 static void threadExcept(ThreadQueue* state_queue, const uint exception) {
     TekState exception_state = {};
+    tekPrintException();
     exception_state.type = EXCEPTION_STATE;
     exception_state.object_id = 0;
     exception_state.data.exception = exception;

@@ -10,9 +10,15 @@ class Vec3:
     z: float
 
 @dataclass
+class Vec2:
+    x: float
+    y: float
+
+@dataclass
 class Vertex:
     position: Vec3
     normal: Vec3
+    tex_coord: Vec2
 
 class MeshFile:
     def __init__(self, filepath: str):
@@ -20,22 +26,22 @@ class MeshFile:
         self.__vertices = list()
         self.__indices = list()
 
-    def add_vertex(self, position: Vec3, normal: Vec3):
-        self.__vertices.append(Vertex(position, normal))
+    def add_vertex(self, position: Vec3, normal: Vec3, tex_coord: Vec2):
+        self.__vertices.append(Vertex(position, normal, tex_coord))
 
-    def add_triangle(self, point_a: Vec3, point_b: Vec3, point_c: Vec3):
+    def add_triangle(self, point_a: int, point_b: int, point_c: int):
         self.__indices.extend((point_a, point_b, point_c))
 
     def write(self):
         format_string = "VERTICES\n"
         for vertex in self.__vertices:
-            format_string += f"{vertex.position.x:.5f} {vertex.position.y:.5f} {vertex.position.z:.5f} {vertex.normal.x:.5f} {vertex.normal.y:.5f} {vertex.normal.z:.5f}\n"
+            format_string += f"{vertex.position.x:.5f} {vertex.position.y:.5f} {vertex.position.z:.5f} {vertex.normal.x:.5f} {vertex.normal.y:.5f} {vertex.normal.z:.5f} {vertex.tex_coord.x} {vertex.tex_coord.y}\n"
         format_string += "\nINDICES\n"
         for i in range(len(self.__indices)):
             format_string += str(self.__indices[i]) + " "
             if (i + 1) % 3 == 0:
                 format_string += "\n"
-        format_string += "\nLAYOUT\n3 3\n\n$POSITION_LAYOUT_INDEX 0\n"
+        format_string += "\nLAYOUT\n3 3 2\n\n$POSITION_LAYOUT_INDEX 0\n"
         with open(self.__filepath, "w") as f:
             f.write(format_string)
 
@@ -57,9 +63,14 @@ def main(radius: float, horizontal_divs: int, vertical_divs: int, filepath: str)
 
             x = xz * math.cos(horizontal_angle)
             z = xz * math.sin(horizontal_angle)
+
+            u = (vertical_angle / math.pi) + 0.5
+            v = horizontal_angle / (2.0 * math.pi)
+
             mesh_file.add_vertex(
                         Vec3(x, y, z),
-                        Vec3(x * inv_radius, y * inv_radius, z * inv_radius)
+                        Vec3(x * inv_radius, y * inv_radius, z * inv_radius),
+                        Vec2(u, v)
                     )
 
     for i in range(vertical_divs):
@@ -69,7 +80,7 @@ def main(radius: float, horizontal_divs: int, vertical_divs: int, filepath: str)
         for j in range(horizontal_divs):
             if i != 0:
                 mesh_file.add_triangle(k2, k1, k1 + 1)
-            if i != horizontal_divs - 1:
+            if i != vertical_divs - 1:
                 mesh_file.add_triangle(k2, k1 + 1, k2 + 1)
 
             k1 += 1

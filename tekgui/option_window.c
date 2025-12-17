@@ -7,6 +7,7 @@
 #include "tekgui.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <float.h>
 
 #include "../core/priorityqueue.h"
 
@@ -106,13 +107,21 @@ static flag tekGuiGetOptionInputType(const char* option_type) {
     return TEK_UNKNOWN_INPUT;
 }
 
+/**
+ * Get the index of an option. The index is a ranking of how far down vertically an option should appear. Kinda like how
+ * line numbers work in BASIC.
+ * @param yml_file The yml file to read the index from
+ * @param key The name of the option
+ * @param index A pointer to where the index should be written
+ * @throws YML_EXCEPTION if option does not exist
+ */
 static exception tekGuiLoadOptionIndex(YmlFile* yml_file, const char* key, double* index) {
     // empty variables to write into.
     YmlData* yml_data;
 
     // if no mention of an index, we can put it at the end.
     if (ymlGet(yml_file, &yml_data, "options", key, "index") != SUCCESS) {
-        *index = UINT_MAX;
+        *index = DBL_MAX;
         return SUCCESS;
     }
 
@@ -233,6 +242,13 @@ static exception tekGuiLoadOptionsYml(YmlFile* yml_file, struct TekGuiOptionsWin
     return SUCCESS;
 }
 
+/**
+ * Read a string from a named option. Only provides a reference to the string, don't edit directly!
+ * @param window The window to read from.
+ * @param key The name of the option to read.
+ * @param string A pointer to where the char pointer should be written.
+ * @throws HASHTABLE_EXCEPTION if key does not exist.
+ */
 exception tekGuiReadStringOption(TekGuiOptionWindow* window, const char* key, char** string) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -240,6 +256,13 @@ exception tekGuiReadStringOption(TekGuiOptionWindow* window, const char* key, ch
     return SUCCESS;
 }
 
+/**
+ * Read a floating point (double) number from a named option.
+ * @param window The window to read from.
+ * @param key The name of the option to read.
+ * @param number A pointer to where the number is to be written.
+ * @throws HASHTABLE_EXCEPTION if key does not exist.
+ */
 exception tekGuiReadNumberOption(TekGuiOptionWindow* window, const char* key, double* number) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -247,6 +270,13 @@ exception tekGuiReadNumberOption(TekGuiOptionWindow* window, const char* key, do
     return SUCCESS;
 }
 
+/**
+ * Read a boolean option from a named option. Will return either 0 or 1.
+ * @param window The window to read from.
+ * @param key The name of the option to read.
+ * @param boolean A pointer to where the value is to be written.
+ * @throws HASHTABLE_EXCEPTION if key does not exist.
+ */
 exception tekGuiReadBooleanOption(TekGuiOptionWindow* window, const char* key, flag* boolean) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -254,6 +284,13 @@ exception tekGuiReadBooleanOption(TekGuiOptionWindow* window, const char* key, f
     return SUCCESS;
 }
 
+/**
+ * Read a vec3 from a named option. Requires a vec3 to write into.
+ * @param window The window to read from.
+ * @param key The name of the option to read.
+ * @param vector The vector to write into.
+ * @throws HASHTABLE_EXCEPTION if key does not exist.
+ */
 exception tekGuiReadVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -261,6 +298,13 @@ exception tekGuiReadVec3Option(TekGuiOptionWindow* window, const char* key, vec3
     return SUCCESS;
 }
 
+/**
+ * Read a vec4 from a named option. Requires the vec4 to exist to write into.
+ * @param window The window to write into
+ * @param key The name of the option to read.
+ * @param vector The vector to write into.
+ * @throws HASHTABLE_EXCEPTION if key does not exist.
+ */
 exception tekGuiReadVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -268,6 +312,13 @@ exception tekGuiReadVec4Option(TekGuiOptionWindow* window, const char* key, vec4
     return SUCCESS;
 }
 
+/**
+ * Update the text displayed by an input option based on its type. For example, numbers need to be converted to strings
+ * in order to be displayed and such.
+ * @param window The window that contains the option
+ * @param option The option to be updated
+ * @throws HASHTABLE_EXCEPTION if option doesn't exist
+ */
 static exception tekGuiUpdateOptionInputText(TekGuiOptionWindow* window, TekGuiOption* option) {
     // for strings, we already have the text to write direct into text.
     if (option->type == TEK_STRING_INPUT) {
@@ -281,6 +332,7 @@ static exception tekGuiUpdateOptionInputText(TekGuiOptionWindow* window, TekGuiO
     const uint len_buffer = 128;
     char buffer[len_buffer];
 
+    // some values that will be filled in if its that type
     double number;
     flag boolean;
     vec4 vector;
@@ -297,6 +349,7 @@ static exception tekGuiUpdateOptionInputText(TekGuiOptionWindow* window, TekGuiO
             snprintf(buffer, len_buffer, "False");
         }
         break;
+    // for vectors, each option only links to one component. so treat that component as if its just one number (cuz it is)
     case TEK_VEC3_INPUT:
         tekChainThrow(tekGuiReadVec3Option(window, option->display.input.name, vector));
         snprintf(buffer, len_buffer, "%.5f", vector[option->display.input.index]);
@@ -309,11 +362,17 @@ static exception tekGuiUpdateOptionInputText(TekGuiOptionWindow* window, TekGuiO
         tekThrow(FAILURE, "Unknown input type.");
     }
 
+    // finally, update the displayed text in the option input.
     tekChainThrow(tekGuiSetTextInputText(&option->display.input.text_input, buffer));
 
     return SUCCESS;
 }
 
+/**
+ * Return whether the option is an option input.
+ * @param option The option to check
+ * @return 0 if not an input, 1 otherwise.
+ */
 static flag tekGuiIsOptionInput(const TekGuiOption* option) {
     switch (option->type) {
     case TEK_LABEL:
@@ -325,11 +384,20 @@ static flag tekGuiIsOptionInput(const TekGuiOption* option) {
     }
 }
 
+/**
+ * Update a single input option in the array of options
+ * @param window The window containing all the options
+ * @param key The name of the option to be updated.
+ * @throws HASHTABLE_EXCEPTION if the option does not exist
+ */
 static exception tekGuiUpdateInputOption(TekGuiOptionWindow* window, const char* key) {
     for (uint i = 0; i < window->len_options; i++) {
+        // get ith item of array
         TekGuiOption* option = window->option_display + i;
+        // if not an option, cannot be this one
         if (!tekGuiIsOptionInput(option))
             continue;
+        // if name of option matches key, attempt to update the option text
         if (!strcmp(option->display.input.name, key)) {
             tekChainThrow(tekGuiUpdateOptionInputText(window, option));
         }
@@ -337,19 +405,44 @@ static exception tekGuiUpdateInputOption(TekGuiOptionWindow* window, const char*
     return SUCCESS;
 }
 
+/**
+ * Write a string into a named option.
+ * @param window The window to write the string to.
+ * @param key The name of the option to write the string into
+ * @param string The string to be written
+ * @param len_string The length of the string to be written
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 exception tekGuiWriteStringOption(TekGuiOptionWindow* window, const char* key, const char* string, const uint len_string) {
+    // get option data by key
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
+
+    // free string if it already exists
     if (option_data->data.string)
         free(option_data->data.string);
+
+    // allocate new memory for string
     option_data->data.string = (char*)malloc(len_string * sizeof(char));
     if (!option_data->data.string)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate string buffer.");
+
+    // copy string into new buffer
     memcpy(option_data->data.string, string, len_string);
+
+    // visual update
     tekChainThrow(tekGuiUpdateInputOption(window, key));
     return SUCCESS;
 }
 
+/**
+ * Write a number to a named input option.
+ * @param window The window to write to.
+ * @param key The name of the option to write to.
+ * @param number The number to be written.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 exception tekGuiWriteNumberOption(TekGuiOptionWindow* window, const char* key, const double number) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -358,6 +451,13 @@ exception tekGuiWriteNumberOption(TekGuiOptionWindow* window, const char* key, c
     return SUCCESS;
 }
 
+/**
+ * Write a boolean value to a named input option.
+ * @param window The window to write to.
+ * @param key The name of the option to write to.
+ * @param boolean The boolean value to be written.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 exception tekGuiWriteBooleanOption(TekGuiOptionWindow* window, const char* key, const flag boolean) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -366,6 +466,13 @@ exception tekGuiWriteBooleanOption(TekGuiOptionWindow* window, const char* key, 
     return SUCCESS;
 }
 
+/**
+ * Write a vec3 to a named input option.
+ * @param window The window to write to.
+ * @param key The name of the option to write to.
+ * @param vector The vec3 to be written.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 exception tekGuiWriteVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -374,6 +481,13 @@ exception tekGuiWriteVec3Option(TekGuiOptionWindow* window, const char* key, vec
     return SUCCESS;
 }
 
+/**
+ * Write a vec4 to a named input option.
+ * @param window The window to write to.
+ * @param key The name of the option to write to.
+ * @param vector The vec4 to be written.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 exception tekGuiWriteVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -382,6 +496,14 @@ exception tekGuiWriteVec4Option(TekGuiOptionWindow* window, const char* key, vec
     return SUCCESS;
 }
 
+/**
+ * Write a number option given by a decimal numeric string. Will convert the string to a number, or will be 0 if the string
+ * is not a valid number.
+ * @param window The window to write the number to
+ * @param key The name of the option to write the number to
+ * @param number_str The string containing the numeric data.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 static exception tekGuiWriteNumberOptionString(TekGuiOptionWindow* window, const char* key, const char* number_str) {
     char* endptr;
     const uint len_number_str = strlen(number_str) + 1;
@@ -397,6 +519,14 @@ static exception tekGuiWriteNumberOptionString(TekGuiOptionWindow* window, const
     return SUCCESS;
 }
 
+/**
+ * Write a boolean option given by a string. Will convert the string to a boolean, or will be false if the string
+ * is not a valid boolean. Will ignore case and accept either "True", "Yes", or "OK" as being true, anything else is false.
+ * @param window The window to write the boolean to
+ * @param key The name of the option to write the boolean to
+ * @param boolean_str The string containing the boolean data.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 static exception tekGuiWriteBooleanOptionString(TekGuiOptionWindow* window, const char* key, const char* boolean_str) {
     flag boolean = 0;
     if (!strcasecmp(boolean_str, "TRUE") || !strcasecmp(boolean_str, "YES") || !strcasecmp(boolean_str, "OK"))
@@ -406,6 +536,15 @@ static exception tekGuiWriteBooleanOptionString(TekGuiOptionWindow* window, cons
     return SUCCESS;
 }
 
+/**
+ * Write an element of a vector given by a decimal numeric string. Will convert the string to a number, or will be 0 if the string
+ * is not a valid number. Will write to the index of the vector specified.
+ * @param window The window to write the element to
+ * @param key The name of the option to write the element to
+ * @param element_str The string containing the numeric data.
+ * @param index The index of the vector to write at.
+ * @throws HASHTABLE_EXCEPTION if the key does not exist.
+ */
 static exception tekGuiWriteVecIndexOptionString(TekGuiOptionWindow* window, const char* key, const char* element_str, const uint index) {
     TekGuiOptionData* option_data;
     tekChainThrow(hashtableGet(&window->option_data, key, (void**)&option_data));
@@ -424,6 +563,14 @@ static exception tekGuiWriteVecIndexOptionString(TekGuiOptionWindow* window, con
     return SUCCESS;
 }
 
+/**
+ * Writes a default value into an input option. For example, a string -> nullptr, number -> 0.0, boolean -> false.
+ * @param window The window to write the value into.
+ * @param name The name of the option to write into.
+ * @param type The type of the option to write as.
+ * @throws FAILURE if type is not allowed.
+ * @throws HASHTABLE_EXCEPTION if name is not an option.
+ */
 static exception tekGuiWriteDefaultValue(TekGuiOptionWindow* window, const char* name, const flag type) {
     // mallocate the option data
     TekGuiOptionData* option_data = (TekGuiOptionData*)malloc(sizeof(TekGuiOptionData));
@@ -458,6 +605,15 @@ static exception tekGuiWriteDefaultValue(TekGuiOptionWindow* window, const char*
     return SUCCESS;
 }
 
+/**
+ * Callback for when text is inputted into one of the options. The edited text input is specified as the first parameter.
+ * Also provides a pointer to the new text and its length. Gives a pointer to the actual text, so you shouldn't overwrite
+ * it.
+ * @param text_input A pointer to the text input that called back.
+ * @param text The new text that was just inputted.
+ * @param len_text The length of the new text.
+ * @return
+ */
 static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const char* text, const uint len_text) {
     struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)text_input->data;
     TekGuiOptionWindow* window = option_pair->window;
@@ -493,6 +649,12 @@ static exception tekGuiOptionInputCallback(TekGuiTextInput* text_input, const ch
     return SUCCESS;
 }
 
+/**
+ * Callback for when a button option is clicked. All buttons will link to this callback, but callback receives a pointer
+ * to the button which called it. Will simply pass the callback on to the handler specified by the user.
+ * @param button A pointer to the button which called back
+ * @param callback_data Callback data, which button was pressed / released
+ */
 static void tekGuiButtonInputCallback(TekGuiTextButton* button, TekGuiButtonCallbackData callback_data) {
     struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)button->data;
     TekGuiOptionWindow* window = option_pair->window;
@@ -604,6 +766,15 @@ static exception tekGuiCreateMultiInput(TekGuiOptionWindow* window, const char* 
     return SUCCESS;
 }
 
+/**
+ * Create a button type option and add it to the window. Will add to the list of options, and set up callbacks.
+ * @param window The window to add the option to.
+ * @param name The name of the new button to be created.
+ * @param label The text to be displayed on the button when it is created
+ * @param option_display The array of option displays
+ * @param option_index The next free index in the option array.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekGuiCreateButtonOption(TekGuiOptionWindow* window, const char* name, const char* label, TekGuiOption* option_display, uint* option_index) {
     // empty option struct
     TekGuiOption* option = option_display + *option_index;
@@ -616,6 +787,7 @@ static exception tekGuiCreateButtonOption(TekGuiOptionWindow* window, const char
     option->display.button.name = name;
 
     // set up callbacks
+    // option pair = a collection of data that is needed in the callback (the window and the button option)
     struct TekGuiOptionPair* option_pair = (struct TekGuiOptionPair*)malloc(sizeof(struct TekGuiOptionPair));
     if (!option_pair)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for option pair.");
@@ -740,11 +912,19 @@ static exception tekGuiDrawOption(TekGuiOption* option, const int x_pos, const i
     return SUCCESS;
 }
 
+/**
+ * Bring the internal button collider of an option to the front of the button list, so that it will receive mouse inputs
+ * before other buttons on the screen, and appear to be above them.
+ * @param option
+ * @return
+ */
 static exception tekGuiBringOptionToFront(TekGuiOption* option) {
     switch (option->type) {
+    // an actual button input should have its button moved to the front
     case TEK_BUTTON_INPUT:
         tekChainThrow(tekGuiBringButtonToFront(&option->display.button.button.button));
         break;
+    // text-based inputs should have their "select this input" button moved.
     case TEK_STRING_INPUT:
     case TEK_NUMBER_INPUT:
     case TEK_BOOLEAN_INPUT:
@@ -892,6 +1072,67 @@ exception tekGuiCreateOptionWindow(const char* options_yml, TekGuiOptionWindow* 
     return SUCCESS;
 }
 
-void tekGuiDeleteOptionWindow(const TekGuiOptionWindow* window) {
-    // TODO: this
+/**
+ * Free any memory allocated by a displayed option.
+ * @param option The option to delete.
+ */
+static void tekGuiDeleteOption(TekGuiOption* option) {
+    switch (option->type) {
+    case TEK_LABEL:
+        tekDeleteText(&option->display.label);
+        break;
+    case TEK_BUTTON_INPUT:
+        tekGuiDeleteTextButton(&option->display.button.button);
+        free((void*)option->display.button.name);
+        break;
+    case TEK_STRING_INPUT:
+    case TEK_NUMBER_INPUT:
+    case TEK_BOOLEAN_INPUT:
+    case TEK_VEC3_INPUT:
+    case TEK_VEC4_INPUT:
+        tekGuiDeleteTextInput(&option->display.input.text_input);
+        free((void*)option->display.input.name);
+        break;
+    default:
+        break;
+    }
+}
+
+/**
+ * Free any memory allocated by option data.
+ * @param option_data The option data to delete
+ */
+static void tekGuiDeleteOptionData(TekGuiOptionData* option_data) {
+    if (option_data->type == TEK_STRING_INPUT)
+        free(option_data->data.string);
+    free(option_data);
+}
+
+/**
+ * Free any memory allocated by the option window.
+ * @param window The window to delete.
+ */
+void tekGuiDeleteOptionWindow(TekGuiOptionWindow* window) {
+    // delete the options
+    for (uint i = 0; i < window->len_options; i++) {
+        TekGuiOption* option = window->option_display + i;
+        tekGuiDeleteOption(option);
+    }
+
+    // delete the option data.
+    // first get all the option data from hashtable
+    TekGuiOptionData* option_data_array;
+    hashtableGetValues(&window->option_data, &option_data_array);
+    if (!option_data_array) return;
+
+    // iterate over, delete each option data
+    for (uint i = 0; i < window->option_data.num_items; i++) {
+        TekGuiOptionData* option_data = option_data_array + i;
+        tekGuiDeleteOptionData(option_data);
+    }
+
+    // final cleanup
+    free(option_data_array);
+    hashtableDelete(&window->option_data);
+    tekGuiDeleteWindow(&window->window);
 }

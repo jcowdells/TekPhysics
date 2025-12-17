@@ -1,0 +1,27 @@
+#version 330 core
+
+in vec3 f_position;
+in vec3 f_normal;
+in vec2 f_tex;
+
+out vec4 color;
+
+uniform vec3 light_color;
+uniform vec3 camera_pos;
+uniform vec3 light_position;
+uniform sampler2D texture_file;
+
+void main() {
+    vec3 tex_colour = vec3(texture(texture_file, f_tex));
+    vec3 ambient = tex_colour * light_color * 0.2f;
+
+    vec3 light_direction = normalize(light_position - f_position);
+    vec3 diffuse = tex_colour * light_color * max(dot(f_normal, light_direction), 0.0f);
+
+    vec3 view_direction = normalize(camera_pos - f_position);
+    vec3 reflect_direction = reflect(-light_direction, f_normal);
+    float spec_modifier = pow(max(dot(view_direction, reflect_direction), 0.0), 32);
+    vec3 specular = 0.5 * spec_modifier * light_color;
+
+    color = vec4(ambient + diffuse + specular, 1.0f);
+}

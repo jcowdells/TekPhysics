@@ -1316,8 +1316,8 @@ static exception tekInspectDrawCallback(TekGuiWindow* window) {
 static int tekWriteInspectText(char* string, size_t max_length, const float time, const float fps, const char* name, const vec3 position, const vec3 velocity) {
     return snprintf(
         string, max_length,
-        "Time: %.3f\nFPS: %.3f\n\nObject Name: %s\nPosition: (%.5f, %.5f, %.5f)\nVelocity: (%.5f, %.5f, %.5f)\n\nUse up and down arrows to switch.",
-        time, fps, name, EXPAND_VEC3(position), EXPAND_VEC3(velocity)
+        "Time: %.3f\nFPS: %.3f\n\nObject Name: %s\nPosition: (%.5f, %.5f, %.5f)\nVelocity: (%.5f, %.5f, %.5f)\nSpeed: %f\n\nUse up and down arrows to switch.",
+        time, fps, name, EXPAND_VEC3(position), EXPAND_VEC3(velocity), glm_vec3_norm(velocity)
     );
 }
 

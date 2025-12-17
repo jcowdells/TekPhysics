@@ -511,8 +511,9 @@ exception ymlGetList(YmlFile* yml, YmlData** data, const List* keys) {
 
         // get the data stored in the hashtable, and make sure that it is a valid key
         const exception tek_exception = hashtableGet(hashtable, key->data, &loop_data);
-        if (tek_exception)
+        if (tek_exception) {
             tekThrow(YML_EXCEPTION, "Invalid key - key does not exist.");
+        }
 
         // if the data stored is type 'yml data', then a hashtable is stored there
         // set this as the new hashtable

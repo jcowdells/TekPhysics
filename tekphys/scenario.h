@@ -10,7 +10,6 @@ typedef struct TekScenario {
     List snapshots;
     List names;
     Queue unused_ids;
-    // TODO: think of some constants of this scenario, probably just gravity.
 } TekScenario;
 
 exception tekCreateScenario(TekScenario* scenario);

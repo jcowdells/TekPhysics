@@ -72,4 +72,4 @@ exception tekGuiReadNumberOption(TekGuiOptionWindow* window, const char* key, do
 exception tekGuiReadBooleanOption(TekGuiOptionWindow* window, const char* key, flag* boolean);
 exception tekGuiReadVec3Option(TekGuiOptionWindow* window, const char* key, vec3 vector);
 exception tekGuiReadVec4Option(TekGuiOptionWindow* window, const char* key, vec4 vector);
-void tekGuiDeleteOptionWindow(const TekGuiOptionWindow* window);
+void tekGuiDeleteOptionWindow(TekGuiOptionWindow* window);

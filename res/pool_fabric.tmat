@@ -1,0 +1,17 @@
+shaders:
+  vertex_shader: "../shader/texture.glvs"
+  fragment_shader: "../shader/texture.glfs"
+uniforms:
+  light_color:
+    r: 0.9
+    g: 0.9
+    b: 0.9
+  light_position:
+    x: 4.0
+    y: 12.0
+    z: 0.0
+  camera_pos: $tek_camera_position
+  model: $tek_model_matrix
+  view: $tek_view_matrix
+  projection: $tek_projection_matrix
+  texture_file: "../res/pool_felt.jpg"

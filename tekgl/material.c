@@ -213,8 +213,9 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
 
     // geometry shader is optional, check if we have one, don't throw error otherwise.
     exception check_for_geometry = ymlGet(&material_yml, &gs_data, "shaders", "geometry_shader");
-    flag has_geometry;
-    if (check_for_geometry == SUCCESS) has_geometry = 1;
+    flag has_geometry = 0;
+    if (check_for_geometry == SUCCESS)
+        has_geometry = 1;
 
     char* vertex_shader;
     char* fragment_shader;
@@ -339,7 +340,8 @@ exception tekBindMaterial(const TekMaterial* material) {
                 break;
             case TEXTURE_DATA:
                 uint* texture_id = uniform->data;
-                tekChainThrow(tekShaderUniformInt(shader_program_id, uniform->name, (int)(*texture_id)));
+                tekBindTexture(*texture_id, 1);
+                tekChainThrow(tekShaderUniformInt(shader_program_id, uniform->name, 1));//(int)(*texture_id)));
                 break;
             case VEC2_DATA:
                 tekChainThrow(tekShaderUniformVec2(shader_program_id, uniform->name, uniform->data));
