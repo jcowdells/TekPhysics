@@ -34,6 +34,8 @@ exception tekScenarioGetSnapshot(const TekScenario* scenario, const uint snapsho
             return SUCCESS;
         }
     });
+
+    // should only be reached if not found
     tekThrow(FAILURE, "ID not in snapshot list");
 }
 
@@ -149,7 +151,6 @@ exception tekScenarioGetNextId(TekScenario* scenario, uint* next_id) {
     void* next_id_ptr;
     tekChainThrow(queueDequeue(&scenario->unused_ids, &next_id_ptr));
     *next_id = (uint)next_id_ptr;
-
     return SUCCESS;
 }
 

@@ -1225,25 +1225,48 @@ static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_tr
     return SUCCESS;
 }
 
+/**
+ * Check if two coordinates are within a tiny tolerance of each other. (less than 1e-6 units seperating them)
+ * @param point_a The first coordinate to check.
+ * @param point_b The second coordinate to check.
+ * @return 1 if they are very close, 0 otherwise.
+ */
 static int tekIsCoordinateEquivalent(vec3 point_a, vec3 point_b) {
     vec3 delta;
     glm_vec3_sub(point_b, point_a, delta);
+    // norm2 = square distance, to avoid square rooting unnecessarily.
     return glm_vec3_norm2(delta) < EPSILON_SQUARED;
 }
 
+/**
+ * Check if two manifolds have a contact point that is within a tiny tolerance of each other.
+ * @param manifold_a The first manifold to check
+ * @param manifold_b The second manifold to check
+ * @return 1 if they are equivalent, 0 otherwise
+ */
 static int tekIsManifoldEquivalent(TekCollisionManifold* manifold_a, TekCollisionManifold* manifold_b) {
     return
         tekIsCoordinateEquivalent(manifold_a->contact_points[0], manifold_b->contact_points[0])
         && tekIsCoordinateEquivalent(manifold_a->contact_points[1], manifold_b->contact_points[1]);
 }
 
+/**
+ * Search the list of contact manifolds and see if a potential new contact already exists.
+ * @param manifold_vector The vector of manifolds
+ * @param manifold The manifold to check against
+ * @param contained A flag that is set to 1 if the manifold is contained already.
+ * @throws VECTOR_EXCEPTION possibly
+ */
 static exception tekDoesManifoldContainContacts(const Vector* manifold_vector, TekCollisionManifold* manifold, flag* contained) {
     *contained = 0;
+    // linear search
     for (uint i = 0; i < manifold_vector->length; i++) {
         TekCollisionManifold* loop_manifold;
         tekChainThrow(vectorGetItemPtr(manifold_vector, i, &loop_manifold));
+        // if the bodies are different, dont care what the coords say they have to be different contacts.
         if (loop_manifold->bodies[0] != manifold->bodies[0] || loop_manifold->bodies[1] != manifold->bodies[1])
             continue;
+        // if coordinates are within a tiny tolerance of each other, then reject this collision manifold
         if (tekIsManifoldEquivalent(manifold, loop_manifold)) {
             *contained = 1;
             return SUCCESS;
@@ -1253,12 +1276,31 @@ static exception tekDoesManifoldContainContacts(const Vector* manifold_vector, T
     return SUCCESS;
 }
 
+/**
+ * Helper function to get a child, essentially a mapping of (0,1) -> (node.left,node.right)
+ */
 #define getChild(collider_node, i) (i == LEFT) ? collider_node->data.node.left : collider_node->data.node.right
 
+/**
+ * Get the collision manifolds releating to the two bodies, and add them to a provided vector. Gives information such as contact position, depth, normals, tangent vectors etc.
+ * @param body_a The first body involved in the potential collision.
+ * @param body_b The second body involved.
+ * @param collision Flag that is set to 1 if there was a collision, 0 if not.
+ * @param manifold_vector The vector containing all the manifolds that will be produced. Will not empty the vector, so the same vector can be used to collect all the manifolds of an entire colliding system / scenario.
+ * @throws FAILURE if collider buffer not initialised.
+ */
 exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* collision, Vector* manifold_vector) {
+    // general process:
+    // check for collision between each pair of sub-obb in the colliding pair.
+    // for each colliding pair, add that pair to the collider stack.
+    // if the child is a leaf node/triangle, then only traverse the non-leaf node until two triangles are being checked.
+    // if two triangles are found to collide, no need to keep traversing the collider structure. can just create a manifold / check for triangle-triangle collision.
+
+    // we need a collider buffer to store pairs of nodes. if not initialised, cannot continue
     if (collider_init == DE_INITIALISED) return SUCCESS;
     if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Collider buffer was never initialised.");
 
+    // initial item to add to collider stack, body a and body b's collider.
     *collision = 0;
     collider_buffer.length = 0;
     TekColliderNode* pair[2] = {
@@ -1267,6 +1309,8 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
     tekUpdateOBB(&body_a->collider->obb, body_a->transform);
     tekUpdateOBB(&body_b->collider->obb, body_b->transform);
     tekChainThrow(vectorAddItem(&collider_buffer, &pair));
+
+    // kinda like a tree traversal but not really.
     while (vectorPopItem(&collider_buffer, &pair)) {
         if (pair[LEFT]->type == COLLIDER_NODE) {
             tekUpdateOBB(&pair[LEFT]->data.node.left->obb, body_a->transform);
@@ -1282,13 +1326,16 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
         const uint i_max = pair[LEFT]->type == COLLIDER_NODE ? 2 : 1;
         const uint j_max = pair[RIGHT]->type == COLLIDER_NODE ? 2 : 1;
 
+        // checking all possible pairs of children. could be either 1, 2 or 4 checks.
         for (uint i = 0; i < i_max; i++) {
             for (uint j = 0; j < j_max; j++) {
+                // get child if it exists, else just the collider node.
                 TekColliderNode* node_a = (pair[LEFT]->type == COLLIDER_NODE) ? getChild(pair[LEFT], i) : pair[LEFT];
                 TekColliderNode* node_b = (pair[RIGHT]->type == COLLIDER_NODE) ? getChild(pair[RIGHT], j) : pair[RIGHT];
 
                 flag sub_collision = 0;
 
+                // use correct collision detection method based on the types of colliders involved
                 if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_NODE)) {
                     sub_collision = tekCheckOBBCollision(&node_a->obb, &node_b->obb);
                 } else if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_LEAF)) {
@@ -1298,6 +1345,8 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
                     tekUpdateLeaf(node_a, body_a->transform);
                     sub_collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
                 } else {
+                    // triangle-triangle collision is more special
+                    // need to create a collision manifold if there is a collision
                     tekUpdateLeaf(node_a, body_a->transform);
                     tekUpdateLeaf(node_b, body_b->transform);
                     TekCollisionManifold manifold;
@@ -1319,6 +1368,7 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
                     }
                 }
 
+                // if there was a triangle-triangle collision, there has to be some form of collision between bodies, so mark as such.
                 if (sub_collision) {
                     temp_pair[LEFT] = node_a;
                     temp_pair[RIGHT] = node_b;
@@ -1331,16 +1381,27 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
     return SUCCESS;
 }
 
+/**
+ * Create an inverse mass matrix, kinda a 12x12 matrix, 0,1 = body a inverse mass + inverse inertia tensor, 2,3 = body b ...
+ * @param body_a The first body being collided.
+ * @param body_b The second body being collected.
+ * @param inv_mass_matrix[4] The outputted inverse inertia matrix.
+ */
 static void tekSetupInvMassMatrix(TekBody* body_a, TekBody* body_b, mat3 inv_mass_matrix[4]) {
+    // if the body is immovable, we can say it has an infinite mass.
+    // the inverse mass matrix is 1/infinity, which tends to 0
+    // so we can just zero out both matrices.
     if (body_a->immovable) {
         glm_mat3_zero(inv_mass_matrix[0]);
         glm_mat3_zero(inv_mass_matrix[1]);
+    // otherwise, calculate the actual matrices.
     } else {
         glm_mat3_identity(inv_mass_matrix[0]);
         glm_mat3_scale(inv_mass_matrix[0], 1.0f / body_a->mass);
         glm_mat3_copy(body_a->inverse_inertia_tensor, inv_mass_matrix[1]);
     }
 
+    // repeat for body b
     if (body_b->immovable) {
         glm_mat3_zero(inv_mass_matrix[2]);
         glm_mat3_zero(inv_mass_matrix[3]);
@@ -1351,6 +1412,13 @@ static void tekSetupInvMassMatrix(TekBody* body_a, TekBody* body_b, mat3 inv_mas
     }
 }
 
+/**
+ * Apply collision between two bodies, based on the contact manifold between them.
+ * @param body_a The first body that is colliding
+ * @param body_b The second body that is colliding
+ * @param manifold The contact manifold between the bodies
+ * @throws SUCCESS nothing throws an exception.
+ */
 exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifold* manifold) {
     vec3 constraints[NUM_CONSTRAINTS][4];
     mat3 inv_mass_matrix[4];
@@ -1358,12 +1426,14 @@ exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifo
 
     const float friction = fmaxf(body_a->friction, body_b->friction);
 
+    // generate the impulse constraint
     glm_vec3_negate_to(manifold->contact_normal, constraints[NORMAL_CONSTRAINT][0]);
     glm_vec3_cross(manifold->r_ac, manifold->contact_normal, constraints[NORMAL_CONSTRAINT][1]);
     glm_vec3_negate(constraints[NORMAL_CONSTRAINT][1]);
     glm_vec3_copy(manifold->contact_normal, constraints[NORMAL_CONSTRAINT][2]);
     glm_vec3_cross(manifold->r_bc, manifold->contact_normal, constraints[NORMAL_CONSTRAINT][3]);
 
+    // generate the tangential / friction constraints
     for (uint j = 0; j < 2; j++) {
         glm_vec3_negate_to(manifold->tangent_vectors[j], constraints[TANGENT_CONSTRAINT_1 + j][0]);
         glm_vec3_cross(manifold->r_ac, manifold->tangent_vectors[j], constraints[TANGENT_CONSTRAINT_1 + j][1]);
@@ -1372,6 +1442,7 @@ exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifo
         glm_vec3_cross(manifold->r_bc, manifold->tangent_vectors[j], constraints[TANGENT_CONSTRAINT_1 + j][3]);
     }
 
+    // for each constraint, solve to find change in velocity
     for (uint c = 0; c < NUM_CONSTRAINTS; c++) {
         float lambda_d = 0.0f; // denominator
         for (uint j = 0; j < 4; j++) {
@@ -1391,6 +1462,7 @@ exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifo
 
         float lambda = lambda_n / lambda_d;
 
+        // clamp lambda.
         const float temp = manifold->impulses[c];
         switch (c) {
         case NORMAL_CONSTRAINT:
@@ -1405,13 +1477,15 @@ exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifo
         default:
             break;
         }
-
+ 
+        // calculate change in velocity for both bodies linear and angular velocity.
         vec3 delta_v[4];
         for (uint j = 0; j < 4; j++) {
             glm_mat3_mulv(inv_mass_matrix[j], constraints[c][j], delta_v[j]);
             glm_vec3_scale(delta_v[j], lambda, delta_v[j]);
         }
 
+        // if body is immovable, then do not apply the change
         if (!body_a->immovable) {
             glm_vec3_add(body_a->velocity, delta_v[0], body_a->velocity);
             glm_vec3_add(body_a->angular_velocity, delta_v[1], body_a->angular_velocity);
@@ -1425,12 +1499,19 @@ exception tekApplyCollision(TekBody* body_a, TekBody* body_b, TekCollisionManifo
     return SUCCESS;
 }
 
+/**
+ * Decide which bodies are colliding and apply impulses to seperate any colliding bodies.
+ * @param bodies The vector containing all the bodies.
+ * @param phys_period The time period of the simulation.
+ * @throws FAILURE if contact buffer was not initialised.
+ */
 exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
     if (collider_init == DE_INITIALISED) return SUCCESS;
     if (collider_init == NOT_INITIALISED) tekThrow(FAILURE, "Contact buffer was never initialised.");
 
     contact_buffer.length = 0;
 
+    // loop through all pairs of bodies
     for (uint i = 0; i < bodies->length; i++) {
         TekBody* body_i;
         tekChainThrow(vectorGetItemPtr(bodies, i, &body_i));
@@ -1443,17 +1524,22 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
             // if both immovable, they will be unaffected by whatever response happens.
             if (body_i->immovable && body_j->immovable) continue;
 
+            // find contact points and add to the contact buffer
             flag is_collision = 0;
             tekChainThrow(tekGetCollisionManifolds(body_i, body_j, &is_collision, &contact_buffer))
         }
     }
 
+    // now loop through all contacts between bodies
     for (uint i = 0; i < contact_buffer.length; i++) {
+        // get both bodies
         TekCollisionManifold* manifold;
         tekChainThrow(vectorGetItemPtr(&contact_buffer, i, &manifold));
 
         TekBody* body_a = manifold->bodies[0], * body_b = manifold->bodies[1];
 
+        // get centres of both bodies
+        // previously, i forgot that centre of mass != centre, led to 24 (ish) hours of bug fixing LOL
         vec3 centre_a, centre_b;
         glm_vec3_add(body_a->position, body_a->centre_of_mass, centre_a);
         glm_vec3_add(body_b->position, body_b->centre_of_mass, centre_b);
@@ -1461,9 +1547,11 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
         vec3 ab;
         glm_vec3_sub(centre_b, centre_a, ab);
 
+        // baumgarte stabilisation = stabilising force to prevent jitter
         manifold->baumgarte_stabilisation = -BAUMGARTE_BETA / phys_period * fmaxf(manifold->penetration_depth - SLOP, 0.0f);
         float restitution = fminf(body_a->restitution, body_b->restitution);
 
+        // couple other quantites that are needed
         glm_vec3_sub(manifold->contact_points[0], centre_a, manifold->r_ac);
         glm_vec3_sub(manifold->contact_points[1], centre_b, manifold->r_bc);
 
@@ -1483,6 +1571,8 @@ exception tekSolveCollisions(const Vector* bodies, const float phys_period) {
         manifold->baumgarte_stabilisation += restitution;
     }
 
+    // iterative solver step -> repeat NUM_ITERATIONS time
+    // through the iterations, the change in velocity to seperate approaches global solution
     for (uint s = 0; s < NUM_ITERATIONS; s++) {
         for (uint i = 0; i < contact_buffer.length; i++) {
             TekCollisionManifold* manifold;

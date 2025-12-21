@@ -46,8 +46,9 @@ extern void sgesv_(int* n, int* nrhs, float* a, int* lda, int* ipiv, float* b, i
 /**
  * Compute the eigenvectors and eigenvalues of a symmetric matrix.
  * @param[in] matrix The matrix to compute.
- * @param[in/out] eigenvectors An empty but already allocated array of 3*sizeof(vec3) that will store the eigenvectors.
- * @param[in/out] eigenvalues An empty but already allocated array of 3*sizeof(float) that will store the eigenvalues.
+ * @param[in/out] eigenvectors[3] An empty but already allocated array of 3*sizeof(vec3) that will store the eigenvectors.
+ * @param[in/out] eigenvalues[3] An empty but already allocated array of 3*sizeof(float) that will store the eigenvalues.
+ * @throws FAILURE if there is no solution or a solution could not be found in a reasonable time.
  * @note Uses LAPACK / ssyev_(...) internally.
  */
 static exception symmetricMatrixCalculateEigenvectors(mat3 matrix, vec3 eigenvectors[3], float eigenvalues[3]) {
@@ -79,6 +80,13 @@ static exception symmetricMatrixCalculateEigenvectors(mat3 matrix, vec3 eigenvec
     return SUCCESS;
 }
 
+/**
+ * Solve a simultaneous equation with 3 unknowns and 3 vector equations.
+ * @param lhs_vectors[3] The three vectors of coefficients for xs, ys and zs
+ * @param rhs_vector The required result.
+ * @param result The values of x y and z.
+ * @throws FAILURE if there is no solution.
+ */
 static exception solveSimultaneous3Vec3(vec3 lhs_vectors[3], vec3 rhs_vector, vec3 result) {
     // copy lhs and rhs vectors into a buffer so it doesn't get overwritten by LAPACK
     vec3 lhs_buffer[3];
@@ -122,6 +130,9 @@ static float tekCalculateTriangleArea(vec3 point_a, vec3 point_b, vec3 point_c) 
     return 0.5f * glm_vec3_norm(cross);
 }
 
+/**
+ * Ensure that an index is allowed, throw error if not.
+ */
 #define tekCheckIndex(index) \
 if (index >= num_vertices) \
 tekThrowThen(FAILURE, "Vertex does not exist.", { \
@@ -259,8 +270,10 @@ static void tekCalculateCovarianceMatrix(const Vector* triangles, const uint* in
  * @param[out] max_p A pointer to where the maximum projection should be stored.
  */
 static void tekFindProjections(const Vector* triangles, const uint* indices, const uint num_indices, vec3 axis, float* min_p, float* max_p) {
+    // search for maximum and minimum projection along axis
     float min_proj = INFINITY, max_proj = -INFINITY;
     for (uint i = 0; i < num_indices; i++) {
+        // read triangle at each index of indices array.
         const struct Triangle* triangle;
         vectorGetItemPtr(triangles, indices[i], &triangle);
         for (uint j = 0; j < 3; j++) {
@@ -274,6 +287,8 @@ static void tekFindProjections(const Vector* triangles, const uint* indices, con
             }
         }
     }
+
+    // output minimum and maximum projection
     *min_p = min_proj;
     *max_p = max_proj;
 }
@@ -332,6 +347,7 @@ static exception tekCreateOBB(const Vector* triangles, const uint* indices, cons
  * @throws FAILURE if there is an error while calculating eigenvectors.
  */
 static exception tekCreateColliderNode(const flag type, const uint id, const Vector* triangles, uint* indices, const uint num_indices, TekColliderNode** collider_node) {
+    // allocate memory for collider
     *collider_node = (TekColliderNode*)malloc(sizeof(TekColliderNode));
     if (!*collider_node)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for collider node.");
@@ -339,12 +355,14 @@ static exception tekCreateColliderNode(const flag type, const uint id, const Vec
         free(*collider_node);
         *collider_node = 0;
     });
+
+    // write data in
     (*collider_node)->id = id;
     (*collider_node)->type = type;
-
-    // setting left & right pointers to NULL, in case someone tries to dereference them with junk in there.
     (*collider_node)->indices = indices;
     (*collider_node)->num_indices = num_indices;
+
+    // setting left & right pointers to NULL, in case someone tries to dereference them with junk in there.
     if (type == COLLIDER_NODE) {
         (*collider_node)->data.node.left = 0;
         (*collider_node)->data.node.right = 0;
@@ -352,6 +370,9 @@ static exception tekCreateColliderNode(const flag type, const uint id, const Vec
     return SUCCESS;
 }
 
+/**
+ * Clean up memory involved in creation of collider.
+ */
 #define tekColliderCleanup() \
 { \
 vectorDelete(&triangles); \
@@ -391,6 +412,14 @@ static void tekPrintCollider(TekColliderNode* collider, uint indent) {
  * @throws FAILURE if there was an exception during calculations.
  */
 exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
+    // algorithm process:
+    // initialise a stack of OBBs
+    // determine the best axis to most equally divide the vertices of the object
+    // determine the smallest OBB that can fit all the vertices
+    // do for each side and add the OBB to the stack
+    // repeat, dequeue the OBB stack, divide the vertices inside the OBB in half, recreate
+    // if OBB is not divisible, add a leaf node (triangle)
+
     // just set up some vectors and whatever
     Vector collider_stack = {};
     tekChainThrow(vectorCreate(16, sizeof(TekColliderNode*), &collider_stack));
@@ -400,6 +429,7 @@ exception tekCreateCollider(const TekBody* body, TekCollider* collider) {
         vectorDelete(&collider_stack);
     });
 
+    // buffer containing indices of triangles
     TekColliderNode* collider_node;
     uint node_id = 0;
     uint* all_indices = (uint*)malloc(triangles.length * sizeof(uint));
@@ -569,10 +599,19 @@ void tekDeleteCollider(TekCollider* collider) {
     *collider = 0;
 }
 
+/**
+ * Update an OBB based on a transformation matrix, so the OBB's coordinates correspond to world coordinates not local coordinates.
+ * @param obb The OBB to transform
+ * @param transform The matrix to transform with.
+ */
 void tekUpdateOBB(struct OBB* obb, mat4 transform) {
+    // transform the centre
     glm_mat4_mulv3(transform, obb->centre, 1.0f, obb->w_centre);
 
+    // now transform the the axes and half extents
     for (uint i = 0; i < 3; i++) {
+        // using w=0 to represent vector transformation
+        // scale factor of half extents = scale factor of axes
         glm_mat4_mulv3(transform, obb->axes[i], 0.0f, obb->w_axes[i]);
         const float scale_factor = glm_vec3_norm(obb->axes[i]);
         glm_vec3_scale(obb->axes[i], 1.0f / scale_factor, obb->axes[i]);
@@ -580,8 +619,14 @@ void tekUpdateOBB(struct OBB* obb, mat4 transform) {
     }
 }
 
+/**
+ * Update a leaf node of the collider structure by transforming each vertex by the transform of the object it relates to.
+ * @param leaf The leaf to transform. 
+ * @param transform The transform matrix to use.
+ */
 void tekUpdateLeaf(TekColliderNode* leaf, mat4 transform) {
     for (uint i = 0; i < leaf->data.leaf.num_vertices; i++) {
+        // multiply vec3 by mat4, using w=1.0 to represent a position
         glm_mat4_mulv3(transform, leaf->data.leaf.vertices[i], 1.0f, leaf->data.leaf.w_vertices[i]);
     }
 }
