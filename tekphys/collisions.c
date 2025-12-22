@@ -40,27 +40,40 @@ static BitSet edge_bitset = {};
 
 static flag collider_init = NOT_INITIALISED;
 
+/**
+ * Called at the end of the program to free any allocated structures.
+ */
 void tekColliderDelete() {
+    // mark de initialised so that they are not used.
     collider_init = DE_INITIALISED;
+    // stuff for broad collision detection
     vectorDelete(&collider_buffer);
     vectorDelete(&contact_buffer);
+    // collision response
     vectorDelete(&impulse_buffer);
+    // GJK + EPA
     vectorDelete(&vertex_buffer);
     vectorDelete(&face_buffer);
     vectorDelete(&edge_buffer);
     bitsetDelete(&edge_bitset);
 }
 
+/**
+ * Initialise some supporting data structures that are needed by many of the methods used in the collision detection process.
+ */
 tek_init TekColliderInit() {
+    // needed for collision detection
     exception tek_exception = vectorCreate(16, 2 * sizeof(TekColliderNode*), &collider_buffer);
     if (tek_exception != SUCCESS) return;
 
     tek_exception = vectorCreate(8, sizeof(TekCollisionManifold), &contact_buffer);
     if (tek_exception != SUCCESS) return;
 
+    // collision response
     tek_exception = vectorCreate(1, NUM_CONSTRAINTS * sizeof(float), &impulse_buffer);
     if (tek_exception != SUCCESS) return;
 
+    // GJK stuff
     tek_exception = vectorCreate(4, sizeof(struct TekPolytopeVertex), &vertex_buffer);
     if (tek_exception != SUCCESS) return;
 
@@ -73,6 +86,7 @@ tek_init TekColliderInit() {
     tek_exception = bitsetCreate(6 * 6, 1, &edge_bitset);
     if (tek_exception != SUCCESS) return;
 
+    // end of program callback
     tek_exception = tekAddDeleteFunc(tekColliderDelete);
     if (tek_exception != SUCCESS) return;
 
@@ -83,6 +97,7 @@ tek_init TekColliderInit() {
  * Check whether there is a collision between two OBBs using the separating axis theorem.
  * @param obb_a The first obb.
  * @param obb_b The obb that will be tested against the first one.
+ * @return 1 if there was a collision, 0 otherwise.
  */
 static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     // OBB-OBB collision using the separating axis theorem (SAT)
@@ -172,16 +187,30 @@ static flag tekCheckOBBCollision(struct OBB* obb_a, struct OBB* obb_b) {
     return 1;
 }
 
+/**
+ * Create a transformation matrix that will convert an OBB into an AABB centred around the origin.
+ * @param obb The OBB to create the matrix for.
+ * @param transform The outputted transformation matrix.
+ */
 static void tekCreateOBBTransform(const struct OBB* obb, mat4 transform) {
+    // some matrix magic.
+    // we know the AABB we want, and the OBB we have, and its easy to say how to change an AABB to get here.
     mat4 temp_transform = {
         obb->w_axes[0][0], obb->w_axes[0][1], obb->w_axes[0][2], 0.0f,
         obb->w_axes[1][0], obb->w_axes[1][1], obb->w_axes[1][2], 0.0f,
         obb->w_axes[2][0], obb->w_axes[2][1], obb->w_axes[2][2], 0.0f,
         obb->w_centre[0], obb->w_centre[1], obb->w_centre[2], 1.0f
     };
+    // invert the matrix to go back the other way.
     glm_mat4_inv_fast(temp_transform, transform);
 }
 
+/**
+ * Check for a collision between an AABB and a triangle. AABB is assumed to be centred around the origin, with extends of +/- each half extent in that axis.
+ * @param half_extents[3] The half extents of the AABB.
+ * @param triangle[3] The triangle to test against.
+ * @return 1 if there was a collision, 0 otherwise. 
+ */
 static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 triangle[3]) {
     vec3 face_vectors[3];
     for (uint i = 0; i < 3; i++) {
@@ -267,27 +296,52 @@ static flag tekCheckAABBTriangleCollision(const float half_extents[3], vec3 tria
     return 1;
 }
 
+/**
+ * Check for a collision between a triangle and a single OBB. Works by transforming both into a position where the OBB can be treated as an AABB (axis aligned bounding box) to reduce calculation.
+ * @param obb The obb to test against.
+ * @param triangle[3] The triangle to test.
+ * @return 1 if there was a collision, 0 otherwise.
+ */
 static flag tekCheckOBBTriangleCollision(const struct OBB* obb, vec3 triangle[3]) {
+    // create the transform that will convert the OBB into an AABB
     mat4 transform;
     tekCreateOBBTransform(obb, transform);
 
     vec3 transformed_triangle[3];
 
+    // apply tranform to each point on the triangle.
     for (uint i = 0; i < 3; i++) {
         glm_mat4_mulv3(transform, triangle[i], 1.0f, transformed_triangle[i]);
     }
 
+    // treat OBB as an AABB.
     return tekCheckAABBTriangleCollision(obb->w_half_extents, transformed_triangle);
 }
 
+/**
+ * Check for a collision between an array of triangles and an OBB.
+ * @param obb The obb to test for collisions.
+ * @param triangles The array of triangles to test.
+ * @param num_triangles The number of triangles (number of points / 3)
+ * @return 1 if there was a collision between any of the triangles and the obb, 0 otherwise.
+ */
 static flag tekCheckOBBTrianglesCollision(const struct OBB* obb, vec3* triangles, const uint num_triangles) {
+    // loop through each triangle
     for (uint i = 0; i < num_triangles; i ++) {
+        // cheeky maths to adjust from triangles to points.
         if (tekCheckOBBTriangleCollision(obb, triangles + i * 3)) return 1;
     }
     return 0;
 }
 
+/**
+ * Calculate the 'orientation' of a triangle versus a point, it is the scalar triple product of the triangle translated by the position vector of the point.
+ * @param triangle[3] The triangle to find the orientation of.
+ * @param point The point to find the orientation of.
+ * @return The orientation of the 4 points.
+ */
 static float tekCalculateOrientation(vec3 triangle[3], vec3 point) {
+    // buffer to store difference between each point and the 4th point.
     vec3 sub_buffer[3];
     for (uint i = 0; i < 3; i++) {
         glm_vec3_sub(triangle[i], point, sub_buffer[i]);
@@ -297,8 +351,8 @@ static float tekCalculateOrientation(vec3 triangle[3], vec3 point) {
 
 /**
  * Return the furthest point on a triangle in a given search direction.
- * @param triangle[in] The triangle to search through.
- * @param direction[in] The direction to search in.
+ * @param[in] triangle[3] The triangle to search through.
+ * @param[in] direction The direction to search in.
  * @return closest_point The index of the closest point on the triangle.
  */
 static uint tekTriangleFurthestPoint(vec3 triangle[3], vec3 direction) {
@@ -321,10 +375,10 @@ static uint tekTriangleFurthestPoint(vec3 triangle[3], vec3 direction) {
 
 /**
  * Triangle support function. Finds a point of a Minkowski Difference that has the largest magnitude in a specified direction.
- * @param triangle_a[in] The first triangle to check.
- * @param triangle_b[in] The second triangle to check.
- * @param direction[in] The direction to check in
- * @param point[out] The outputted point of the Minkowski Difference.
+ * @param[in] triangle_a[3] The first triangle to check.
+ * @param[in] triangle_b[3] The second triangle to check.
+ * @param[in] direction The direction to check in
+ * @param[out] point The outputted point of the Minkowski Difference.
  */
 static void tekTriangleSupport(vec3 triangle_a[3], vec3 triangle_b[3], vec3 direction, struct TekPolytopeVertex* point) {
     // find the maximal point of triangle a, and the maximal point of triangle b in the other direction
@@ -347,8 +401,8 @@ static void tekTriangleSupport(vec3 triangle_a[3], vec3 triangle_b[3], vec3 dire
 
 /**
  * Update a simplex which has two points.
- * @param direction[out] The direction which is being tested.
- * @param simplex[in/out] The simplex to update.
+ * @param[out] direction The direction which is being tested.
+ * @param[in/out] simplex[4] The simplex to update.
  * @return
  */
 static void tekUpdateLineSimplex(vec3 direction, struct TekPolytopeVertex simplex[4]) {
@@ -390,9 +444,9 @@ static void tekUpdateTriangleSimplexLineAB(vec3 ao, vec3 ab, vec3 direction, uin
 
 /**
  * Update a simplex which has three points. The final simplex could have between 1 and 3 points, and direction will be changed based on features of simplex.
- * @param direction[out] The new direction of the simplex.
- * @param simplex[in/out] The simplex to update.
- * @param len_simplex[in/out] The length of the simplex.
+ * @param[out] direction The new direction of the simplex.
+ * @param[in/out] simplex[4] The simplex to update.
+ * @param[in/out] len_simplex The length of the simplex.
  * @return
  */
 static void tekUpdateTriangleSimplex(vec3 direction, struct TekPolytopeVertex simplex[4], uint* len_simplex) {
@@ -454,9 +508,9 @@ static void tekUpdateTriangleSimplex(vec3 direction, struct TekPolytopeVertex si
 
 /**
  * Update a simplex with 4 vertices. Tests each valid face as a separate triangle, and determines if origin is contained.
- * @param direction[out] The new direction to test
- * @param simplex[in/out] The simplex to update.
- * @param len_simplex[in/out] The length of the simplex.
+ * @param[out] direction The new direction to test
+ * @param[in/out] simplex[4] The simplex to update.
+ * @param[in/out] len_simplex The length of the simplex.
  * @return 1 if the origin is contained, 0 if not
  */
 static int tekUpdateTetrahedronSimplex(vec3 direction, struct TekPolytopeVertex simplex[4], uint* len_simplex) {
@@ -518,9 +572,9 @@ static int tekUpdateTetrahedronSimplex(vec3 direction, struct TekPolytopeVertex 
 
 /**
  * Call the correct update function based on the number of vertices in the simplex.
- * @param direction[out] The new direction to travel in.
- * @param simplex[in/out] The simplex to update.
- * @param len_simplex[in/out] The number of vertices in the simplex.
+ * @param[out] direction The new direction to travel in.
+ * @param[in/out] simplex[4] The simplex to update.
+ * @param[in/out] len_simplex The number of vertices in the simplex.
  * @return 1 if the origin is contained within the simplex, 0 if not or if the simplex is not a tetrahedron.
  */
 static int tekUpdateSimplex(vec3 direction, struct TekPolytopeVertex simplex[4], uint* len_simplex) {
@@ -543,10 +597,11 @@ static int tekUpdateSimplex(vec3 direction, struct TekPolytopeVertex simplex[4],
 
 /**
  * Check for a collision between two triangles using GJK algorithm
- * @param triangle_a[in] One of the triangles to test.
- * @param triangle_b[in] The other triangle to be tested against.
- * @param simplex[out] The simplex created during the processing of the triangles. (required to exist beforehand)
- * @param len_simplex[out] The number of vertices in the simplex. (required to exist beforehand)
+ * @param[in] triangle_a[3] One of the triangles to test.
+ * @param[in] triangle_b[3] The other triangle to be tested against.
+ * @param[out] simplex[4] The simplex created during the processing of the triangles. (required to exist beforehand)
+ * @param[out] len_simplex The number of vertices in the simplex. (required to exist beforehand)
+ * @param[out] separation The seperation of the contact points.
  * @return Whether or not the triangles are colliding (0 if not, 1 if they are)
  */
 int tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], struct TekPolytopeVertex simplex[4], uint* len_simplex, float* separation) {
@@ -628,7 +683,14 @@ int tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], struct Tek
     return 0;
 }
 
+/**
+ * Old test function that survived because I forgot to remove it. But now its too late.
+ * @param triangle_a[3] The first triangle involved in the test.
+ * @param triangle_b[3] The second triangle involved in the test.
+ * @return 1 if there was a collision between them, 0 otherwise. (I presume)
+ */
 int tekTriangleTest(vec3 triangle_a[3], vec3 triangle_b[3]) {
+    // testing collisions...
     struct TekPolytopeVertex simplex[4];
     uint len_simplex;
     float separation;
@@ -641,9 +703,11 @@ int tekTriangleTest(vec3 triangle_a[3], vec3 triangle_b[3]) {
  * @return 0 if X is the smallest, 1 if Y is the smallest and 2 if Z is the smallest.
  */
 static uint tekGetMinAxis(vec3 vector) {
+    // loop through each axis (x, y and z) to find which of those coordinates has the smallest magnitude
     uint min_axis = 0;
     float min_length = FLT_MAX;
     for (uint i = 0; i < 3; i++) {
+        // if a new smaller axis is found, update.
         if (fabsf(vector[i]) < min_length) {
             min_length = fabsf(vector[i]);
             min_axis = i;
@@ -652,6 +716,13 @@ static uint tekGetMinAxis(vec3 vector) {
     return min_axis;
 }
 
+/**
+ * Blow up a simplex so that it is 3D - some simplexes can end when they are a line or a triangle, but the EPA algorithm requires that there is a tetrahedron.
+ * @param triangle_a[3] The first triangle involved in the collision detection.
+ * @param triangle_b[3] The second triangle involved in the collision detection.
+ * @param simplex[4] The current state of the simplex.
+ * @param len_simplex The number of points in the simplex.
+ */
 static void tekGrowSimplex(vec3 triangle_a[3], vec3 triangle_b[3], struct TekPolytopeVertex simplex[4], uint len_simplex) {
     vec3 axes[] = {
         1.0f, 0.0f, 0.0f,  // +X
@@ -842,6 +913,14 @@ static exception tekGetClosestFace(const Vector* vertices, const Vector* faces, 
     return SUCCESS;
 }
 
+/**
+ * Remove an edge from a polytope given the indices of the two vertices that make up that edge.
+ * @param edges The vector of all edges in the polytope.
+ * @param edges_bitset The bitset containing the presence of edges in the polytope.
+ * @param indices[2] The indices of the edge to be removed.
+ * @throws VECTOR_EXCEPTION .
+ * @throws BITSET_EXCEPTION .
+ */
 static exception tekRemoveEdgeFromPolytope(Vector* edges, BitSet* edges_bitset, const uint indices[2]) {
     // if the opposite edge already exists in the edge list, discard this edge and remove
     // this is because the two triangles are joined together, so this edge will disappear from the simplex
@@ -873,9 +952,11 @@ static exception tekRemoveEdgeFromPolytope(Vector* edges, BitSet* edges_bitset, 
  * @throws VECTOR_EXCEPTION if face_index is out of range.
  */
 static exception tekRemoveFaceFromPolytope(Vector* faces, Vector* edges, BitSet* edges_bitset, const uint face_index) {
+    // remove face and get indices of vertices
     uint indices[3];
     tekChainThrow(vectorRemoveItem(faces, face_index, indices));
 
+    // now get each pair of indices and remove the associated edges
     for (uint i = 0; i < 3; i++) {
         const uint edge_indices[] = {
             indices[i], indices[(i + 1) % 3]
@@ -956,6 +1037,7 @@ static exception tekRemoveAllVisibleFaces(const Vector* vertices, Vector* faces,
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekAddFaceToPolytope(Vector* faces, const uint index_a, const uint index_b, const uint index_c) {
+    // just makes a little array so that i can add it to the vector as one chunk.
     const uint indices[] = {
         index_a, index_b, index_c
     };
@@ -967,7 +1049,7 @@ static exception tekAddFaceToPolytope(Vector* faces, const uint index_a, const u
  * Add a face to fill a gap formed by adding a new support point.
  * @param vertices A vector containing the indices of the polytope.
  * @param faces A vector containing the indices of vertices that make up faces.
- * @param edge_indices The indices of the edge vertices that make a side of the new triangle.
+ * @param edge_indices[2] The indices of the edge vertices that make a side of the new triangle.
  * @param support_index The index of the newly added point.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
@@ -998,11 +1080,23 @@ static exception tekAddFillerFace(const Vector* vertices, Vector* faces, const u
     return SUCCESS;
 }
 
+/**
+ * If a point is added to a polytope, it produces a "hole" in the polytope which needs to be filled, which this function does.
+ * @param vertices The vertices that make up the polytope
+ * @param faces The faces (triplets of vertex indices) that make up the shape.
+ * @param edges The edges (pairs of indices) that make up the shape.
+ * @param edges_bitset Bitset which marks which indices are connected by an edge.
+ * @param support_index The index of the newly added vertex.
+ * @throws VECTOR_EXCEPTION .
+ * @throws BITSET_EXCEPTION .
+ */
 static exception tekAddAllFillerFaces(const Vector* vertices, Vector* faces, const Vector* edges, const BitSet* edges_bitset, const uint support_index) {
+    // go through all the edges, and add a face for each edge
     for (uint i = 0; i < edges->length; i++) {
         uint* indices;
         tekChainThrow(vectorGetItemPtr(edges, i, &indices));
 
+        // not sure why i did that? maybe just wanted an excuse to use my bitset
         flag has_edge;
         tekChainThrow(bitsetGet2D(edges_bitset, indices[0], indices[1], &has_edge));
 
@@ -1013,12 +1107,20 @@ static exception tekAddAllFillerFaces(const Vector* vertices, Vector* faces, con
     return SUCCESS;
 }
 
+/**
+ * Print out a polytope, this is a collection of vertices in face groups that form a closed shape / minkowski sum.
+ * @param vertices 
+ * @param faces 
+ * @throws VECTOR_EXCEPTION .
+ */
 static exception tekPrintPolytope(const Vector* vertices, const Vector* faces) {
+    // print out the vertices
     for (uint i = 0; i < vertices->length; i++) {
         struct TekPolytopeVertex* vertex;
         tekChainThrow(vectorGetItemPtr(vertices, i, &vertex));
     }
 
+    // print out the faces
     for (uint i = 0; i < faces->length; i++) {
         uint* indices;
         tekChainThrow(vectorGetItemPtr(faces, i, &indices));
@@ -1033,14 +1135,24 @@ static exception tekPrintPolytope(const Vector* vertices, const Vector* faces) {
     return SUCCESS;
 }
 
+/**
+ * Take a triangle, and project the origin in the direction of the triangle's face normal. Then get the barycentric coordinates of where the projection meets the triangle.
+ * @param point_a The first point on the triangle.
+ * @param point_b The second point on the triangle.
+ * @param point_c The third point on the triangle.
+ * @param barycentric The outputted barycentric coordinates.
+ */
 void tekProjectOriginToBarycentric(vec3 point_a, vec3 point_b, vec3 point_c, vec3 barycentric) {
+    // edge vectors
     vec3 ab, ac;
     glm_vec3_sub(point_b, point_a, ab);
     glm_vec3_sub(point_c, point_a, ac);
 
+    // face normal = cross product of edge vectors
     vec3 normal;
     glm_vec3_cross(ab, ac, normal);
 
+    // other vectors
     vec3 ao;
     glm_vec3_negate_to(point_a, ao);
 
@@ -1048,25 +1160,56 @@ void tekProjectOriginToBarycentric(vec3 point_a, vec3 point_b, vec3 point_c, vec
     glm_vec3_cross(ab, ao, ab_ao);
     glm_vec3_cross(ao, ac, ao_ac);
 
+    // find square of magnitude
     const float square_normal = glm_vec3_dot(normal, normal);
 
+    // formula for barycentric coordinate.
     barycentric[2] = glm_vec3_dot(ab_ao, normal) / square_normal;
     barycentric[1]  = glm_vec3_dot(ao_ac, normal) / square_normal;
     barycentric[0] = 1 - barycentric[2] - barycentric[1];
 }
 
+/**
+ * Take a triangle plus a barycentric coordinates in terms of u, v and w, and produce a single point that is specified by the barycentric coordinate.
+ * @param point_a The first point on the triangle.
+ * @param point_b The second point on the triangle.
+ * @param point_c The third point on the triangle.
+ * @param barycentric The barycentric coordinate (u,v,w relate to points a,b,c)
+ * @param point The outputted point.
+ */
 static void tekCreatePointFromBarycentric(vec3 point_a, vec3 point_b, vec3 point_c, vec3 barycentric, vec3 point) {
+    // p = u*a + v*b + w*c
     glm_vec3_scale(point_a, barycentric[0], point);
     glm_vec3_muladds(point_b, barycentric[1], point);
     glm_vec3_muladds(point_c, barycentric[2], point);
 }
 
+/**
+ * Find the points of collision between two triangles using the Expanding Polytope Algorithm (EPA). Uses the
+ * "waste products" of GJK to begin with, and further processes this to find the contact normal and points.
+ * @param triangle_a[3] The first triangle involved in the collision
+ * @param triangle_b[3] The second triangle involved in the collision
+ * @param simplex[4] The simplex, generated during EPA.
+ * @param contact_depth Outputted depth of the contact / displacement between contacts
+ * @param contact_normal The direction of least penetration between the triangles.
+ * @param contact_a The first point of contact, found on the first triangle
+ * @param contact_b The second point of contact, found on the second triangle.
+ * @throws FAILURE if supporting data structures were not initialised.
+ * @throws VECTOR_EXCEPTION if cosmic bit flip occurs
+ */
 static exception tekGetTriangleCollisionPoints(vec3 triangle_a[3], vec3 triangle_b[3], struct TekPolytopeVertex simplex[4], float* contact_depth, vec3 contact_normal, vec3 contact_a, vec3 contact_b) {
+    // general process: generate support point in starting direction.
+    // find closest face on the simplex to this point.
+    // backtrack towards origin and find another support point
+    // keep going until cannot get closer to the origin - this is the best contact point
+
+    // requires some supporting memory to be allocated.
     if (collider_init == NOT_INITIALISED)
         tekThrow(FAILURE, "Collider was not initialised.");
     if (collider_init == DE_INITIALISED)
         return SUCCESS;
 
+    // reset all supporting structures for use
     vertex_buffer.length = 0;
     face_buffer.length = 0;
     edge_buffer.length = 0;
@@ -1083,8 +1226,6 @@ static exception tekGetTriangleCollisionPoints(vec3 triangle_a[3], vec3 triangle
     tekChainThrow(tekAddFaceToPolytope(&face_buffer, 0, 2, 3));
     tekChainThrow(tekAddFaceToPolytope(&face_buffer, 1, 3, 2));
 
-    tekPrintPolytope(&vertex_buffer, &face_buffer);
-
     uint face_index;
     vec3 face_normal;
     float min_distance = FLT_MAX;
@@ -1096,6 +1237,7 @@ static exception tekGetTriangleCollisionPoints(vec3 triangle_a[3], vec3 triangle
 
         tekChainThrow(tekGetClosestFace(&vertex_buffer, &face_buffer, &face_index, &min_distance, face_normal));
 
+        // prevent infinite loop
         if (num_iterations > 20) {
             break;
         }
@@ -1118,19 +1260,20 @@ static exception tekGetTriangleCollisionPoints(vec3 triangle_a[3], vec3 triangle
         tekChainThrow(vectorAddItem(&vertex_buffer, &support));
 
         tekChainThrow(tekAddAllFillerFaces(&vertex_buffer, &face_buffer, &edge_buffer, &edge_bitset, support_index));
-
-        //tekPrintPolytope(&vertex_buffer, &face_buffer);
         num_iterations++;
     }
 
+    // at the end, we will have found the closest face to the origin, this is the best contact between triangles.
     uint* indices;
     tekChainThrow(vectorGetItemPtr(&face_buffer, face_index, &indices));
 
+    // get the vertices of this face.
     struct TekPolytopeVertex* vertex_a, * vertex_b, * vertex_c;
     tekChainThrow(vectorGetItemPtr(&vertex_buffer, indices[0], &vertex_a));
     tekChainThrow(vectorGetItemPtr(&vertex_buffer, indices[1], &vertex_b));
     tekChainThrow(vectorGetItemPtr(&vertex_buffer, indices[2], &vertex_c));
 
+    // now interpolate this face back onto the original triangles to get the contact points
     vec3 barycentric;
     tekProjectOriginToBarycentric(vertex_a->support, vertex_b->support, vertex_c->support, barycentric);
 
@@ -1143,7 +1286,16 @@ static exception tekGetTriangleCollisionPoints(vec3 triangle_a[3], vec3 triangle
     return SUCCESS;
 }
 
+/**
+ * Generate a collision manifold between two triangles, if they are colliding.
+ * @param triangle_a[3] The three points of the first triangle.
+ * @param triangle_b[3] The three points of the second triangle.
+ * @param collision Set to 1 if there is a collision, 0 otherwise.
+ * @param manifold A pointer to a collision manifold that can have the collision data written into it.
+ * @throws NOTHING unless I change the function one day.
+ */
 static exception tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triangle_b[3], flag* collision, TekCollisionManifold* manifold) {
+    // test for the collision using GJK (Oh yeah)
     struct TekPolytopeVertex simplex[4];
     uint len_simplex;
     float gjk_separation;
@@ -1153,6 +1305,7 @@ static exception tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triang
     }
     *collision = 1;
 
+    // once we r certain there is a collision, blow up the simplex to use EPA
     tekGrowSimplex(triangle_a, triangle_b, simplex, len_simplex);
 
     vec3 norm_a, norm_b;
@@ -1162,6 +1315,7 @@ static exception tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triang
     vec3 cross;
     glm_vec3_cross(norm_a, norm_b, cross);
 
+    // make sure that we dont have parallel triangles cuz then it doesnt work
     if (glm_vec3_norm2(cross) < EPSILON_SQUARED) {
         // ultimate bodge (no mathematical basis)
         uint min_a = 0, min_b = 0;
@@ -1181,6 +1335,7 @@ static exception tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triang
             }
         }
 
+        // doesn't really work well but ¯\_(ツ)_/¯
         manifold->penetration_depth = sqrtf(min_separation);
         glm_vec3_scale(separation, -1.0f / manifold->penetration_depth, manifold->contact_normal);
         glm_vec3_copy(triangle_a[min_a], manifold->contact_points[0]);
@@ -1192,6 +1347,7 @@ static exception tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triang
         );
     }
 
+    // somehow this finds a perpendicular vector to the contact normal?
     if (manifold->contact_normal[0] >= 0.57735f) { // ~= 1 / sqrt(3)
         manifold->tangent_vectors[0][0] = manifold->contact_normal[1];
         manifold->tangent_vectors[0][1] = -manifold->contact_normal[0];
@@ -1205,6 +1361,7 @@ static exception tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triang
     glm_vec3_normalize(manifold->tangent_vectors[0]);
     glm_vec3_cross(manifold->contact_normal, manifold->tangent_vectors[0], manifold->tangent_vectors[1]);
 
+    // zero out the impulses vector cuz junk was going in
     for (uint i = 0; i < NUM_CONSTRAINTS; i++) {
         manifold->impulses[i] = 0.0f;
     }
@@ -1212,11 +1369,24 @@ static exception tekGetTriangleCollisionManifold(vec3 triangle_a[3], vec3 triang
     return SUCCESS;
 }
 
+/**
+ * Check for collisions between two arrays of triangles, and copy collision data into an empty manifold.
+ * @param triangles_a The first array of triangles.
+ * @param num_triangles_a The number of triangles in the array (number of points / 3)
+ * @param triangles_b The second array of triangles.
+ * @param num_triangles_b The number of triangles in the array
+ * @param collision Set to 1 if there was a collision between any of the triangles, 0 otherwise.
+ * @param manifold A pointer to a manifold to potentially copy data into.
+ * @throws NOTHING but in case I ever change anything it might throw something one day.
+ */
 static exception tekCheckTrianglesCollision(vec3* triangles_a, const uint num_triangles_a, vec3* triangles_b, const uint num_triangles_b, flag* collision, TekCollisionManifold* manifold) {
+    // get all possible combinations of triangles
     *collision = 0;
     for (uint i = 0; i < num_triangles_a; i++) {
         for (uint j = 0; j < num_triangles_b; j++) {
             flag sub_collision = 0;
+            // issue - if there is more than one collision then collision manifold gets overwritten.
+            // i dont think that multiple triangles ever happens though ngl.
             tekChainThrow(tekGetTriangleCollisionManifold(triangles_a + i * 3, triangles_b + j * 3, &sub_collision, manifold));
             if (sub_collision)
                 *collision = 1;
@@ -1245,6 +1415,7 @@ static int tekIsCoordinateEquivalent(vec3 point_a, vec3 point_b) {
  * @return 1 if they are equivalent, 0 otherwise
  */
 static int tekIsManifoldEquivalent(TekCollisionManifold* manifold_a, TekCollisionManifold* manifold_b) {
+    // check that both points are equal
     return
         tekIsCoordinateEquivalent(manifold_a->contact_points[0], manifold_b->contact_points[0])
         && tekIsCoordinateEquivalent(manifold_a->contact_points[1], manifold_b->contact_points[1]);
