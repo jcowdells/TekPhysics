@@ -113,10 +113,14 @@ static exception tekCalculateBodyProperties(TekBody* body) {
  * @param body The body to update.
  */
 static void tekBodyUpdateTransform(TekBody* body) {
+    // transform matrix is a mixture of translation and rotation
     mat4 translation;
     glm_translate_make(translation, body->position);
     mat4 rotation;
     glm_quat_mat4(body->rotation, rotation);
+
+    // rotate first, then translate (but matrices work backwards :D)
+    // cuz rotation only rotates around the origin
     glm_mat4_mul(translation, rotation, body->transform);
 }
 
@@ -125,23 +129,30 @@ static void tekBodyUpdateTransform(TekBody* body) {
  * @note Will calculate properties of the body given the mesh data, so could take time for larger objects. Will also allocate memory to store vertices.
  * @param mesh_filename The mesh file to use when creating the body.
  * @param mass The mass of the object
+ * @param friction Coefficient of friction for the body
+ * @param restitution Coefficient of restitution for the body
  * @param position The position (x, y, z) of the body's center of mass
  * @param rotation The rotation quaternion of the body.
  * @param scale The scaling applied to the object
  * @param body A pointer to a struct to contain the new body.
  * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FAILURE if file is malformed
  */
 exception tekCreateBody(const char* mesh_filename, const float mass, const float friction, const float restitution, vec3 position, vec4 rotation, vec3 scale, TekBody* body) {
+    // some variables used throughout
     float* vertex_array = 0;
     uint* index_array = 0;
     int* layout_array = 0;
     uint len_vertex_array = 0, len_index_array = 0, len_layout_array = 0;
     uint position_layout_index = 0;
 
+    // read mesh data from the file. read into arrays of vertices, indices and layout
     tekChainThrow(tekReadMeshArrays(mesh_filename, &vertex_array, &len_vertex_array, &index_array, &len_index_array, &layout_array, &len_layout_array, &position_layout_index));
 
     int vertex_size = 0;
     int position_index = 0;
+
+    // check position layout index. should be a 3 vector
     for (uint i = 0; i < len_layout_array; i++) {
         if (position_layout_index == i) {
             if (layout_array[i] != 3) tekThrow(FAILURE, "Position data must be 3 floats.");
@@ -149,18 +160,21 @@ exception tekCreateBody(const char* mesh_filename, const float mass, const float
         }
         vertex_size += layout_array[i];
     }
+
+    // no longer needed, only useful for rendering
     free(layout_array);
 
+    // allocate memory for body vertices and copy them in
     const uint num_vertices = len_vertex_array / vertex_size;
     body->vertices = (vec3*)malloc(num_vertices * sizeof(vec3));
     if (!body->vertices) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vertices.");
-
     for (uint i = 0; i < num_vertices; i++) {
         for (uint j = 0; j < 3; j++) {
             body->vertices[i][j] = vertex_array[i * vertex_size + position_index + j];
         }
     }
 
+    // copy other values into the body
     body->num_vertices = num_vertices;
     body->indices = index_array;
     body->num_indices = len_index_array;
@@ -171,9 +185,13 @@ exception tekCreateBody(const char* mesh_filename, const float mass, const float
     glm_vec4_copy(rotation, body->rotation);
     glm_vec3_copy(scale, body->scale);
 
+    // calculate properties - centre of mass, inertia tensor
     tekChainThrow(tekCalculateBodyProperties(body));
+
+    // create the collider structure
     tekChainThrow(tekCreateCollider(body, &body->collider));
 
+    // create transformation matrix
     tekBodyUpdateTransform(body);
 
     return SUCCESS;
@@ -263,8 +281,15 @@ void tekBodyApplyImpulse(TekBody* body, vec3 point_of_application, vec3 impulse,
     glm_vec3_muladds(angular_acceleration, delta_time, body->angular_velocity);
 }
 
+/**
+ * Update the mass of a body. Don't set the mass directly because the mass affects the density, inertia tensor and other properties that need to be updated.
+ * @param body The body to have its mass changed.
+ * @param mass The new mass of the body.
+ * @throws MEMORY_EXCEPTION if malloc() fails
+ */
 exception tekBodySetMass(TekBody* body, const float mass) {
-    body->mass = mass;
+    body->mass = mass; // kiss my mass
+    // recalculate some properties that are based on mass
     tekChainThrow(tekCalculateBodyProperties(body));
     return SUCCESS;
 }
@@ -274,6 +299,7 @@ exception tekBodySetMass(TekBody* body, const float mass) {
  * @param body The body to delete.
  */
 void tekDeleteBody(const TekBody* body) {
+    // delete the collider before freeing so we dont lose the pointer
     tekDeleteCollider(&body->collider);
     free(body->vertices);
 }
