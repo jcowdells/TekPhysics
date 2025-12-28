@@ -13,6 +13,10 @@
 
 FT_Library ft_library = 0;
 
+/**
+ * Initialise the freetype library and allow fonts to be loaded and used.
+ * @throws FREETYPE_EXCEPTION if library could not be initialised.
+ */
 exception tekCreateFreeType() {
     // initialise freetype library if it hasn't been already
     if (!ft_library)
@@ -20,10 +24,22 @@ exception tekCreateFreeType() {
     return SUCCESS;
 }
 
+/**
+ * Delete the freetype library once font loading is finished.
+ */
 void tekDeleteFreeType() {
-    if (ft_library) FT_Done_FreeType(ft_library);
+    if (ft_library) FT_Done_FreeType(ft_library); // allows to access static variable from outside
 }
 
+/**
+ * Create a font face from a filename and a face index. Each font file has different faces e.g. bold, italic.
+ * The face index specifies which one of these faces you want.
+ * @param filename The name of the font file to load.
+ * @param face_index The face index to load. (use 0 if unsure)
+ * @param face_size The size of the face in pixels to load as.
+ * @param face The outputted font face.
+ * @throws FREETYPE_EXCEPTION if the font could not be created.
+ */
 exception tekCreateFontFace(const char* filename, const uint face_index, const uint face_size, FT_Face* face) {
     // make sure that the font is large enough
     if (face_size < MIN_FONT_SIZE) tekThrow(FREETYPE_EXCEPTION, "Font size is too small.");
@@ -40,6 +56,14 @@ exception tekCreateFontFace(const char* filename, const uint face_index, const u
     return SUCCESS;
 }
 
+/**
+ * Get the size of a glyph without loading the bitmap data of the glyph.
+ * @param face The font face to get the glyph from.
+ * @param glyph The id of the glyph to load, should be the ascii value of the character you want.
+ * @param glyph_width The outputted width of the glyph.
+ * @param glyph_height The outputted height of the glyph.
+ * @throws FREETYPE_EXCEPTION if FreeType was not initialised of the glyph could not be loaded.
+ */
 exception tekGetGlyphSize(const FT_Face* face, const uint glyph, uint* glyph_width, uint* glyph_height) {
     // make sure that the library has been initialised
     if (!ft_library) tekThrow(FREETYPE_EXCEPTION, "FreeType must be initialised before loading a glyph.");
@@ -53,6 +77,14 @@ exception tekGetGlyphSize(const FT_Face* face, const uint glyph, uint* glyph_wid
     return SUCCESS;
 }
 
+/**
+ * Load a glyph temporarily into memory, get the size and bitmap data of the glyph.
+ * @param face The font face to get the glyph from.
+ * @param glyph_id The id of the glyph, should be the ascii value of the character you want.
+ * @param glyph The outputted glyph data.
+ * @param glyph_data The outputted bitmap data for the glyph.
+ * @throws FREETYPE_EXCEPTION if FreeType is not initialised or the glyph couldn't be rendered.
+ */
 exception tekTempLoadGlyph(const FT_Face* face, const uint glyph_id, TekGlyph* glyph, byte** glyph_data) {
     // make sure that the library has been initialised
     if (!ft_library) tekThrow(FREETYPE_EXCEPTION, "FreeType must be initialised before loading a glyph.");
@@ -74,6 +106,12 @@ exception tekTempLoadGlyph(const FT_Face* face, const uint glyph_id, TekGlyph* g
     return SUCCESS;
 }
 
+/**
+ * Get the size of the atlas required to contain a font face.
+ * @param face The font face that needs to be contained.
+ * @param atlas_size The outputted size of the atlas as a square texture, this is the width and height.
+ * @throws FREETYPE_EXCEPTION if atlas size is smaller than the minimum allowed size.
+ */
 exception tekGetAtlasSize(const FT_Face* face, uint* atlas_size) {
     // init an array to store the width of each character
     uint char_widths[ATLAS_SIZE];
@@ -153,6 +191,14 @@ exception tekGetAtlasSize(const FT_Face* face, uint* atlas_size) {
     return SUCCESS;
 }
 
+/**
+ * Create the font atlas and update the glyph data for each character once it has been added to the font atlas.
+ * @param face The font face that is being used to create the font atlas.
+ * @param atlas_size The size of the atlas from \ref tekGetAtlasSize
+ * @param atlas_data A pointer to the buffer containing the atlas, which will have the glyphs written to it.
+ * @param glyphs The array of glyphs that will be updated with the glyph data.
+ * @throws FREETYPE_EXCEPTION if could not load a glyph from the font face.
+ */
 exception tekCreateFontAtlasData(const FT_Face* face, const uint atlas_size, byte** atlas_data, TekGlyph* glyphs) {
     // grab some initial data
     const uint char_height = (*face)->size->metrics.height >> 6;
@@ -190,6 +236,16 @@ exception tekCreateFontAtlasData(const FT_Face* face, const uint atlas_size, byt
     return SUCCESS;
 }
 
+/**
+ * Create the font atlas texture,  this is a texture that contains every character in a tightly packed area.
+ * Also returns an array of glyphs, which store where on the atlas each character is.
+ * @param face The font face to create the texture atlas from.
+ * @param texture_id A pointer to a uint which will have the id of the newly created texture written to it.
+ * @param atlas_size A pointer to a uint which will have the new atlas size written to it.
+ * @param glyphs A pointer to an array of glyphs which will have the glyph data written to it. 
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws FREETYPE_EXCEPTION if failed to load font.
+ */
 exception tekCreateFontAtlasTexture(const FT_Face* face, uint* texture_id, uint* atlas_size, TekGlyph* glyphs) {
     tekChainThrow(tekGetAtlasSize(face, atlas_size));
 
@@ -222,11 +278,25 @@ exception tekCreateFontAtlasTexture(const FT_Face* face, uint* texture_id, uint*
     return SUCCESS;
 }
 
+/**
+ * Create a new bitmap font from a true type font file. The files contain multiple faces such as italic, bold.
+ * So you need to also specify which font you want to use with a font index.
+ * @param filename The name of the .ttf file to be loaded.
+ * @param face_index The index of the face to use (use 0 if unsure)
+ * @param face_size The size of the face in pixels.
+ * @param bitmap_font A pointer to a TekBitmapFont struct that will have the font data written to it.
+ * @throws FREETYPE_EXCEPTION if failed to load the font.
+ */
 exception tekCreateBitmapFont(const char* filename, const uint face_index, const uint face_size, TekBitmapFont* bitmap_font) {
+    // load the font face
     FT_Face face;
     tekChainThrow(tekCreateFontFace(filename, face_index, face_size, &face));
+
+    // create the font atlas texture
     tekChainThrow(tekCreateFontAtlasTexture(&face, &bitmap_font->atlas_id, &bitmap_font->atlas_size, &bitmap_font->glyphs));
+
+    // store original size
     bitmap_font->original_size = face->size->metrics.height >> 6;
-    tekDeleteFontFace(face);
+    tekDeleteFontFace(face); // delete font face, we only need the atlas from it.
     return SUCCESS;
 }

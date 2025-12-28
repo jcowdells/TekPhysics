@@ -18,6 +18,9 @@
 #include "GLFW/glfw3.h"
 #include "collisions.h"
 
+/**
+ * Template for generating receive functions for thread queues.
+ */
 #define RECV_FUNC(func_name, func_type, param_name) \
 exception func_name(ThreadQueue* queue, func_type* param_name) { \
     func_type* copy; \
@@ -45,6 +48,9 @@ static RECV_FUNC(recvEvent, TekEvent, event);
  */
 RECV_FUNC(recvState, TekState, state);
 
+/**
+ * Template function for generating thread queue push functions.
+ */
 #define PUSH_FUNC(func_name, func_type, param_name) \
 exception func_name(ThreadQueue* queue, const func_type param_name) { \
     func_type* copy = (func_type*)malloc(sizeof(func_type)); \
@@ -70,6 +76,9 @@ static PUSH_FUNC(pushState, TekState, state);
  */
 PUSH_FUNC(pushEvent, TekEvent, event);
 
+/**
+ * Template for generating functions for updating the camera. Actually obsolete now but too late to remove.
+ */
 #define CAM_UPDATE_FUNC(func_name, param_name, state_type) \
 static exception func_name(ThreadQueue* state_queue, const vec3 param_name) { \
     TekState state = {}; \
@@ -90,16 +99,17 @@ static void threadPrint(ThreadQueue* state_queue, const char* format, ...) {
     va_list va;
 
     va_start(va, format);
-    const int len_message = vsnprintf(&temp_write, 0, format, va);
+    const int len_message = vsnprintf(&temp_write, 0, format, va); // figure out the length of message
     va_end(va);
 
-    char* buffer = (char*)malloc(len_message * sizeof(char));
+    char* buffer = (char*)malloc(len_message * sizeof(char)); // create buffer big enough
     if (!buffer) return;
 
     va_start(va, format);
     vsprintf(buffer, format, va);
     va_end(va);
 
+    // send message across
     TekState message_state = {};
     message_state.type = MESSAGE_STATE;
     message_state.object_id = 0;
@@ -107,6 +117,9 @@ static void threadPrint(ThreadQueue* state_queue, const char* format, ...) {
     pushState(state_queue, message_state);
 }
 
+/**
+ * Send print message through state queue. Acts like normal printf()
+ */
 #define tprint(format, ...) threadPrint(state_queue, format, __VA_ARGS__)
 
 /**
@@ -115,11 +128,16 @@ static void threadPrint(ThreadQueue* state_queue, const char* format, ...) {
  * @param exception The exception code.
  */
 static void threadExcept(ThreadQueue* state_queue, const uint exception) {
+    // create state
     TekState exception_state = {};
     tekPrintException();
+
+    // fill with data
     exception_state.type = EXCEPTION_STATE;
     exception_state.object_id = 0;
     exception_state.data.exception = exception;
+
+    // push to state queue
     pushState(state_queue, exception_state);
 }
 
@@ -146,9 +164,11 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, const uint object_id, const char* mesh_filename, const char* material_filename, const float mass, const float friction, const float restitution, vec3 position, vec4 rotation, vec3 scale) {
+    // create the body
     TekBody body = {};
     tekChainThrow(tekCreateBody(mesh_filename, mass, friction, restitution, position, rotation, scale, &body));
 
+    // copy mesh and material files to new strings
     const uint len_mesh = strlen(mesh_filename) + 1;
     const uint len_material = strlen(material_filename) + 1;
     char* mesh_copy = (char*)malloc(len_mesh);
@@ -163,9 +183,12 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, c
     memcpy(mesh_copy, mesh_filename, len_mesh);
     memcpy(material_copy, material_filename, len_material);
 
+    // create the state
     TekState state = {};
     state.object_id = object_id;
 
+    // if body id is greater than current length of the vector
+    // add a load of empty bodies before adding the real one
     if (bodies->length <= object_id) {
         TekBody dummy = {};
         memset(&dummy, 0, sizeof(TekBody));
@@ -177,6 +200,7 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, c
         tekChainThrowThen(vectorAddItem(bodies, &body), {
             tekEngineCreateBodyCleanup;
         });
+    // otherwise just add it straight in
     } else {
         TekBody* delete_body;
         tekChainThrowThen(vectorGetItemPtr(bodies, object_id, &delete_body), {
@@ -190,6 +214,7 @@ static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, c
         });
     }
 
+    // finish the state and push it to the state queue
     state.type = ENTITY_CREATE_STATE;
     state.data.entity.mesh_filename = mesh_filename;
     state.data.entity.material_filename = material_filename;
@@ -262,24 +287,43 @@ static exception tekEngineDeleteBody(ThreadQueue* state_queue, const Vector* bod
     return SUCCESS;
 }
 
+/**
+ * Delete all non null bodies in the bodies vector.
+ * @param state_queue The thread queue of the simulation that sends states.
+ * @param bodies The vector containing all bodies in the simulation.
+ * @throws VECTOR_EXCEPTION .
+ */
 static exception tekEngineDeleteAllBodies(ThreadQueue* state_queue, const Vector* bodies) {
+    // loop over bodies
     for (uint i = 0; i < bodies->length; i++) {
         TekBody* body;
         tekChainThrow(vectorGetItemPtr(bodies, i, &body));
-        if (body->num_vertices == 0) continue;
+        if (body->num_vertices == 0) continue; // num vertices==0 = no body
 
         tekChainThrow(tekEngineDeleteBody(state_queue, bodies, i));
     }
     return SUCCESS;
 }
 
+/**
+ * Push an inspect state to the state queue. This gives the information about the body currently being inspected by the debug menu.
+ * @param state_queue The thread queue to push the state to.
+ * @param time The current simulation time.
+ * @param position The current position of the body.
+ * @param velocity The current rotation of the body.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekPushInspectState(ThreadQueue* state_queue, const float time, vec3 position, vec3 velocity) {
+    // create a new empty state
     TekState state = {};
+
+    // write data
     state.type = INSPECT_STATE;
     state.data.inspect.time = time;
     glm_vec3_copy(position, state.data.inspect.position);
     glm_vec3_copy(velocity, state.data.inspect.velocity);
 
+    // push to state queue
     tekChainThrow(pushState(state_queue, state));
 
     return SUCCESS;
@@ -292,7 +336,13 @@ struct TekEngineArgs {
     double phys_period;
 };
 
+/**
+ * Call exception, push exception to state queue and goto cleanup
+ */
 #define threadThrow(exception_code, exception_message) { const exception __thread_exception = exception_code; if (__thread_exception) { tekSetException(__thread_exception, __LINE__, __FUNCTION__, __FILE__, exception_message); threadExcept(state_queue, __thread_exception); goto tek_engine_cleanup; } }
+/**
+ * Call an exception, push to state queue and goto cleanup
+ */
 #define threadChainThrow(exception_code) { const exception __thread_exception = exception_code; if (__thread_exception) { tekTraceException(__thread_exception, __LINE__, __FUNCTION__, __FILE__); threadExcept(state_queue, __thread_exception); goto tek_engine_cleanup; } }
 
 /**
@@ -300,18 +350,21 @@ struct TekEngineArgs {
  * @param args Required for use with pthread library. Used to pass TekEngineArgs pointer.
  */
 static void tekEngine(void* args) {
+    // expand out engine args
     const struct TekEngineArgs* engine_args = (struct TekEngineArgs*)args;
     ThreadQueue* event_queue = engine_args->event_queue;
     ThreadQueue* state_queue = engine_args->state_queue;
     double phys_period = engine_args->phys_period;
     free(args);
 
+    // vector to store all the bodies being simulated
     Vector bodies = {};
     threadChainThrow(vectorCreate(0, sizeof(TekBody), &bodies));
 
     Queue unused_ids = {};
     queueCreate(&unused_ids);
 
+    // variables used in the physics loop
     struct timespec engine_time, step_time;
     double phys_period_s = floor(phys_period);
     step_time.tv_sec = (__time_t)phys_period_s;
@@ -330,9 +383,12 @@ static void tekEngine(void* args) {
     vec4 snapshot_rotation_quat;
     TekBody* snapshot_body;
 
+    // main loop
     while (running) {
+        // receive all events from window thread
         TekEvent event = {};
         while (recvEvent(event_queue, &event) == SUCCESS) {
+            // switch event type, each type has corresponding data and action to be performed
             switch (event.type) {
             case QUIT_EVENT:
                 // end the loop
@@ -392,7 +448,7 @@ static void tekEngine(void* args) {
             case CLEAR_EVENT:
                 threadChainThrow(tekEngineDeleteAllBodies(state_queue, &bodies));
                 break;
-            case TIME_EVENT:
+            case TIME_EVENT: // update physics time step
                 phys_period = 1 / event.data.time.rate;
                 phys_period_s = floor(phys_period / event.data.time.speed);
                 step_time.tv_sec = (__time_t)(phys_period_s / event.data.time.speed);
@@ -401,13 +457,13 @@ static void tekEngine(void* args) {
             case PAUSE_EVENT:
                 paused = event.data.paused;
                 break;
-            case STEP_EVENT:
+            case STEP_EVENT: // advance by one simulation step
                 if (paused)
                     step = 1;
                 break;
-            case GRAVITY_EVENT:
+            case GRAVITY_EVENT: // update acceleration due to gravity
                 gravity = event.data.gravity;
-            case INSPECT_EVENT:
+            case INSPECT_EVENT: // change which body is being inspected
                 inspect_index = (uint)event.data.body.id;
             default:
                 break;
@@ -418,13 +474,19 @@ static void tekEngine(void* args) {
 
         if (step) paused = 0;
 
+        // sort out collisions
         if (mode == MODE_RUNNER && !paused) {
+            // check and fix collisions
             threadChainThrow(tekSolveCollisions(&bodies, (float)phys_period));
 
             for (uint i = 0; i < bodies.length; i++) {
                 TekBody* body = 0;
                 threadChainThrow(vectorGetItemPtr(&bodies, i, &body));
+
+                // dont simulate null bodies
                 if (!body->num_vertices) continue;
+
+                // dont move immovable bodies
                 if (body->immovable) {
                     glm_vec3_zero(body->velocity);
                     glm_vec3_zero(body->angular_velocity);
@@ -436,11 +498,13 @@ static void tekEngine(void* args) {
             time_elapsed += phys_period;
         }
 
+        // allows for the sim to be stepped one step at a time
         if (step) {
             paused = 1;
             step = 0;
         }
 
+        // return details about a specific body to debug
         vec3 inspect_position, inspect_velocity;
         if (inspect_index < bodies.length) {
             TekBody* inspect_body = 0;
@@ -453,9 +517,11 @@ static void tekEngine(void* args) {
         }
         threadChainThrow(tekPushInspectState(state_queue, time_elapsed, inspect_position, inspect_velocity));
 
+        // update engine time
         engine_time.tv_sec += step_time.tv_sec;
         engine_time.tv_nsec += step_time.tv_nsec;
 
+        // wait for time to pass before moving onto next step
         while (engine_time.tv_nsec >= BILLION) {
             engine_time.tv_nsec -= BILLION;
             engine_time.tv_sec += 1;
@@ -465,6 +531,7 @@ static void tekEngine(void* args) {
         counter++;
     }
 
+    // goto here after the loop finished or terminates unexpectedly
 tek_engine_cleanup:
     for (uint i = 0; i < bodies.length; i++) {
         TekBody* loop_body;
@@ -485,10 +552,12 @@ tek_engine_cleanup:
  * @throws THREAD_EXCEPTION if the call to pthread_create() fails.
  */
 exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, const double phys_period, unsigned long long* thread) {
+    // engine args passed into thread. but can only pass one pointer in hence the struct.
     struct TekEngineArgs* engine_args = (struct TekEngineArgs*)malloc(sizeof(struct TekEngineArgs));
     engine_args->event_queue = event_queue;
     engine_args->state_queue = state_queue;
     engine_args->phys_period = phys_period;
+    // create new thread, if returns not 0 then there was a bugger
     if (pthread_create((pthread_t*)thread, NULL, tekEngine, engine_args))
 	    tekThrow(THREAD_EXCEPTION, "Failed to create physics thread");
     return SUCCESS;
@@ -499,5 +568,6 @@ exception tekInitEngine(ThreadQueue* event_queue, ThreadQueue* state_queue, cons
  * @param thread The engine thread, returned by tekInitEngine()
  */
 void tekAwaitEngineStop(const unsigned long long thread) {
+    // wrapper so u dont have to include pthread.h or whatnot
     pthread_join(thread, NULL);
 }

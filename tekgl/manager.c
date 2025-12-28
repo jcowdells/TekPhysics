@@ -154,31 +154,56 @@ exception tekAddMouseScrollCallback(const TekMouseScrollCallback callback) {
     return SUCCESS;
 }
 
+/**
+ * Set the mode of the cursor. Should be one of two modes:
+ * DEFAULT_CURSOR or CROSSHAIR_CURSOR, assumes default cursor if invalid cursor mode specified.
+ * @param cursor_mode The cursor mode to use.
+ */
 void tekSetCursor(const flag cursor_mode) {
     switch (cursor_mode) {
-    case CROSSHAIR_CURSOR:
+    case CROSSHAIR_CURSOR: // if crosshair cursor, set the cursor to crosshair cursor
         glfwSetCursor(tek_window, crosshair_cursor);
         break;
-    default:
+    default: // NULL = default cursor.
         glfwSetCursor(tek_window, NULL);
     }
 }
 
+/**
+ * Set the colour of the window background when nothing is drawn.
+ * @param colour The colour to use.
+ */
 void tekSetWindowColour(vec3 colour) {
-    glm_vec3_copy(colour, tek_window_colour);
+    glm_vec3_copy(colour, tek_window_colour); // copy into window colour variable.
 }
 
+/**
+ * Set the draw mode of the window, should be one of:
+ * DRAW_MODE_NORMAL - draw everything as expected.
+ * DRAW_MODE_GUI - draw everything as gui.
+ * This changes how depth is rendered, gui elements are all rendered at the same level.
+ * Typical depth test will not work, so setting gui mode will force new things to appear above old things.
+ * @param draw_mode 
+ */
 void tekSetDrawMode(const flag draw_mode) {
     if (draw_mode == DRAW_MODE_NORMAL) {
-        glDepthFunc(GL_LESS);
+        glDepthFunc(GL_LESS); // obscure things which are behind
         return;
     }
 
     if (draw_mode == DRAW_MODE_GUI) {
-        glDepthFunc(GL_ALWAYS);
+        glDepthFunc(GL_ALWAYS); // always draw over things
     }
 }
 
+/**
+ * Initialise the TekPhysics window.
+ * @param window_name The title to be displayed for the window.
+ * @param window_width The initial width of the window.
+ * @param window_height The initial height of the window.
+ * @throws GLFW_EXCEPTION if GLFW failed to initialise or create the window.
+ * @throws GLAD_EXCEPTION if GLAD failed to load.
+ */
 exception tekInit(const char* window_name, const int window_width, const int window_height) {
     // initialise glfw
     if (!glfwInit()) tekThrow(GLFW_EXCEPTION, "GLFW failed to initialise.");
@@ -232,11 +257,19 @@ exception tekInit(const char* window_name, const int window_width, const int win
     return SUCCESS;
 }
 
+/**
+ * Return whether the window should remain open.
+ * @return 1 if the window is still open, 0 if the X button has been pressed.
+ */
 flag tekRunning() {
     // return whether tekgl should continue running
     return glfwWindowShouldClose(tek_window) ? 0 : 1;
 }
 
+/**
+ * Swap buffers and poll events. Should be called every frame / every loop of the main loop.
+ * @throws NOTHING not sure why it's not a void function. 
+ */
 exception tekUpdate() {
     // swap buffers - clears front buffer and displays back buffer to screen
     glfwSwapBuffers(tek_window);
@@ -251,6 +284,9 @@ exception tekUpdate() {
     return SUCCESS;
 }
 
+/**
+ * Free memory allocated by supporting structures for the manager code, for example different callback function lists.
+ */
 void tekDelete() {
     // run all cleanup functions
     const ListItem* item = 0;
@@ -277,22 +313,36 @@ void tekDelete() {
     glfwTerminate();
 }
 
+/**
+ * Get the current size of the window.
+ * @param window_width The outputted width.
+ * @param window_height The outputted height.
+ */
 void tekGetWindowSize(int* window_width, int* window_height) {
+    // pointers :D
     *window_width = tek_window_width;
     *window_height = tek_window_height;
 }
 
+/**
+ * Set the mouse mode of the window. Can be once of two types:
+ * MOUSE_MODE_CAMERA - make the mouse disappear and unable to leave the screen.
+ * MOUSE_MODE_NORMAL - make the mouse behave as expected.
+ * If neither one is used, then normal mode is assumed.
+ * @param mouse_mode The mouse mode as specified above
+ */
 void tekSetMouseMode(const flag mouse_mode) {
+    // cannot change mouse mode unless window is focused
     glfwFocusWindow(tek_window);
     switch (mouse_mode) {
     case MOUSE_MODE_CAMERA:
         if (glfwRawMouseMotionSupported())
-            glfwSetInputMode(tek_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
-        glfwSetInputMode(tek_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            glfwSetInputMode(tek_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE); // raw motion
+        glfwSetInputMode(tek_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // hide cursor
         break;
     case MOUSE_MODE_NORMAL:
     default:
-        glfwSetInputMode(tek_window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
-        glfwSetInputMode(tek_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        glfwSetInputMode(tek_window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE); // normal mouse movement
+        glfwSetInputMode(tek_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL); // show cursor
     }
 }

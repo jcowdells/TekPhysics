@@ -31,11 +31,23 @@
 #define PROJECTION_MATRIX_WILDCARD "$tek_projection_matrix"
 #define CAMERA_POSITION_WILDCARD   "$tek_camera_position"
 
+/**
+ * Create a uniform for vector data that is made of multiple yml key value pairs.
+ * @param hashtable The yml data containing the vector.
+ * @param num_items The number of items in the vector.
+ * @param keys_order An array of strings that states the order to access the keys of the vector in.
+ * @param uniform A pointer to the uniform to update with the vector data.
+ * @throws OPENGL_EXCEPTION if the number of items is not in the range [2,4], as this is not a valid cglm vector any more.
+ */
 exception tekCreateVecUniform(const HashTable* hashtable, const uint num_items, const char** keys_order, TekMaterialUniform* uniform) {
+    // enforce minmax length
     if ((num_items < 2) || (num_items > 4)) tekThrow(OPENGL_EXCEPTION, "Cannot create vector with more than 4 or less than 2 items.");
     exception tek_exception = SUCCESS;
-    float vector[4];
+
+    // loop thru keys and access value of each key
+    float vector[4]; // maximum size is 4, no point mallocating to save only 2 floats of space for this temporary buffer
     for (uint i = 0; i < num_items; i++) {
+        // construct the vector one piece at a time
         YmlData* data;
         tek_exception = hashtableGet(hashtable, keys_order[i], &data); tekChainBreak(tek_exception);
         double number;
@@ -43,29 +55,52 @@ exception tekCreateVecUniform(const HashTable* hashtable, const uint num_items, 
         vector[i] = (float)number;
     }
     tekChainThrow(tek_exception);
+
+    // NOW mallocate because this cant be stack memory anyway
     float* uniform_data = malloc(num_items * sizeof(float));
     uniform->data = uniform_data;
     if (!uniform->data) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for vector.");
+
+    // copy the temp buffer over.
     for (uint i = 0; i < num_items; i++) {
         memcpy(uniform_data + i, vector + i, sizeof(float));
     }
+
+    // macro is ordered, so VEC3_DATA is one more than VEC2_DATA etc.
     uniform->type = VEC2_DATA + (num_items - 2);
     return SUCCESS;
 }
 
-exception tekCreateUniform(const char* uniform_name, const flag data_type, const void* data, TekMaterialUniform** uniform) {
-    *uniform = (TekMaterialUniform*)malloc(sizeof(TekMaterialUniform));
+/**
+ * Create a single uniform to add to the uniform array in the material.
+ * @param uniform_name The name of the uniform.
+ * @param data_type The type of data stored in the uniform.
+ * @param data The actual data being stored in the uniform.
+ * @param uniform A pointer to a uniform pointer that will be overwritten with a pointer to a newly allocated uniform struct that will be filled with the data provided.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
+static exception tekCreateUniform(const char* uniform_name, const flag data_type, const void* data, TekMaterialUniform** uniform) {
+    *uniform = (TekMaterialUniform*)malloc(sizeof(TekMaterialUniform)); // mallocate some memory for uniform
+    if (!(*uniform))
+        tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for uniform.");
+
+    // copy uniform name into new buffer
     uint len_uniform_name = strlen(uniform_name) + 1;
     char* uniform_name_copy = (char*)malloc(len_uniform_name * sizeof(char));
     if (!uniform_name_copy) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for uniform name.");
+
+    // write common data into uniform struct.
     memcpy(uniform_name_copy, uniform_name, len_uniform_name);
     (*uniform)->name = uniform_name_copy;
     (*uniform)->type = data_type;
     exception tek_exception = SUCCESS;
+
+    // write data according to the data type.
     switch (data_type) {
+        // number data handled in the same way
         case UINTEGER_DATA:
         case UFLOAT_DATA:
-            void** number_data = (void**)malloc(sizeof(void*));
+            void** number_data = (void**)malloc(sizeof(void*)); // allocate new space for number
             if (!number_data) {
                 tek_exception = MEMORY_EXCEPTION;
                 tekExcept(tek_exception, "Failed to allocate memory for number.");
@@ -74,22 +109,25 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
             memcpy(number_data, &data, sizeof(void*));
             (*uniform)->data = number_data;
             break;
+        // texture data needs to have a texture created with opengl
         case TEXTURE_DATA:
             const char* filepath = data;
-            uint* texture_id = (uint*)malloc(sizeof(uint));
+            uint* texture_id = (uint*)malloc(sizeof(uint)); // allocate space for new uint
             if (!texture_id) {
                 tek_exception = MEMORY_EXCEPTION;
                 tekExcept(tek_exception, "Failed to allocate memory for texture id.");
                 break;
             }
-            tek_exception = tekCreateTexture(filepath, texture_id);
+            tek_exception = tekCreateTexture(filepath, texture_id); // create the texture from provided data
             if (tek_exception) {
                 free(texture_id);
                 tekChainBreak(tek_exception);
             }
             (*uniform)->data = texture_id;
             break;
+        // wildcard such as $tek_projection_matrix etc.
         case WILDCARD_DATA:
+            // no data stored here, just tells us to pass in camera data to the shader and whatnot
             (*uniform)->data = 0;
             const char* wildcard = data;
             if (!strcmp(wildcard, MODEL_MATRIX_WILDCARD))
@@ -105,31 +143,36 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
                 tekExcept(tek_exception, "Unrecognised wilcard used.");
             }
             break;
+        // multiple data points such as colours, positions etc stored here.
         case UYML_DATA:
             const HashTable* hashtable = data;
             char** keys = 0;
             tekChainBreak(hashtableGetKeys(hashtable, &keys));
             const uint num_items = hashtable->num_items;
 
+            // find a key that reveals what kind of vector we are working with
+            // yml is unordered so need to linear search it
             flag vec_mode = UNKNOWN_DATA;
             for (uint i = 0; i < num_items; i++) {
-                if (!strcmp("r", keys[i])) {
+                if (!strcmp("r", keys[i])) { // checking for rgb(a) mode
                     vec_mode = RGBA_DATA;
                     break;
                 }
-                if (!strcmp("x", keys[i])) {
+                if (!strcmp("x", keys[i])) { // checking for xyz(w) mode
                     vec_mode = XYZW_DATA;
                     break;
                 }
-                if (!strcmp("u", keys[i])) {
+                if (!strcmp("u", keys[i])) { // checking for uv mode
                     vec_mode = UV_DATA;
                     break;
                 }
-                if (!strcmp("red", keys[i])) {
+                if (!strcmp("red", keys[i])) { // checking for literal red green blue (alpha) mode
                     vec_mode = RGBA_WORD_DATA;
                     break;
                 }
             }
+
+            // if no mode is found, throw an error
             if (vec_mode == UNKNOWN_DATA) {
                 tek_exception = YML_EXCEPTION;
                 tekExcept(tek_exception, "Bad layout for vector data.");
@@ -137,6 +180,7 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
                 break;
             }
 
+            // enforce some error checking stuff
             if ((vec_mode == RGBA_DATA) && (num_items < 3)) {
                 tek_exception = YML_EXCEPTION;
                 tekExcept(tek_exception, "Incorrect number of items for RGBA expression.");
@@ -158,6 +202,8 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
                 break;
             }
 
+            // hard code the order to access the keys in
+            // as previously stated, the keys are unordered so cant just do data[0] data[1] etc.
             char* keys_order[4];
             if (vec_mode == RGBA_DATA) {
                 keys_order[0] = "r";
@@ -182,6 +228,8 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
                 keys_order[3] = "alpha";
             }
 
+            // pass onto subroutine cuz it would be too long
+            // although this function is already stupid long
             tek_exception = tekCreateVecUniform(hashtable, num_items, keys_order, *uniform);
             free(keys);
             tekChainBreak(tek_exception);
@@ -194,17 +242,30 @@ exception tekCreateUniform(const char* uniform_name, const flag data_type, const
     return tek_exception;
 }
 
+/**
+ * Delete a material uniform from memory.
+ * @param uniform The uniform to delete.
+ */
 void tekDeleteUniform(TekMaterialUniform* uniform) {
-    if (uniform->name) free(uniform->name);
+    if (uniform->name) free(uniform->name); // avoid freeing null pointers cuz it usually has bad consequences
     if (uniform->data) free(uniform->data);
     free(uniform);
 }
 
+/**
+ * Create a material from a file, a collection of shaders and uniforms to texture a mesh.
+ * @param filename The filename of the YAML file containing the material data.
+ * @param material A pointer to a TekMaterial struct which will be overwritten with the material data.
+ * @throws FILE_EXCEPTION if file could not be read.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception tekCreateMaterial(const char* filename, TekMaterial* material) {
+    // load up the material yml file
     YmlFile material_yml = {};
     ymlCreate(&material_yml);
     tekChainThrow(ymlReadFile(filename, &material_yml));
 
+    // read some stuff that has to exist
     YmlData* vs_data = 0;
     YmlData* fs_data = 0;
     YmlData* gs_data = 0;
@@ -222,6 +283,7 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
 
     exception tek_exception = SUCCESS;
 
+    // read vertex and fragment shaders
     tek_exception = ymlDataToString(vs_data, &vertex_shader);
     if (tek_exception) {
         free(vertex_shader);
@@ -239,6 +301,8 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
 
     uint shader_program_id = 0;
 
+    // read geometry shader if exists
+    // if yes, also need to call a different shader program function to use it
     if (has_geometry) {
         char* geometry_shader;
         tekChainThrowThen(ymlDataToString(gs_data, &geometry_shader), {
@@ -253,6 +317,7 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
         tek_exception = tekCreateShaderProgramVF(vertex_shader, fragment_shader, &shader_program_id);
     }
 
+    // no longer needed once the shader is compiled
     free(vertex_shader);
     free(fragment_shader);
     if (tek_exception) {
@@ -260,8 +325,13 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
         tekDeleteShaderProgram(shader_program_id);
         tekChainThrow(tek_exception);
     }
+
+    // set the shader program id
     material->shader_program_id = shader_program_id;
 
+    // according to Comment Buggerer v1.1, i am 39.932% finished writing ts (352/586 functions still remain)
+    // this is why u should always write comments as you go, not all at the end
+    // alas i still ignore that
     char** keys = 0;
     uint num_keys;
     tek_exception = ymlGetKeys(&material_yml, &keys, &num_keys, "uniforms");
@@ -271,6 +341,7 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
         tekChainThrow(tek_exception);
     }
 
+    // for however many keys there are, allocate that much space
     material->num_uniforms = num_keys;
     material->uniforms = (TekMaterialUniform**)calloc(num_keys, sizeof(TekMaterialUniform*));
     if (!material->uniforms) {
@@ -279,11 +350,13 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for uniforms.");
     }
 
+    // for each key, load in the corresponding uniform
     for (uint i = 0; i < num_keys; i++) {
         YmlData* uniform_yml;
+        // archaic exception handling!!! (blast from the past)
         tek_exception = ymlGet(&material_yml, &uniform_yml, "uniforms", keys[i]); tekChainBreak(tek_exception);
         flag uniform_type;
-        switch (uniform_yml->type) {
+        switch (uniform_yml->type) { // act different according to data type. (is this polymorphism?)
             case YML_DATA:
                 uniform_type = UYML_DATA;
                 break;
@@ -303,13 +376,16 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
                 break;
         }
 
+        // create uniform
         TekMaterialUniform* uniform;
         tek_exception = tekCreateUniform(keys[i], uniform_type, uniform_yml->value, &uniform);
         tekChainBreak(tek_exception);
 
+        // write uniform at that index.
         material->uniforms[i] = uniform;
     }
 
+    // if something went wrong, clean up after ourselves
     if (tek_exception) {
         for (uint i = 0; i < num_keys; i++) {
             if (!material->uniforms[i]) break;
@@ -324,12 +400,17 @@ exception tekCreateMaterial(const char* filename, TekMaterial* material) {
     return SUCCESS;
 }
 
+/**
+ * Bind (use) a material, so that all subsequent draw calls will be drawn with this material.
+ * @param material The material to bind.
+ * @throws OPENGL_EXCEPTION if the material is invalid in some way.
+ */
 exception tekBindMaterial(const TekMaterial* material) {
     const uint shader_program_id = material->shader_program_id;
-    tekBindShaderProgram(shader_program_id);
-    for (uint i = 0; i < material->num_uniforms; i++) {
+    tekBindShaderProgram(shader_program_id); // load the internal shader.
+    for (uint i = 0; i < material->num_uniforms; i++) { // bind all uniforms
         const TekMaterialUniform* uniform = material->uniforms[i];
-        switch (uniform->type) {
+        switch (uniform->type) { // map each type to the correct shader bind function.
             case UINTEGER_DATA:
                 long* uinteger = uniform->data;
                 tekChainThrow(tekShaderUniformInt(shader_program_id, uniform->name, (int)(*uinteger)));
@@ -339,7 +420,7 @@ exception tekBindMaterial(const TekMaterial* material) {
                 tekChainThrow(tekShaderUniformFloat(shader_program_id, uniform->name, (float)(*ufloat)));
                 break;
             case TEXTURE_DATA:
-                uint* texture_id = uniform->data;
+                uint* texture_id = uniform->data; // textures also need to be bound to a slot.
                 tekBindTexture(*texture_id, 1);
                 tekChainThrow(tekShaderUniformInt(shader_program_id, uniform->name, 1));//(int)(*texture_id)));
                 break;
@@ -359,19 +440,29 @@ exception tekBindMaterial(const TekMaterial* material) {
     return SUCCESS;
 }
 
+/**
+ * Return whether a material has a specific type of uniform. Useful to check if a material has a projection matrix etc.
+ * @param material The material to check.
+ * @param uniform_type The type to check if the material has.
+ * @return 1 if the material has that type, 0 otherwise.
+ */
 flag tekMaterialHasUniformType(TekMaterial* material, const flag uniform_type) {
     const TekMaterialUniform* uniform = 0;
+    // classic linear search
     for (uint i = 0; i < material->num_uniforms; i++) {
         const TekMaterialUniform* loop_uniform = material->uniforms[i];
         if (loop_uniform->type == uniform_type) {
-            return 1;
+            return 1; // quit early if we can
         }
     }
     return 0;
 }
 
-#define MATERIAL_BIND_UNIFORM_FUNC(func_name, uniform_type, bind_func) \
-exception func_name(const TekMaterial* material, uniform_type uniform_data, flag uniform_type) { \
+/**
+ * Template function for binding uniforms.
+ */
+#define MATERIAL_BIND_UNIFORM_FUNC(func_name, func_type, bind_func) \
+exception func_name(const TekMaterial* material, func_type uniform_data, flag uniform_type) { \
     const TekMaterialUniform* uniform; \
     for (uint i = 0; i < material->num_uniforms; i++) { \
         const TekMaterialUniform* loop_uniform = material->uniforms[i]; \
@@ -389,8 +480,15 @@ exception func_name(const TekMaterial* material, uniform_type uniform_data, flag
 MATERIAL_BIND_UNIFORM_FUNC(tekBindMaterialVec3, vec3, tekShaderUniformVec3);
 MATERIAL_BIND_UNIFORM_FUNC(tekBindMaterialMatrix, mat4, tekShaderUniformMat4);
 
+/**
+ * Delete a matrerial, freeing any allocated memory.
+ * @param material The material to delete.
+ */
 void tekDeleteMaterial(const TekMaterial* material) {
+    // delete the uniforms
     for (uint i = 0; i < material->num_uniforms; i++)
         tekDeleteUniform(material->uniforms[i]);
+
+    // delete the shader program
     tekDeleteShaderProgram(material->shader_program_id);
 }

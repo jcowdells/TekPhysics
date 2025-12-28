@@ -9,6 +9,9 @@
 #define ATLAS_SIZE    256
 #define MIN_FONT_SIZE 3
 
+/**
+ * Delete a font face, wrapper around normal method to keep naming convention.
+ */
 #define tekDeleteFontFace(face) FT_Done_Face(face)
 
 typedef struct TekGlyph {

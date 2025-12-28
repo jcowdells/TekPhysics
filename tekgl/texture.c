@@ -4,6 +4,14 @@
 #include "../stb/stb_image.h"
 #include "glad/glad.h"
 
+/**
+ * Create a new texture from an image file, and return the id of the newly created texture.
+ * It is recommended to have square textures with side lengths that are powers of 2.
+ * e.g. 128x128, 512x512.
+ * @param filename The name of the file that should be loaded into a texture.
+ * @param texture_id A pointer to a uint that will have the new texture id written to it.
+ * @throws STBI_EXCEPTION if the image could not be loaded.
+ */
 exception tekCreateTexture(const char* filename, uint* texture_id) {
     // load texture using stbi
     stbi_set_flip_vertically_on_load(1);
@@ -31,12 +39,22 @@ exception tekCreateTexture(const char* filename, uint* texture_id) {
     return SUCCESS;
 }
 
+/**
+ * Bind a texture to a specified texture slot, allows the texture to be accessed in shaders.
+ * @param texture_id The id of the texture to bind
+ * @param texture_slot The slot (0, 1, 2, ... etc) to bind to.
+ */
 void tekBindTexture(const uint texture_id, const byte texture_slot) {
     // set texture slot to bind texture to, then bind it
     glActiveTexture(GL_TEXTURE0 + texture_slot);
     glBindTexture(GL_TEXTURE_2D, texture_id);
 }
 
+/**
+ * Delete a texture using its id using opengl.
+ * @param texture_id The id of the texture to delete.
+ */
 void tekDeleteTexture(const uint texture_id) {
-    glDeleteTextures(1, &texture_id);
+    glDeleteTextures(1, &texture_id); // expects an array of texture ids to delete
+    // so just point to the id and say length = 1
 }
