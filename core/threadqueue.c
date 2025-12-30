@@ -11,10 +11,13 @@
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 exception threadQueueCreate(ThreadQueue* thread_queue, const uint capacity) {
+    // allocate memory for queue
     thread_queue->buffer = (void**)malloc(capacity * sizeof(void*));
     if (!thread_queue->buffer)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory buffer for thread queue.");
     thread_queue->buffer_size = capacity;
+
+    // atomic integer for front and rear
     atomic_init(&thread_queue->front, 0);
     atomic_init(&thread_queue->rear, 0);
     return SUCCESS;
@@ -26,7 +29,10 @@ exception threadQueueCreate(ThreadQueue* thread_queue, const uint capacity) {
  * @param thread_queue The thread queue to delete.
  */
 void threadQueueDelete(ThreadQueue* thread_queue) {
+    // free allocated memory
     free(thread_queue->buffer);
+
+    // prevent misuse by setting things to null
     thread_queue->buffer = 0;
     thread_queue->buffer_size = 0;
 }

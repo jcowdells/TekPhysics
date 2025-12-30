@@ -168,9 +168,17 @@ exception tekGuiSetWindowTitle(TekGuiWindow* window, const char* title) {
     return SUCCESS;
 }
 
+/**
+ * Create a new window and add it to the list of all windows.
+ * @param window The new outputted window.
+ * @throws FAILURE if opengl not initialised.
+ * @throws OPENGL_EXCEPTION . 
+ */
 exception tekGuiCreateWindow(TekGuiWindow* window) {
+    // check if opengl initialised + window intitialised
     if (!window_init) tekThrow(FAILURE, "Attempted to run function before initialised.");
 
+    // assign all default values from defaults.yml
     window->type = WINDOW_TYPE_EMPTY;
     window->visible = 1;
     window->data = NULL;
@@ -189,6 +197,7 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     tekChainThrow(tekGuiSetWindowTitleBuffer(window, window_defaults.title));
     tekChainThrow(tekGuiWindowCreateTitleText(window));
 
+    // create button to detect when title bar clicked / dragged
     tekChainThrow(tekGuiCreateButton(&window->title_button));
     tekGuiWindowUpdateButtonHitbox(window);
     window->title_button.hitbox_width = window_defaults.width + 2 * window_defaults.border_width;
@@ -196,6 +205,7 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     window->title_button.data = (void*)window;
     window->title_button.callback = tekGuiWindowTitleButtonCallback;
 
+    // add background mesh to list
     tekChainThrow(tekGuiWindowAddGLMesh(window, &window->mesh_index));
 
     window->being_dragged = 0;
@@ -209,6 +219,11 @@ exception tekGuiCreateWindow(TekGuiWindow* window) {
     return SUCCESS;
 }
 
+/**
+ * Draw a single window, and call any sub draw calls of the window.
+ * @param window The window to draw.
+ * @throws OPENGL_EXCEPTION .
+ */
 exception tekGuiDrawWindow(const TekGuiWindow* window) {
     if (!window->visible) return SUCCESS;
 
@@ -227,7 +242,12 @@ exception tekGuiDrawWindow(const TekGuiWindow* window) {
     return SUCCESS;
 }
 
+/**
+ * Draw all the windows that have been created.
+ * @throws OPENGL_EXCEPTION .
+ */
 exception tekGuiDrawAllWindows() {
+    // loop through windows and draw each one
     const ListItem* item = 0;
     foreach(item, (&window_ptr_list), {
         const TekGuiWindow* window = (const TekGuiWindow*)item->data;
@@ -236,30 +256,60 @@ exception tekGuiDrawAllWindows() {
     return SUCCESS;
 }
 
+/**
+ * Set the position of a window in pixels.
+ * @param window The window to set the position of.
+ * @param x_pos The new x position of the window.
+ * @param y_pos The new y position of the window.
+ */
 void tekGuiSetWindowPosition(TekGuiWindow* window, const int x_pos, const int y_pos) {
+    // update position and redraw mesh
     window->x_pos = x_pos;
     window->y_pos = y_pos;
     tekGuiWindowUpdateButtonHitbox(window);
     tekGuiWindowUpdateGLMesh(window);
 }
 
+/**
+ * Set the size of a window in pixels.
+ * @param window The window to set the size of.
+ * @param width The new width in pixels.
+ * @param height The new height in pixels.
+ */
 void tekGuiSetWindowSize(TekGuiWindow* window, const uint width, const uint height) {
+    // update size and redraw mesh and update button
     window->width = width;
     window->height = height;
     tekGuiWindowUpdateButtonHitbox(window);
     tekGuiWindowUpdateGLMesh(window);
 }
 
+/**
+ * Set the background colour of a window.
+ * @param window The window to set the background colour of.
+ * @param colour The colour to set the background as.
+ */
 void tekGuiSetWindowBackgroundColour(TekGuiWindow* window, vec4 colour) {
+    // set colour and update mesh
     glm_vec4_copy(colour, window->background_colour);
     tekGuiWindowUpdateGLMesh(window);
 }
 
+/**
+ * Set the colour of the border of a window.
+ * @param window The window to set the border colour of.
+ * @param colour The colour to set the window border.
+ */
 void tekGuiSetWindowBorderColour(TekGuiWindow* window, vec4 colour) {
+    // set colour and update mesh.
     glm_vec4_copy(colour, window->border_colour);
     tekGuiWindowUpdateGLMesh(window);
 }
 
+/**
+ * Delete a window, freeing any allocated memory.
+ * @param window The window to delete.
+ */
 void tekGuiDeleteWindow(TekGuiWindow* window) {
-
+    // TODO: THIS????????????????
 }
