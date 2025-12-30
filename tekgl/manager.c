@@ -24,24 +24,38 @@ static List tek_mbutton_funcs = {0, 0};
 static List tek_mscroll_funcs = {0, 0};
 static GLFWcursor* crosshair_cursor;
 
+/**
+ * Add a framebuffer callback which will be called whenever the framebuffer/window is resized.
+ * @param callback The callback function.
+ * @throws LIST_EXCEPTION if could not add function to list.
+ */
 exception tekAddFramebufferCallback(const TekFramebufferCallback callback) {
-    if (!tek_fb_funcs.length) {
+    if (!tek_fb_funcs.length) { // create list if not yet created
         listCreate(&tek_fb_funcs);
     }
 
-    tekChainThrow(listAddItem(&tek_fb_funcs, callback));
+    tekChainThrow(listAddItem(&tek_fb_funcs, callback)); // add callback to list
     return SUCCESS;
 }
 
+/**
+ * Add a framebuffer callback which is called every time the window is resized.
+ * This gives the new size of the portion of the window which is being rendered, and doesn't include borders.
+ * @param window The GLFW window which is being resized.
+ * @param width The new width of the framebuffer.
+ * @param height The new height of the framebuffer.
+ */
 void tekManagerFramebufferCallback(GLFWwindow* window, const int width, const int height) {
     if (window != tek_window) return;
 
+    // update these so we can retreive at any time.
     tek_window_width = width;
     tek_window_height = height;
 
     // update the size of the viewport
     glViewport(0, 0, width, height);
 
+    // call any user-created framebuffer callbacks.
     const ListItem* item = 0;
     foreach(item, (&tek_fb_funcs), {
         const TekFramebufferCallback callback = (TekFramebufferCallback)item->data;
@@ -49,6 +63,11 @@ void tekManagerFramebufferCallback(GLFWwindow* window, const int width, const in
     });
 }
 
+/**
+ * Add a delete function which is called when the program is terminating.
+ * @param delete_func The function to call on termination.
+ * @throws LIST_EXCEPTION if could not add function to list.
+ */
 exception tekAddDeleteFunc(const TekDeleteFunc delete_func) {
     if (!tek_delete_funcs.length)
         listCreate(&tek_delete_funcs);
@@ -58,6 +77,11 @@ exception tekAddDeleteFunc(const TekDeleteFunc delete_func) {
     return SUCCESS;
 }
 
+/**
+ * Add a GL load function, this is called after glfw + glad have been initialised.
+ * @param gl_load_func The function to be called during loading.
+ * @throws LIST_EXCEPTION if could not add function to list.
+ */
 exception tekAddGLLoadFunc(const TekGLLoadFunc gl_load_func) {
     if (!tek_gl_load_funcs.length)
         listCreate(&tek_gl_load_funcs);
@@ -67,87 +91,153 @@ exception tekAddGLLoadFunc(const TekGLLoadFunc gl_load_func) {
     return SUCCESS;
 }
 
+/**
+ * The main callback for all key press events, goes on to call any user-created key callbacks.
+ * @param window The window where the key press is occurring.
+ * @param key The key being pressed as a GLFW_KEY_... enum/macro.
+ * @param scancode The scancode of the key
+ * @param action The action e.g. press, release, repeat.
+ * @param mods Any modifiers acting on the key.
+ */
 void tekManagerKeyCallback(GLFWwindow* window, const int key, const int scancode, const int action, const int mods) {
     if (window != tek_window) return;
+
+    // for each key callback.
     const ListItem* item = 0;
     foreach(item, (&tek_key_funcs), {
-        const TekKeyCallback callback = (TekKeyCallback)item->data;
-        callback(key, scancode, action, mods);
+        const TekKeyCallback callback = (TekKeyCallback)item->data; // get the callback.
+        callback(key, scancode, action, mods); // call it.
     });
 }
 
+/**
+ * The main callback for char events, e.g. listen for typing with shift/caps lock affecting keys.
+ * Goes on to call all user created char callbacks.
+ * @param window The GLFW window where the typing is happening.
+ * @param codepoint The character being pressed as ascii code.
+ */
 static void tekManagerCharCallback(GLFWwindow* window, uint codepoint) {
     if (window != tek_window) return;
+
+    // for each callback in list
     const ListItem* item = 0;
     foreach(item, (&tek_char_funcs), {
-        const TekCharCallback callback = (TekCharCallback)item->data;
-        callback(codepoint);
+        const TekCharCallback callback = (TekCharCallback)item->data; // get callback
+        callback(codepoint); // call it
     });
 }
 
+/**
+ * The main callback for mouse movement events that will go on to trigger all user-created callbacks of this type.
+ * @param window The GLFW window where the event happened.
+ * @param x The x position of the mouse after moving.
+ * @param y The y position of the mouse after moving.
+ */
 static void tekManagerMouseMoveCallback(GLFWwindow* window, const double x, const double y) {
     if (window != tek_window) return;
+
+    // for each item
     const ListItem* item = 0;
     foreach(item, (&tek_mmove_funcs), {
-        const TekMousePosCallback callback = (TekMousePosCallback)item->data;
-        callback(x, y);
+        const TekMousePosCallback callback = (TekMousePosCallback)item->data; // get the callback
+        callback(x, y); // call it
     });
 }
 
+/**
+ * The main callback for mouse buttons that will go on to trigger user-created callbacks.
+ * @param window The GLFW window pointer that is being clicked.
+ * @param button The button being clicked.
+ * @param action The type of click e.g. press or release.
+ * @param mods The modifiers acting on the button.
+ */
 static void tekManagerMouseButtonCallback(GLFWwindow* window, const int button, const int action, const int mods) {
     if (window != tek_window) return;
 
+    // for each item
     const ListItem* item = 0;
     foreach(item, (&tek_mbutton_funcs), {
-        const TekMouseButtonCallback callback = (TekMouseButtonCallback)item->data;
-        callback(button, action, mods);
+        const TekMouseButtonCallback callback = (TekMouseButtonCallback)item->data; // get the callback
+        callback(button, action, mods); // call it
     });
 }
 
+/**
+ * The root callback for mouse scroll events, which triggers all user-created events.
+ * @param window The GLFW window pointer.
+ * @param x_offset The amount of scroll in the x direction.
+ * @param y_offset The amount of scroll in the y direction.
+ */
 static void tekManagerMouseScrollCallback(GLFWwindow* window, const double x_offset, const double y_offset) {
-    if (window != tek_window) return;
+    if (window != tek_window) return; // only respond to events from this window i guess
 
+    // list for loop
     const ListItem* item = 0;
     foreach(item, (&tek_mscroll_funcs), {
-        const TekMouseScrollCallback callback = (TekMouseScrollCallback)item->data;
-        callback(x_offset, y_offset);
+        const TekMouseScrollCallback callback = (TekMouseScrollCallback)item->data; // get callback
+        callback(x_offset, y_offset); // call it
     });
 }
 
+/**
+ * Add a callback for every time a key is pressed on the keyboard.
+ * @param callback The callback function.
+ * @throws LIST_EXCEPTION if the function could not be added to the list. 
+ */
 exception tekAddKeyCallback(const TekKeyCallback callback) {
-    if (!tek_key_funcs.length)
+    if (!tek_key_funcs.length) // if length == 0, then create the list as it has not yet been
         listCreate(&tek_key_funcs);
 
     tekChainThrow(listAddItem(&tek_key_funcs, callback));
     return SUCCESS;
 }
 
+/**
+ * Add a 'char' callback, which is called whenever the user types. It is affected by shift/caps lock etc.
+ * @param callback The callback function.
+ * @throws LIST_EXCEPTION if the function could not be added to the list of callbacks.
+ */
 exception tekAddCharCallback(const TekCharCallback callback) {
-    if (!tek_char_funcs.length)
+    if (!tek_char_funcs.length) // if length == 0, then list is yet to be created.
        listCreate(&tek_char_funcs);
 
     tekChainThrow(listAddItem(&tek_char_funcs, callback));
     return SUCCESS;
 }
 
+/**
+ * Add a callback that is triggered every time the mouse is moved.
+ * @param callback The callback function.
+ * @throws LIST_EXCEPTION if the callback could not be added to the list of callbacks.
+ */
 exception tekAddMousePosCallback(const TekMousePosCallback callback) {
-    if (!tek_mmove_funcs.length)
+    if (!tek_mmove_funcs.length) // if length == 0, then list is yet to be created.
         listCreate(&tek_mmove_funcs);
 
     tekChainThrow(listAddItem(&tek_mmove_funcs, callback));
     return SUCCESS;
 }
 
+/**
+ * Add a mouse button callback that is triggered every time the mouse is clicked.
+ * @param callback The callback function
+ * @throws LIST_EXCEPTION if could not add callback to list.
+ */
 exception tekAddMouseButtonCallback(const TekMouseButtonCallback callback) {
-    if (!tek_mbutton_funcs.length)
+    if (!tek_mbutton_funcs.length) // if length == 0, then list has not yet been created.
         listCreate(&tek_mbutton_funcs);
 
     tekChainThrow(listAddItem(&tek_mbutton_funcs, callback));
     return SUCCESS;
 }
 
+/**
+ * Add a callback that will be triggered every time the mouse is scrolled.
+ * @param callback The function to call.
+ * @throws LIST_EXCEPTION if could not add callback to list of callbacks.
+ */
 exception tekAddMouseScrollCallback(const TekMouseScrollCallback callback) {
-    if (!tek_mscroll_funcs.length)
+    if (!tek_mscroll_funcs.length) // if length == 0, then uninitialised.
         listCreate(&tek_mscroll_funcs);
 
     tekChainThrow(listAddItem(&tek_mscroll_funcs, callback));

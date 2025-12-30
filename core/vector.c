@@ -13,8 +13,9 @@
  * @throws MEMORY_EXCEPTION if the initial list could not be allocated.
  */
 exception vectorCreate(uint start_capacity, const uint element_size, Vector* vector) {
+    // mostly just safety checks here
     if (element_size == 0) tekThrow(VECTOR_EXCEPTION, "Vector elements cannot have a size of 0.");
-    if (start_capacity == 0) start_capacity = 1;
+    if (start_capacity == 0) start_capacity = 1; // if start capacity is 0, it would infinitely try and double the size of the vector cuz 2 * 0 = 0. and would never grow. just seemed too harsh to throw an error for that when it really has no effect.
     void* internal = (void*)malloc(start_capacity * element_size);
     if (!internal) tekThrow(MEMORY_EXCEPTION, "Failed to allocate initial memory for vector.");
     vector->internal = internal;
@@ -32,6 +33,7 @@ exception vectorCreate(uint start_capacity, const uint element_size, Vector* vec
  * @param item The item to write into the vector.
  */
 static void vectorWriteItem(const Vector* vector, const uint index, const void* item) {
+    // calcuate byte array index and copy bytes
     void* dest = vector->internal + index * vector->element_size;
     memcpy(dest, item, vector->element_size);
 }
@@ -42,10 +44,15 @@ static void vectorWriteItem(const Vector* vector, const uint index, const void* 
  * @throws MEMORY_EXCEPTION if extra memory could not be allocated.
  */
 static exception vectorDoubleCapacity(Vector* vector) {
+    // double the internal size
     const uint new_size = vector->internal_size * 2;
     void* internal = vector->internal;
     void* temp = (void*)realloc(internal, new_size * vector->element_size);
+
+    // attempt to realloc
     if (!temp) tekThrowThen(MEMORY_EXCEPTION, "Failed to allocate more memory to grow vector.", free(internal));
+    // if worked, then we can set the new data in the vector
+    // if we did it earlier, then it would crash trying to delete the vector
     vector->internal = temp;
     vector->internal_size = new_size;
     return SUCCESS;
@@ -60,9 +67,9 @@ static exception vectorDoubleCapacity(Vector* vector) {
  */
 exception vectorAddItem(Vector* vector, const void* item) {
     if (vector->length >= vector->internal_size)
-        tekChainThrow(vectorDoubleCapacity(vector));
-    vectorWriteItem(vector, vector->length, item);
-    vector->length++;
+        tekChainThrow(vectorDoubleCapacity(vector)); // amazing helper function
+    vectorWriteItem(vector, vector->length, item); // add item at end
+    vector->length++; // increment length cuz its longer now by 1
     return SUCCESS;
 }
 
@@ -75,6 +82,7 @@ exception vectorAddItem(Vector* vector, const void* item) {
  * @throws VECTOR_EXCEPTION if the index is out of bounds.
  */
 exception vectorSetItem(const Vector* vector, const uint index, const void* item) {
+    // just add a check to the write function
     if (index >= vector->length) tekThrow(VECTOR_EXCEPTION, "Attempted to set index out of bounds.");
     vectorWriteItem(vector, index, item);
     return SUCCESS;
@@ -90,6 +98,8 @@ exception vectorSetItem(const Vector* vector, const uint index, const void* item
  */
 exception vectorGetItem(const Vector* vector, const uint index, void* item) {
     if (index >= vector->length) tekThrow(VECTOR_EXCEPTION, "Attempted to get index out of bounds.");
+
+    // copy data into buffer from user
     const void* src = vector->internal + index * vector->element_size;
     memcpy(item, src, vector->element_size);
     return SUCCESS;
@@ -105,6 +115,8 @@ exception vectorGetItem(const Vector* vector, const uint index, void* item) {
  */
 exception vectorGetItemPtr(const Vector* vector, const uint index, void** item) {
     if (index >= vector->length) tekThrow(VECTOR_EXCEPTION, "Attempted to get index out of bounds.");
+
+    // basic pointers stuff (yeah)
     *item = vector->internal + index * vector->element_size;
     return SUCCESS;
 }
@@ -119,11 +131,17 @@ exception vectorGetItemPtr(const Vector* vector, const uint index, void** item) 
  */
 exception vectorRemoveItem(Vector* vector, const uint index, void* item) {
     if (index >= vector->length) tekThrow(VECTOR_EXCEPTION, "Attempted to get index out of bounds.");
+
+    // get copy of the item before its gone (if wanted)
     if (item) tekChainThrow(vectorGetItem(vector, index, item));
+
+    // shift everything after the item being removed down by one item
     void* dest = vector->internal + index * vector->element_size;
     const void* src = dest + vector->element_size;
     const uint remainder_size = (vector->length - index - 1) * vector->element_size;
     memcpy(dest, src, remainder_size);
+
+    // decrement length (cuz an item was removed)
     vector->length--;
     return SUCCESS;
 }
@@ -158,18 +176,25 @@ flag vectorPopItem(Vector* vector, void* item) {
  */
 exception vectorInsertItem(Vector* vector, const uint index, const void* item) {
     if (index > vector->length) tekThrow(VECTOR_EXCEPTION, "Attempted to set index out of bounds.");
+
+    // new item to be added to vector at the end, just use the tried and true add method
     if (index == vector->length) {
         tekChainThrow(vectorAddItem(vector, item));
         return SUCCESS;
     }
 
+    // if adding past the end, need to grow the size
     if (vector->length >= vector->internal_size)
         tekChainThrow(vectorDoubleCapacity(vector));
 
+    // mega bodge
+    // shift everything at index and after one item forward
     void* src = vector->internal + index * vector->element_size;
     void* dest = src + vector->element_size;
     const uint size = (vector->length - index) * vector->element_size;
     memcpy(dest, src, size);
+
+    // now add the new item
     vectorWriteItem(vector, index, item);
     vector->length++;
     return SUCCESS;
@@ -181,7 +206,10 @@ exception vectorInsertItem(Vector* vector, const uint index, const void* item) {
  * @note This will maintain the previous internal capacity of the vector.
  */
 void vectorClear(Vector* vector) {
+    // overwrite internal buffer so every byte is 0
     memset(vector->internal, 0, vector->internal_size * vector->element_size);
+
+    // length = 0 to prevent access to random null chunks?
     vector->length = 0;
 }
 
@@ -190,7 +218,10 @@ void vectorClear(Vector* vector) {
  * @param vector The vector to delete.
  */
 void vectorDelete(Vector* vector) {
+    // free allocated memory block
     free(vector->internal);
+
+    // prevent further misuse
     vector->internal = 0;
     vector->internal_size = 0;
     vector->element_size = 0;

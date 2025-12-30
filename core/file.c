@@ -80,15 +80,25 @@ exception writeFile(const char* buffer, const char* filename) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 exception addPathToFile(const char* directory, const char* filename, char** result) {
+    // get some lengths
     const uint len_directory = strlen(directory);
     const uint len_filename = strlen(filename);
+
+    // final string should only have one null terminator, if it had one from each string it would cut half way
     const uint len_result = len_directory + len_filename + 1;
-    *result = (char*)malloc(len_result * sizeof(char));
+    *result = (char*)malloc(len_result * sizeof(char)); // mallashib
     if (!*result)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for result.");
+
+    // Python:     result = "directory" + "filename" 👍
+    // TekPhysics:
     memcpy(*result, directory, len_directory);
     memcpy(*result + len_directory, filename, len_filename);
     (*result)[len_directory + len_filename] = 0;
+    // We choose to write in C in this NEA and do the other things, not because they are easy, but because they are hard;
+    // because that goal will serve to organize and measure the best of our energies and skills,
+    // because that challenge is one that we are willing to accept, one we are unwilling to postpone,
+    // and one we intend to win, and the others, too.
     return SUCCESS;
 }
 
@@ -98,10 +108,10 @@ exception addPathToFile(const char* directory, const char* filename, char** resu
  * @return 0 if it does not exist, 1 if it does.
  */
 flag fileExists(const char* filename) {
-    FILE* file_ptr = fopen(filename, "r");
-    if (file_ptr) {
+    FILE* file_ptr = fopen(filename, "r"); // open in read-only
+    if (file_ptr) { // if possible to read, it exists
         fclose(file_ptr);
         return 1;
     }
-    return 0;
+    return 0; // otherwise it effectively does not exist.
 }

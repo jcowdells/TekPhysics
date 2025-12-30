@@ -189,7 +189,8 @@ YML_CREATE_TOKEN_FUNC(ymlCreateFloatDataToken, FLOAT_DATA, {
  * @throws YML_EXCEPTION if token is of an unknown type.
  */
 exception ymlCreateAutoDataToken(const Token* token, YmlData** yml_data) {
-    switch (token->type & TYPE_MASK) {
+    switch (token->type & TYPE_MASK) { // type also contains other data about the thingy - if it is in a list or not
+        // decide which method to use to create the token.
         case STRING_TOKEN:
             tekChainThrow(ymlCreateStringDataToken(token, yml_data));
             break;
@@ -219,11 +220,13 @@ exception ymlDataToString(const YmlData* yml_data, char** string) {
     // make sure that the data is actually of a string
     if (yml_data->type != STRING_DATA) tekThrow(YML_EXCEPTION, "Data is not of string type.");
 
+    // mallocate
     const char* yml_string = yml_data->value;
     const uint len_string = strlen(yml_string) + 1;
     *string = (char*)malloc(len_string * sizeof(char));
     if (!(*string)) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for string.");
 
+    // copy old string into new buffer
     memcpy(*string, yml_string, len_string);
     return SUCCESS;
 }
@@ -397,6 +400,7 @@ void ymlDeleteData(YmlData* yml_data) {
                 break;
             case LIST_DATA:
                 // for list data, we need to deallocate each item in the list first
+                // delete all data before deleting the actual list.
                 List* yml_list = yml_data->value;
                 const ListItem* item = yml_list->data;
                 while (item) {
@@ -467,6 +471,13 @@ exception ymlCreate(YmlFile* yml) {
 
 // Auto convert variadic arguments into a list
 // Using macro to avoid passing around a va_list.
+/**
+ * Macro template for reading through variadic arguments until reaching nullptr, and adding each va_arg to a list.
+ * @param list_name The name of the list to create and add items to.
+ * @param va_name The name of the va_list variable to create.
+ * @param va_type The expected type of the variadic arguments.
+ * @param final_param The name of the final parameter before the variadic arguments
+ */
 #define VA_ARGS_TO_LIST(list_name, va_name, va_type, final_param) \
 va_list va_name; \
 va_start(va_name, final_param); \
@@ -527,7 +538,13 @@ exception ymlGetList(YmlFile* yml, YmlData** data, const List* keys) {
     return SUCCESS;
 }
 
-/// @copydoc ymlGetList
+/**
+ * Get a piece of yml data by variadic arguments.
+ * @param yml The yml data structure to get from.
+ * @param data The returned data.
+ * @param ... The keys/route to access this data.
+ * @throws YML_EXCEPTION .
+ */
 exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
     // separate method. should be called from a macro ymlGet
     // the macro will force the final argument to be null
@@ -569,16 +586,28 @@ exception ymlGetVA(YmlFile* yml, YmlData** data, ...) {
  * @throws YML_EXCEPTION If the list points to an invalid key.
  */
 exception ymlGetKeysList(YmlFile* yml, char*** yml_keys, uint* num_keys, const List* keys) {
+    // get yml data
     YmlData* yml_data;
     tekChainThrow(ymlGetList(yml, &yml_data, keys));
+
+    // ensure there are keys to return below this data
     if (yml_data->type != YML_DATA) tekThrow(YML_EXCEPTION, "Data has no keys.");
+
+    // return them
     const HashTable* hashtable = yml_data->value;
     tekChainThrow(hashtableGetKeys(hashtable, yml_keys));
     *num_keys = hashtable->num_items;
     return SUCCESS;
 }
 
-/// @copydoc ymlGetKeysList
+/**
+ * Get a list of sub keys from a yml data structure by variadic arguments.
+ * @param yml The yml data structure to get the data from.
+ * @param yml_keys The retrieved keys from this data structure.
+ * @param num_keys The number of keys received
+ * @param ... The keys/route to access this yml data.
+ * @throws YML_EXCEPTION .
+ */
 exception ymlGetKeysVA(YmlFile* yml, char*** yml_keys, uint* num_keys, ...) {
     // separate method. should be called from a macro ymlGet
     // the macro will force the final argument to be null
@@ -691,7 +720,13 @@ exception ymlSetList(YmlFile* yml, YmlData* data, const List* keys) {
     return SUCCESS;
 }
 
-/// @copydoc ymlSetList
+/**
+ * Set an item in a YML data structure by variadic arguments.
+ * @param yml The yml to set item in.
+ * @param data The yml data to set at that point.
+ * @param ... The keys/route to access that item.
+ * @throws YML_EXCEPTION .
+ */
 exception ymlSetVA(YmlFile* yml, YmlData* data, ...) {
     // separate method. should be called from a macro ymlGet
     // the macro will force the final argument to be null
@@ -764,7 +799,13 @@ exception ymlRemoveList(YmlFile* yml, const List* keys) {
     return SUCCESS;
 }
 
-/// @copydoc ymlRemoveList
+/**
+ * Remove item from YML using variadic arguments to specify the item to remove.
+ * \ref ymlRemove
+ * @param yml The yml file to remove from
+ * @param ... The names of each key to access to arrive at the item to remove.
+ * @throws YML_EXCEPTION
+ */
 exception ymlRemoveVA(YmlFile* yml, ...) {
     // separate method. should be called from a macro ymlRemove
     // the macro will force the final argument to be null
@@ -975,12 +1016,14 @@ TOKEN_CREATE_FUNC(ymlCreateListToken, LIST_TOKEN | ymlDetectType(word));
  * @note This function allocates memory that needs to be freed.
  * @param[in] type The type of indent token to create.
  * @param[out] token A pointer to the token that will be created.
+ * @throws MEMORY_EXCEPTION if malloc() fails
  */
 exception ymlCreateIndentToken(const flag type, Token** token) {
+    // mallocate
     *token = (Token*)malloc(sizeof(Token));
     if (!*token) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for indent token.");
     (*token)->type = type;
-    (*token)->word = 0;
+    (*token)->word = 0; // does not point to a word.
     return SUCCESS;
 }
 
@@ -1012,7 +1055,8 @@ exception ymlCreateIndentToken(const flag type, Token** token) {
  * @param word The word that should be used to check if the indent has changed.
  * @param tokens The list of tokens that should gain an indent token if the indent has changed.
  * @param indent_stack The indent stack - a stack storing each level of indent in the order that it occurred.
- * @return
+ * @throws LIST_EXCEPTION .
+ * @throws YML_EXCEPTION .
  */
 exception ymlUpdateIndent(uint* indent, const Word* word, List* tokens, Stack* indent_stack) {
     // essentially, if the indent changes, we need to look at the indent stack
@@ -1143,6 +1187,13 @@ exception ymlCreateTokens(const List* split_text, List* tokens) {
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 exception ymlFromTokensListAddList(const ListItem** prev_item, const ListItem** item, List* yml_list, YmlData** yml_data) {
+    // list of tokens will be like:
+    // ... data ...
+    // list identifier: <- prev item
+    //   item 1         <- item
+    //   item 2
+    // NON-LIST-ITEM ...
+    // so search for the first non-list item 
     while (*item) {
         // loop until we find a non list item in the tokens
         const Token* list_token = (Token*)(*item)->data;
@@ -1159,6 +1210,7 @@ exception ymlFromTokensListAddList(const ListItem** prev_item, const ListItem** 
         *item = (*item)->next;
     }
 
+    // create the actual yml data now
     tekChainThrowThen(ymlCreateListData(yml_list, yml_data), {
         ymlDeleteData(*yml_data);
     });
@@ -1288,6 +1340,7 @@ exception ymlFromTokens(const List* tokens, YmlFile* yml) {
  * @param data The YmlData to print
  */
 void ymlPrintData(const YmlData* data) {
+     // these two are easy
      if (data->type == STRING_DATA) printf("%s\n", (char*)data->value);
      if (data->type == INTEGER_DATA) printf("%ld\n", (long)data->value);
      if (data->type == FLOAT_DATA) {
@@ -1360,7 +1413,7 @@ exception ymlPrintIndent(YmlFile* yml, uint indent) {
  * @throws MEMORY_EXCEPTION if failed to allocate memory for keys/values to print
  */
 exception ymlPrint(YmlFile* yml) {
-    tekChainThrow(ymlPrintIndent(yml, 0));
+    tekChainThrow(ymlPrintIndent(yml, 0)); // recursive func, initial indent = 0
     return SUCCESS;
 }
 
@@ -1368,7 +1421,7 @@ exception ymlPrint(YmlFile* yml) {
  * @brief Take a filename and read its content into a yml data structure.
  * @param filename The filename of the yml file to be read.
  * @param yml A pointer to an existing but empty YmlFile struct to read the data into.
- * @return
+ * @throws YML_EXCEPTION if could not read file.
  */
 exception ymlReadFile(const char* filename, YmlFile* yml) {
     tekChainThrow(ymlCreate(yml));
@@ -1380,6 +1433,7 @@ exception ymlReadFile(const char* filename, YmlFile* yml) {
     if (!buffer) tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory to read yml file into.");
     tekChainThrow(readFile(filename, file_size, buffer));
 
+    // create list to store split up text.
     List split_text;
     listCreate(&split_text);
 
@@ -1412,6 +1466,7 @@ exception ymlReadFile(const char* filename, YmlFile* yml) {
         free(buffer);
     });
 
+    // clean up
     listFreeAllData(&split_text);
     listFreeAllData(&tokens);
     listDelete(&split_text);

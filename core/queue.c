@@ -8,6 +8,7 @@
  * @param queue A pointer to an empty queue.
  */
 void queueCreate(Queue* queue) {
+    // null out everything incase bogus data was in the struct
     queue->rear = 0;
     queue->front = 0;
     queue->length = 0;
@@ -93,7 +94,7 @@ exception queueDequeue(Queue* queue, void** data) {
 exception queuePeek(const Queue* queue, void** data) {
     if (!queue->front)
         tekThrow(QUEUE_EXCEPTION, "Cannot peek an empty queue.");
-    *data = queue->front->data;
+    *data = queue->front->data; // root node = front of queue
     return SUCCESS;
 }
 

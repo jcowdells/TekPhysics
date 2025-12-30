@@ -38,8 +38,11 @@ exception bitsetCreate(uint num_bits, const flag grows, BitSet* bitset) {
  * @param bitset The bitset to delete.
  */
 void bitsetDelete(BitSet* bitset) {
+    // free allocated memory
     if (bitset->bitset)
         free(bitset->bitset);
+
+    // prevent misuse
     bitset->bitset = 0;
     bitset->size = 0;
     bitset->grows = 0;
@@ -52,8 +55,8 @@ void bitsetDelete(BitSet* bitset) {
  * @param bit_index The index of the bit (0-63) inside that number.
  */
 static void bitsetGetIndices(const uint bitset_index, uint* array_index, uint* bit_index) {
-    *array_index = bitset_index / BITS_PER_INDEX;
-    *bit_index = bitset_index % BITS_PER_INDEX;
+    *array_index = bitset_index / BITS_PER_INDEX; // grows at 1/64th of the rate of the bitset index
+    *bit_index = bitset_index % BITS_PER_INDEX; // loops 0-63 every array index
 }
 
 /**
@@ -100,10 +103,11 @@ static exception bitsetSetValue(BitSet* bitset, const uint index, const char val
         }
     }
 
+    // major bit hacking
     if (value) {
-        bitset->bitset[array_index] |= 1ull << bit_index;
+        bitset->bitset[array_index] |= 1ull << bit_index; // makes sense
     } else {
-        bitset->bitset[array_index] &= ~(1ull << bit_index);
+        bitset->bitset[array_index] &= ~(1ull << bit_index); // makes sense if u think abt it
     }
     return SUCCESS;
 }
@@ -116,6 +120,7 @@ static exception bitsetSetValue(BitSet* bitset, const uint index, const char val
  * @throws BITSET_EXCEPTION if the index is out of range, and growth is disabled.
  */
 exception bitsetSet(BitSet* bitset, const uint index) {
+    // set = set to 1
     tekChainThrow(bitsetSetValue(bitset, index, 1));
     return SUCCESS;
 }
@@ -128,6 +133,7 @@ exception bitsetSet(BitSet* bitset, const uint index) {
  * @throws BITSET_EXCEPTION if the index is out of range, and growth is disabled.
  */
 exception bitsetUnset(BitSet* bitset, const uint index) {
+    // unset = set to 0
     tekChainThrow(bitsetSetValue(bitset, index, 0));
     return SUCCESS;
 }
@@ -140,6 +146,8 @@ exception bitsetUnset(BitSet* bitset, const uint index) {
  * @throws BITSET_EXCEPTION if the index is out of range, and growth is disabled.
  */
 exception bitsetGet(const BitSet* bitset, const uint index, flag* value) {
+    // need to access in two stages, array index and bit index
+    // array has 64 bit integers in it. only want one of those bits
     uint array_index, bit_index;
     bitsetGetIndices(index, &array_index, &bit_index);
 
@@ -150,6 +158,7 @@ exception bitsetGet(const BitSet* bitset, const uint index, flag* value) {
         tekThrow(BITSET_EXCEPTION, "Could not access bit outside of range.");
     }
 
+    // shift by bit index to get actual bit value.
     *value = (bitset->bitset[array_index] & (1ull << bit_index)) ? 1 : 0;
     return SUCCESS;
 }
@@ -163,6 +172,8 @@ exception bitsetGet(const BitSet* bitset, const uint index, flag* value) {
  * @return The 1D index.
  */
 static uint bitsetGet1DIndex(const uint x, const uint y) {
+    // 0x5F3759DF evil floating point bit level hacking
+    // yea i dont remember how it works exactly but u can figure it out
     if (y > x) {
         return y * y + 2 * y - x;
     }
@@ -178,6 +189,7 @@ static uint bitsetGet1DIndex(const uint x, const uint y) {
  *  * @throws BITSET_EXCEPTION if index out of range, and growth disabled.
  */
 exception bitsetSet2D(BitSet* bitset, const uint x, const uint y) {
+    // wrapper around normal function, just with converting to 1d coordinate.
     tekChainThrow(bitsetSet(bitset, bitsetGet1DIndex(x, y)));
     return SUCCESS;
 }
@@ -191,6 +203,7 @@ exception bitsetSet2D(BitSet* bitset, const uint x, const uint y) {
  *  * @throws BITSET_EXCEPTION if index out of range, and growth disabled.
  */
 exception bitsetUnset2D(BitSet* bitset, const uint x, const uint y) {
+    // wrapper around normal function, just converting coordinate
     tekChainThrow(bitsetUnset(bitset, bitsetGet1DIndex(x, y)));
     return SUCCESS;
 }
@@ -204,6 +217,8 @@ exception bitsetUnset2D(BitSet* bitset, const uint x, const uint y) {
  * @throws BITSET_EXCEPTION if index out of range, and growth disabled.
  */
 exception bitsetGet2D(const BitSet* bitset, const uint x, const uint y, flag* value) {
+    // wrapper around normal bitset function
+    // but get the 1d index
     tekChainThrow(bitsetGet(bitset, bitsetGet1DIndex(x, y), value));
     return SUCCESS;
 }
@@ -213,5 +228,6 @@ exception bitsetGet2D(const BitSet* bitset, const uint x, const uint y, flag* va
  * @param bitset The bitset to operate on.
  */
 void bitsetClear(const BitSet* bitset) {
+    // set all bits to zero in chunks of 64 bits
     memset(bitset->bitset, 0, bitset->size * sizeof(uint64_t));
 }

@@ -8,6 +8,7 @@
  * @param queue A pointer to an empty queue.
  */
 void priorityQueueCreate(PriorityQueue* queue) {
+    // default values
     queue->queue = 0;
     queue->length = 0;
 }
@@ -105,11 +106,11 @@ flag priorityQueueDequeue(PriorityQueue* queue, void** data) {
  * @return 0 if the queue is empty, 1 otherwise.
  */
 flag priorityQueuePeek(const PriorityQueue* queue, void** data) {
-    if (!queue->queue) {
+    if (!queue->queue) { // if queue empty, cannot peek any data
         *data = 0;
         return 0;
     }
-    *data = queue->queue->data;
+    *data = queue->queue->data; // get data at the front of the queue.
     return 1;
 }
 

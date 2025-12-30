@@ -10,11 +10,22 @@
 mat4 text_projection;
 uint text_shader_program_id = 0;
 
+/**
+ * Framebuffer callback for text code. Update a projection matrix for use in text shader.
+ * @param width The new width of the framebuffer.
+ * @param height The new height of the framebuffer.
+ */
 void tekTextFramebufferCallback(const int width, const int height) {
     // when framebuffer changes size, change our projection matrix to match the new size
     glm_ortho(0.0f, (float)width, (float)height, 0.0f, -1.0f, 1.0f, text_projection);
 }
 
+/**
+ * Callback for when opengl is loaded. Creates the shader that allows text to be drawn and which is shared
+ * between different text being drawn.
+ * @throws OPENGL_EXCEPTION .
+ * @throws LIST_EXCEPTION .
+ */
 exception tekGLLoadTextEngine() {
     // if already initialised, don't do it again ;D
     if (text_shader_program_id) return SUCCESS;
@@ -33,6 +44,9 @@ exception tekGLLoadTextEngine() {
     return SUCCESS;
 }
 
+/**
+ * Delete callback for text engine, delete allocated memory.
+ */
 void tekDeleteTextEngine() {
     // the only thing we need to delete is the shader program
     // if its already been deleted, don't bother doing it again.
@@ -42,11 +56,28 @@ void tekDeleteTextEngine() {
     }
 }
 
+/**
+ * Initialisation function for loading text engine.
+ */
 tek_init tekInitTextEngine() {
-    tekAddGLLoadFunc(tekGLLoadTextEngine);
-    tekAddDeleteFunc(tekDeleteTextEngine);
+    tekAddGLLoadFunc(tekGLLoadTextEngine); // load text engine when opengl initialised.
+    tekAddDeleteFunc(tekDeleteTextEngine); // delete stuff when program ends.
 }
 
+/**
+ * Generate a mesh that represents some lettering. Sorts out where the vertices should go, new line spacing,
+ * texture atlas coordinates etc.
+ * @param text The text to generate a mesh for.
+ * @param len_text The length of the text to draw.
+ * @param size The size of the lettering in pixels.
+ * @param font The font to draw with.
+ * @param tek_text The TekText struct to create the mesh data for.
+ * @param vertices The outputted vertices of the mesh.
+ * @param len_vertices_ptr The length of the vertices array created.
+ * @param indices The outputted indices of the mesh. 
+ * @param len_indices_ptr The length of the indices array created.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 static exception tekGenerateTextMeshData(const char* text, const uint len_text, const uint size, TekBitmapFont* font, TekText* tek_text, float** vertices, uint* len_vertices_ptr, uint** indices, uint* len_indices_ptr) {
     // make sure that these values are set to 0, as they are expected to be initialised in other calculations.
     tek_text->width = 0;
@@ -147,6 +178,14 @@ static exception tekGenerateTextMeshData(const char* text, const uint len_text, 
     return SUCCESS;
 }
 
+/**
+ * Create a new TekText structure using a font, some text and a size.
+ * @param text The actual writing to be displayed.
+ * @param size The size of the lettering.
+ * @param font The font to draw with.
+ * @param tek_text A pointer to an existing but empty TekText struct that will have the text data written to it.
+ * @throws OPENGL_EXCEPTION if could not create meshes.
+ */
 exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, TekText* tek_text) {
     float* vertices = 0; uint len_vertices = 0;
     uint* indices = 0; uint len_indices = 0;
@@ -172,6 +211,13 @@ exception tekCreateText(const char* text, const uint size, TekBitmapFont* font, 
     return SUCCESS;
 }
 
+/**
+ * Update a TekText struct to retain the same font, but redraw with different text and/or a different size.
+ * @param tek_text The text to redraw.
+ * @param text The new text to update with.
+ * @param size The new size to update with.
+ * @throws OPENGL_EXCEPTION if could not update buffers.
+ */
 exception tekUpdateText(TekText* tek_text, const char* text, const uint size) {
     float* vertices = 0; uint len_vertices = 0;
     uint* indices = 0; uint len_indices = 0;
@@ -179,14 +225,25 @@ exception tekUpdateText(TekText* tek_text, const char* text, const uint size) {
     // find the number of characters of text we are working with
     const size_t len_text = strlen(text);
 
+    // recreate internal meshes
     tekChainThrow(tekGenerateTextMeshData(text, len_text, size, tek_text->font, tek_text, &vertices, &len_vertices, &indices, &len_indices));
     tekChainThrow(tekRecreateMesh(&tek_text->mesh, vertices, len_vertices, indices, len_indices, 0, 0));
 
+    // free unneeded data.
     free(vertices);
     free(indices);
     return SUCCESS;
 }
 
+/**
+ * Draw text at a point with a specific colour.
+ * @param tek_text The text to draw.
+ * @param x The x-coordinate to draw the text at.
+ * @param y The y-coordinate to draw the text at.
+ * @param colour The colour of the text (rgba)
+ * @throws OPENGL_EXCEPTION if could not draw the text.
+ * @throws SHADER_EXCEPTION if shader was not loaded.
+ */
 exception tekDrawColouredText(const TekText* tek_text, const float x, const float y, const vec4 colour) {
     // make sure that text engine has been initialised, and bind it
     if (!text_shader_program_id) tekThrow(OPENGL_EXCEPTION, "No text shader is available to use.");
@@ -208,6 +265,18 @@ exception tekDrawColouredText(const TekText* tek_text, const float x, const floa
     return SUCCESS;
 }
 
+/**
+ * Draw text of a specific colour at a coordinate, and rotate by an angle around a different point.
+ * @param tek_text The text to draw.
+ * @param x The x-coordinate of the text to draw.
+ * @param y The y-coordinate of the text to draw.
+ * @param colour The colour of the text (rgba)
+ * @param rot_x The x-coordinate to rotate the text around.
+ * @param rot_y The y-coordinate to rotate the text around.
+ * @param angle The angle to rotate the text by.
+ * @throws OPENGL_EXCEPTION if could not draw.
+ * @throws SHADER_EXCEPTION if shader not loaded.
+ */
 exception tekDrawColouredRotatedText(const TekText* tek_text, const float x, const float y, const vec4 colour, const float rot_x, const float rot_y, const float angle) {
     // make sure that text engine has been initialised, and bind it
     if (!text_shader_program_id) tekThrow(OPENGL_EXCEPTION, "No text shader is available to use.");
@@ -244,11 +313,25 @@ exception tekDrawColouredRotatedText(const TekText* tek_text, const float x, con
     return SUCCESS;
 }
 
+/**
+ * Draw some text to the screen at a position.
+ * @param tek_text The text to draw.
+ * @param x The x-coordinate to draw at.
+ * @param y The y-coordinate to draw at.
+ * @throws OPENGL_EXCEPTION if could not draw.
+ */
 exception tekDrawText(const TekText* tek_text, const float x, const float y) {
+    // archaic remnant of old code, text used to be hard coded as white
+    // after adding colours, the coloured text method is used but colour set to white.
+    // so calls to the old method still work the same now.
     tekChainThrow(tekDrawColouredText(tek_text, x, y, (vec4){1.0f, 1.0f, 1.0f, 1.0f}));
     return SUCCESS;
 }
 
+/**
+ * Delete a text struct, freeing any allocated memory.
+ * @param tek_text A pointer to the struct to delete.
+ */
 void tekDeleteText(const TekText* tek_text) {
     // mesh is the only thing that we need to delete
     // font exists separately to text

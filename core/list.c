@@ -87,6 +87,14 @@ exception listAddItem(List* list, void* data) {
     return SUCCESS;
 }
 
+/**
+ * Update the data stored at an index of a list.
+ * @note Data is not copied, only stored as a pointer.
+ * @param list The list to set an item of.
+ * @param index The index to set.
+ * @param data The data to be set at that index.
+ * @throws LIST_EXCEPTION if index out of range.
+ */
 exception listSetItem(List* list, const uint index, void* data) {
     // obviously we cant insert an item outside of the list
     if (index >= list->length) tekThrow(LIST_EXCEPTION, "List index out of range.");
@@ -123,9 +131,10 @@ exception listSetItem(List* list, const uint index, void* data) {
  * Insert an item at a specific index into the list.
  * @note Will only copy the pointer into the list, but not actually the data. So don't try and add stack variables to it and then pass on to another function, etc.
  * @param list The list to insert an item into.
- * @param index
- * @param data
- * @return
+ * @param index The index to insert the item at.
+ * @param data The data to be inserted into the list.
+ * @throws LIST_EXCEPTION if index out of range
+ * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 exception listInsertItem(List* list, const uint index, void* data) {
     // obviously we cant insert an item outside of the list

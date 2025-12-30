@@ -177,7 +177,7 @@ exception hashtableGetKeys(const HashTable* hashtable, char*** keys) {
  * @note The function will allocate memory to store the values in, which needs to be freed. The order of the values will match the order of keys retrieved by hashtableGetKeys.
  * @param hashtable A pointer to the hashtable.
  * @param values A pointer to an array of void pointers that will be filled with the values contained in the hashtable.
- * @return
+ * @throws MEMORY_EXCEPTION if could not allocate array to store values.
  */
 exception hashtableGetValues(const HashTable* hashtable, void*** values) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot get values from null ptr.");
@@ -273,7 +273,7 @@ static exception hashtableRehash(HashTable* hashtable, const unsigned int new_le
 /**
  * @brief Returns whether a hashtable is more than 75% full, at which point the number of collisions makes the hashtable slower, requiring the linked lists to be traversed more often.
  * @param hashtable A pointer to the hashtable.
- * @return
+ * @return 1 if the internal array is more than 75% full, 0 otherwise
  */
 static flag hashtableTooFull(const HashTable* hashtable) {
     if (!hashtable) tekThrow(NULL_PTR_EXCEPTION, "Cannot check if null ptr is full.");
@@ -397,6 +397,8 @@ exception hashtableRemove(HashTable* hashtable, const char* key) {
  * @return 1 if the item exists, 0 if it does not or an error occurred while looking for it
  */
 flag hashtableHasKey(HashTable* hashtable, const char* key) {
+    // attempt to get node, if fails then there is no node.
+    // kinda large overhead from writing exception buffer and whatnot
     HashNode* hash_node = 0;
     const exception hashtable_result =  hashtableGetNode(hashtable, key, &hash_node);
     if (hashtable_result == SUCCESS) return 1;
@@ -412,6 +414,7 @@ flag hashtableHasKey(HashTable* hashtable, const char* key) {
  * @param hashtable A pointer to a hashtable
  */
 void hashtablePrint(const HashTable* hashtable) {
+    // print
     printf("HashNode* internal  = %p\n", hashtable->internal);
     printf("unsigned int length = %u\n", hashtable->length);
 }
@@ -429,16 +432,16 @@ void hashtablePrint(const HashTable* hashtable) {
  */
 void hashtablePrintItems(const HashTable* hashtable) {
     printf("%p\n", hashtable);
-    if (!hashtable) {
+    if (!hashtable) { // if no pointer, ofc cannot print anything
         printf("hashtable = NULL !");
         return;
     }
-    if (!hashtable->internal) {
+    if (!hashtable->internal) { // no data
         printf("hashtable->internal = NULL !");
         return;
     }
     printf("{\n");
-    for (unsigned int i = 0; i < hashtable->length; i++) {
+    for (unsigned int i = 0; i < hashtable->length; i++) { // loop through and print each item in the internal array
         const HashNode* node_ptr = hashtable->internal[i];
         while (node_ptr) {
             printf("    \"%s\" = %ld (hash=%d)\n", node_ptr->key, (long)node_ptr->data, i);
@@ -455,6 +458,8 @@ void hashtablePrintItems(const HashTable* hashtable) {
  */
 void hashtablePrintInternal(const HashTable* hashtable) {
     printf("{\n");
+    // code predating the "typedef uint" in tekgl.h!!!
+    // estimated time of writing: january 2025
     for (unsigned int i = 0; i < hashtable->length; i++) {
         printf("    internal[%u] = %p\n", i, hashtable->internal[i]);
     }

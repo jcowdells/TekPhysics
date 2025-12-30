@@ -70,6 +70,7 @@ exception stackPush(Stack* stack, void* data) {
 exception stackPop(Stack* stack, void** data) {
     if (!stack->data) tekThrow(STACK_EXCEPTION, "Stack is empty");
 
+    // return root node and set root node to child of root node.
     StackItem* item = stack->data;
     *data = item->data;
     stack->data = item->next;
@@ -88,7 +89,7 @@ exception stackPop(Stack* stack, void** data) {
  */
 exception stackPeek(const Stack* stack, void** data) {
     if (!stack->data) tekThrow(STACK_EXCEPTION, "Stack is empty");
-    *data = stack->data->data;
+    *data = stack->data->data; // top of stack = root node
 
     return SUCCESS;
 }
