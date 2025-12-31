@@ -46,6 +46,9 @@ struct TekGuiTextInputDefaults {
     vec4 text_colour;
 };
 
+/**
+ * Mostly unused logging function. Just prints [INFO] TekGui: before the message
+ */
 #define tekGuiLog(...) printf("[INFO] TekGui: "); printf(__VA_ARGS__)
 
 exception tekGuiGetWindowDefaults(struct TekGuiWindowDefaults* defaults);

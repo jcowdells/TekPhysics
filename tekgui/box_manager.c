@@ -20,15 +20,28 @@ static uint box_vao = 0;
 
 static Vector box_mesh_buffer;
 
+/**
+ * Delete callback for box code. Free supporting memory.
+ */
 static void tekGuiBoxDelete() {
+    // delete opengl shenanigans
     glDeleteVertexArrays(1, &box_vao);
     glDeleteBuffers(1, &box_vbo);
     tekDeleteShaderProgram(box_shader);
+
+    // delete vector
+    vectorDelete(&box_mesh_buffer);
 
     box_init = DE_INITIALISED;
     box_gl_init = DE_INITIALISED;
 }
 
+/**
+ * Callback for when opengl loads. Set up the vertex buffer + element buffer + vertex array
+ * @throws FAILURE if not initialised.
+ * @throws OPENGL_EXCEPTION .
+ * @throws SHADER_EXCEPTION .
+ */
 static exception tekGuiBoxGLLoad() {
     if (box_init != INITIALISED)
         tekThrow(FAILURE, "TekGuiBoxManager was not initialised fully.");
@@ -74,19 +87,31 @@ static exception tekGuiBoxGLLoad() {
     return SUCCESS;
 }
 
+/**
+ * Initialisation function for gui boxes. Set some callbacks and create supporting data structures.
+ */
 tek_init tekGuiBoxInit() {
+    // callbacks
     exception tek_exception = tekAddGLLoadFunc(tekGuiBoxGLLoad);
     if (tek_exception) return;
 
     tek_exception = tekAddDeleteFunc(tekGuiBoxDelete);
     if (tek_exception) return;
 
+    // create box buffer
     tek_exception = vectorCreate(1, sizeof(TekGuiBoxData), &box_mesh_buffer);
     if (tek_exception) return;
 
     box_init = INITIALISED;
 }
 
+/**
+ * Create a new box to be added to the box buffer.
+ * @param box_data A pointer to the box data to add to the buffer.
+ * @param index The outputted index of where the box data was added to the buffer.
+ * @throws FAILURE if box not initialised.
+ * @throws OPENGL_EXCEPTION if opengl not initialised.
+ */
 exception tekGuiCreateBox(const TekGuiBoxData* box_data, uint* index) {
     if (!box_init) tekThrow(FAILURE, "Attempted to run function before initialised.");
     if (!box_gl_init) tekThrow(OPENGL_EXCEPTION, "Attempted to run function before OpenGL initialised.");
@@ -109,6 +134,13 @@ exception tekGuiCreateBox(const TekGuiBoxData* box_data, uint* index) {
     return SUCCESS;
 }
 
+/**
+ * Update a box in the box buffer with new coordinates. Will overwrite the old mesh data.
+ * @param box_data A pointer to the new box data to overwrite into the box.
+ * @param index The index to write at in the box buffer.
+ * @throws FAILURE if not initialised.
+ * @throws OPENGL_EXCEPTION if opengl not initialised.
+ */
 exception tekGuiUpdateBox(const TekGuiBoxData* box_data, const uint index) {
     if (!box_init) tekThrow(FAILURE, "Attempted to run function before initialised.");
     if (!box_gl_init) tekThrow(OPENGL_EXCEPTION, "Attempted to run function before OpenGL initialised.");
@@ -128,6 +160,15 @@ exception tekGuiUpdateBox(const TekGuiBoxData* box_data, const uint index) {
     return SUCCESS;
 }
 
+/**
+ * Draw a generic box to the screen, with a background and border colour. The box to draw is specified by
+ * the index in the buffer containing all boxes, this is given by the \ref tekGuiCreateBox method.
+ * @param index The index of the box to draw.
+ * @param background_colour The colour to fill the background with (rgba).
+ * @param border_colour The colour to fill the border with (rgba).
+ * @throws OPENGL_EXCEPTION if index out of range.
+ * @throws SHADER_EXCEPTION .
+ */
 exception tekGuiDrawBox(const uint index, const vec4 background_colour, const vec4 border_colour) {
     if (index >= box_mesh_buffer.length)
         tekThrow(OPENGL_EXCEPTION, "Attempted to draw index out of range.");

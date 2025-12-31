@@ -4,22 +4,41 @@
 
 #include "tekgui.h"
 
+/**
+ * Remove a text mesh from the lookup, freeing any associated memory with that lookup.
+ * @param window The window to remove the lookup from.
+ * @param key The key to remove.
+ * @throws HASHTABLE_EXCEPTION if key does not exist.
+ */
 static exception tekGuiListWindowRemoveLookup(TekGuiListWindow* window, const char* key) {
+    // get text from the hashtable
     TekText* tek_text;
     tekChainThrow(hashtableGet(&window->text_lookup, key, &tek_text));
+
+    // free it
     if (tek_text) {
         tekDeleteText(tek_text);
         free(tek_text);
     }
+
+    // now remove the dead pointer
     tekChainThrow(hashtableRemove(&window->text_lookup, key));
     return SUCCESS;
 }
 
+/**
+ * Clean out the lookup table, remove any items that are no longer in the list being displayed.
+ * @param window The window for which to clean the lookup.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ * @throws HASHTABLE_EXCEPTION .
+ */
 static exception tekGuiListCleanLookup(TekGuiListWindow* window) {
+    // get all keys in the hashtable to look through them
     char** keys;
     tekChainThrow(hashtableGetKeys(&window->text_lookup, &keys));
 
     // if there is a key in the lookup that is no longer in the list, we should remove it as it will not be rendered.
+    // nested for loop, check each lookup against each item of the list
     for (uint i = 0; i < window->text_lookup.num_items; i++) {
         const char* key = keys[i];
         const ListItem* item;
@@ -37,21 +56,45 @@ static exception tekGuiListCleanLookup(TekGuiListWindow* window) {
     return SUCCESS;
 }
 
+/**
+ * Add a text mesh to the lookup.
+ * @param window The list window to add the lookup to.
+ * @param text The string associated with that text.
+ * @param tek_text The outputted text mesh. Set to NULL if not wanted.
+ * @throws MEMORY_EXCEPTION if could not allocate memory for new text mesh.
+ */
 static exception tekGuiListWindowAddLookup(TekGuiListWindow* window, const char* text, TekText** tek_text) {
+    // allocate memory for text mesh
     TekText* tek_text_ptr = (TekText*)malloc(sizeof(TekText));
     if (!tek_text_ptr)
         tekThrow(MEMORY_EXCEPTION, "Failed to allocate memory for text mesh.");
+
+    // get default font and create text
     TekBitmapFont* font;
     tekChainThrow(tekGuiGetDefaultFont(&font));
     tekChainThrow(tekCreateText(text, window->text_size, font, tek_text_ptr));
+
+    // add to hash table
     tekChainThrow(hashtableSet(&window->text_lookup, text, tek_text_ptr));
+
+    // if wanted return the text mesh.
     if (tek_text)
         *tek_text = tek_text_ptr;
     return SUCCESS;
 }
 
+/**
+ * Get a text mesh by looking up the string it is associated with. If there is no such text, create the text and add it to the lookup.
+ * @param window The window that contains the string to get.
+ * @param text The 
+ * @param tek_text 
+ * @throws HASHTABLE_EXCEPTION .
+ */
 static exception tekGuiListWindowGetLookup(TekGuiListWindow* window, const char* text, TekText** tek_text) {
+    // check if the flag is there
     const flag has_text = hashtableHasKey(&window->text_lookup, text);
+    
+    // react appropriately
     if (has_text) {
         tekChainThrow(hashtableGet(&window->text_lookup, text, tek_text));
     } else {
@@ -61,7 +104,13 @@ static exception tekGuiListWindowGetLookup(TekGuiListWindow* window, const char*
     return SUCCESS;
 }
 
+/**
+ * Delete the text mesh lookup table, freeing any allocated memory.
+ * @param window 
+ * @throws HASHTABLE_EXCEPTION .
+ */
 static exception tekGuiListWindowDeleteLookup(TekGuiListWindow* window) {
+    // delete all the keys
     char** keys;
     tekChainThrow(hashtableGetKeys(&window->text_lookup, &keys));
 
@@ -70,16 +119,33 @@ static exception tekGuiListWindowDeleteLookup(TekGuiListWindow* window) {
         tekChainThrow(tekGuiListWindowRemoveLookup(window, key));
     }
 
+    // free everything else.
     free(keys);
+    tekChainThrow(hashtableDelete(&window->text_lookup));
     return SUCCESS;
 }
 
+/**
+ * Formula to calculate a brightness value for a colour.
+ * @param colour The colour to get the brightness of.
+ * @return The brightness between 0.0 and 1.0
+ */
 static float tekGuiGetColourBrightness(const vec4 colour) {
+    // presumably based on human eye cones and which ones are more sensitive to light?
     return colour[0] * 0.299f + colour[1] * 0.587f + colour[2] * 0.114f;
 }
 
+/**
+ * Unused method to modify the brightness of a colour. Will adjust the colour in the most suitable direction to have the largest impact on making it look different to before.
+ * @param original_colour The original colour.
+ * @param final_colour The outputted colour with different brightness.
+ * @param delta How much to change the brightness by.
+ */
 static void tekGuiModifyColourBrightness(vec4 original_colour, vec4 final_colour, const float delta) {
+    // get brightness
     const float brightness = tekGuiGetColourBrightness(original_colour);
+
+    // if already dark, make brighter
     if (brightness < 0.5f) {
         glm_vec4_copy((vec4){
                 original_colour[0] + delta,
@@ -89,6 +155,7 @@ static void tekGuiModifyColourBrightness(vec4 original_colour, vec4 final_colour
             },
             final_colour
         );
+    // if already bright, make darker
     } else {
         glm_vec4_copy((vec4){
                 original_colour[0] - delta,
@@ -101,28 +168,41 @@ static void tekGuiModifyColourBrightness(vec4 original_colour, vec4 final_colour
     }
 }
 
+/**
+ * Draw a list window, drawing each string that is in the list and is visible.
+ * @param window The list window to draw.
+ * @throws OPENGL_EXCEPTION .
+ */
 static exception tekGuiDrawListWindow(TekGuiWindow* window) {
+    // get list window from window data.
     TekGuiListWindow* list_window = (TekGuiListWindow*)window->data;
+
+    // move button in case the window has moved
     tekGuiSetButtonPosition(&list_window->button, list_window->window.x_pos, list_window->window.y_pos);
     tekGuiSetButtonSize(&list_window->button, list_window->window.width, list_window->window.height);
 
+    // iterate over text list
     const ListItem* item;
+    // x has slight offset from left edge
     const float x = (float)(list_window->window.x_pos + (int)(list_window->text_size / 2));
-    float y = (float)list_window->window.y_pos;
+    float y = (float)list_window->window.y_pos; // y increments for each new item
     uint index = 0;
     foreach(item, list_window->text_list, {
-
+        // firstly, skip through the list until we reach the first visible item.
         if (index < list_window->draw_index) {
             index++;
             item = item->next;
             continue;
         }
+        // if we have reached the end of the visible portion, stop rendering.
         if (index >= list_window->draw_index + list_window->num_visible) break;
 
+        // retrieve the text from the list, and look up the text mesh
         const char* text = item->data;
         TekText* tek_text = 0;
         tekChainThrow(tekGuiListWindowGetLookup(window, text, &tek_text));
 
+        // if this is the selected or hovered item, the text colour is different.
         vec4 text_colour;
         if (index == list_window->select_index) {
             tekGuiModifyColourBrightness(list_window->text_colour, text_colour, 0.4f);
@@ -134,19 +214,36 @@ static exception tekGuiDrawListWindow(TekGuiWindow* window) {
 
         tekChainThrow(tekDrawColouredText(tek_text, x, y, text_colour));
 
+        // increment y
         y += (float)list_window->text_size * 1.25f;
         index++;
     });
     return SUCCESS;
 }
 
+/**
+ * Select a list window and bring it to the front of the gui.
+ * @param window The window to bring to the front. 
+ * @throws LIST_EXCEPTION if could not move button in list.
+ */
 static exception tekGuiSelectListWindow(TekGuiWindow* window) {
+    // get window to get button to move forward.
     TekGuiListWindow* list_window = (TekGuiListWindow*)window->data;
     tekChainThrow(tekGuiBringButtonToFront(&list_window->button));
     return SUCCESS;
 }
 
+/**
+ * Get the current index being hovered / clicked based on y coordinate of mouse.
+ * @param window The window to check against.
+ * @param mouse_y The y-coordinate of the mouse.
+ * @return The index in the list that is being hovered.
+ */
 static int tekGuiListWindowGetIndex(TekGuiListWindow* window, int mouse_y) {
+    // setting up for a linear interpolation type thing
+    // basically, get min and max, then see how far between min and mouse_y
+    // then get the percentage of how far between min and max we are.
+    // then multiply by number of visible items and add how far scrolled. simple.
     const int
         min_y = window->window.y_pos,
         max_y = min_y + window->window.height;
@@ -161,22 +258,34 @@ static int tekGuiListWindowGetIndex(TekGuiListWindow* window, int mouse_y) {
     return screen_index + window->draw_index;
 }
 
+/**
+ * Callback for when the active area of a list window is clicked. Will pass on the clicked index to further callbacks.
+ * @param button The internal button of the list window.
+ * @param callback_data The callback data associated with this click. (button type, press/release)
+ */
 static void tekGuiListWindowButtonCallback(TekGuiButton* button, TekGuiButtonCallbackData callback_data) {
+    // get list window from button data.
     TekGuiListWindow* window = (TekGuiListWindow*)button->data;
-    if (!window->window.visible)
+    if (!window->window.visible) // invisible windows should not be clickable.
         return;
     switch (callback_data.type) {
+    // hovered items should be rendered differently.
     case TEK_GUI_BUTTON_MOUSE_TOUCHING_CALLBACK:
         window->hover_index = tekGuiListWindowGetIndex(window, (int)callback_data.mouse_y);
         break;
+    // if clicked
     case TEK_GUI_BUTTON_MOUSE_BUTTON_CALLBACK:
+        // ensure that left click + release
         if (callback_data.data.mouse_button.button != GLFW_MOUSE_BUTTON_LEFT || callback_data.data.mouse_button.action != GLFW_RELEASE)
             break;
+        // update selection and pass on callback
         window->select_index = tekGuiListWindowGetIndex(window, (int)callback_data.mouse_y);
         if (window->callback)
             window->callback(window);
         break;
+    // if scrolled
     case TEK_GUI_BUTTON_MOUSE_SCROLL_CALLBACK:
+        // increment draw index based on scroll direction
         if (callback_data.data.mouse_scroll.y_offset > 0.0) {
             if (window->draw_index > 0)
                 window->draw_index--;
@@ -191,10 +300,19 @@ static void tekGuiListWindowButtonCallback(TekGuiButton* button, TekGuiButtonCal
     }
 }
 
+/**
+ * Create a list window gui element, which displays a scrollable list of strings.
+ * The window will automatically adjust if new strings are added to the list.
+ * @param window The outputted window that is being created.
+ * @param text_list The list of strings that should be displayed.
+ * @throws MEMORY_EXCEPTION if malloc() fails.
+ */
 exception tekGuiCreateListWindow(TekGuiListWindow* window, List* text_list) {
+    // load list window defaults
     struct TekGuiListWindowDefaults list_window_defaults = {};
     tekChainThrow(tekGuiGetListWindowDefaults(&list_window_defaults));
 
+    // create base window
     tekChainThrow(tekGuiCreateWindow(&window->window));
     window->text_list = text_list;
     window->text_size = list_window_defaults.text_size;
@@ -206,6 +324,8 @@ exception tekGuiCreateListWindow(TekGuiListWindow* window, List* text_list) {
 
     tekGuiSetWindowSize(&window->window, window->window.width, window->num_visible * window->text_size * 5 / 4);
 
+    // set up text hashtable, map strings to text objects
+    // also allows text to be reused.
     tekChainThrow(hashtableCreate(&window->text_lookup, 8));
     tekChainThrow(tekGuiCreateButton(&window->button));
     tekGuiSetButtonPosition(&window->button, window->window.x_pos, window->window.y_pos);
@@ -216,7 +336,14 @@ exception tekGuiCreateListWindow(TekGuiListWindow* window, List* text_list) {
     return SUCCESS;
 }
 
+/**
+ * Delete a list window, freeing any memory allocated to the structure.
+ * @param window The list window to delete.
+ */
 void tekGuiDeleteListWindow(TekGuiListWindow* window) {
+    // delete base window
     tekGuiDeleteWindow(&window->window);
+
+    // delete text storage.
     tekGuiListWindowDeleteLookup(window);
 }

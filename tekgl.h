@@ -4,10 +4,14 @@ typedef char flag;
 typedef unsigned char byte;
 typedef unsigned int uint;
 
-/// Take a 3 component vector and expand it, used for printing mostly.
+/**
+ * Take a 3 component vector and expand it, used for printing mostly.
+ */
 #define EXPAND_VEC3(vector) vector[0], vector[1], vector[2]
 
-/// Take a 4 component vector and expand it, used for printing mostly.
+/**
+ * Take a 4 component vector and expand it, used for printing mostly.
+ */
 #define EXPAND_VEC4(vector) vector[0], vector[1], vector[2], vector[3]
 
 // different modes that the simulation can be in
