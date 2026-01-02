@@ -31,8 +31,8 @@ void hashtableDelete(const HashTable* hashtable) {
 
 /**
  * @brief Create a hashtable. The length is relatively unimportant, setting it too small just means more rehashes.
- * @param hashtable[out] A pointer to an empty hashtable struct.
- * @param length[in] The starting size of the hashtable. If this size is filled by 75%, the hashtable will double its size.
+ * @param[out] hashtable A pointer to an empty hashtable struct.
+ * @param[in] length The starting size of the hashtable. If this size is filled by 75%, the hashtable will double its size.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 exception hashtableCreate(HashTable* hashtable, const unsigned int length) {
@@ -282,7 +282,7 @@ static flag hashtableTooFull(const HashTable* hashtable) {
 }
 
 /**
- *
+ * Get an item from a hashtable by key.
  * @param hashtable A pointer to the hashtable.
  * @param key The key to the wanted data.
  * @param data A pointer that will be filled with the stored data.

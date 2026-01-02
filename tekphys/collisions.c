@@ -1481,7 +1481,7 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
     tekUpdateOBB(&body_b->collider->obb, body_b->transform);
     tekChainThrow(vectorAddItem(&collider_buffer, &pair));
 
-    // kinda like a tree traversal but not really.
+    // tree traversal.
     while (vectorPopItem(&collider_buffer, &pair)) {
         if (pair[LEFT]->type == COLLIDER_NODE) {
             tekUpdateOBB(&pair[LEFT]->data.node.left->obb, body_a->transform);

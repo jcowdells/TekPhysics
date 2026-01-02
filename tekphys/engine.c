@@ -151,7 +151,7 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
  * @note Will create both a body and a corresponding entity on the graphics thread. The object ids are assigned in order, filling gaps in the order when they appear.
  * @param state_queue The ThreadQueue that will be used to send the entity creation message to the graphics thread.
  * @param bodies A pointer to a vector that contains the bodies.
- * @param unused_ids A queue containing unused object ids, allowing gaps in the list of ids to be filled by new objects.
+ * @param object_id The ID of the new body to create.
  * @param mesh_filename The file that contains the mesh for the object.
  * @param material_filename The file that contains the material for the object. Only used in the graphics thread.
  * @param mass The mass of the body.
@@ -160,7 +160,6 @@ static void threadExcept(ThreadQueue* state_queue, const uint exception) {
  * @param position The position of the body in the world.
  * @param rotation The rotation of the body as a quaternion.
  * @param scale The scale in x, y, and z direction from the original shape of the body.
- * @param object_id A pointer to where the new object id will be stored. Can be set to NULL if id is not needed.
  * @throws MEMORY_EXCEPTION if malloc() fails.
  */
 static exception tekEngineCreateBody(ThreadQueue* state_queue, Vector* bodies, const uint object_id, const char* mesh_filename, const char* material_filename, const float mass, const float friction, const float restitution, vec3 position, vec4 rotation, vec3 scale) {
@@ -261,7 +260,6 @@ static exception tekEngineUpdateBody(ThreadQueue* state_queue, const Vector* bod
  * @brief Delete a body, freeing the object id for reuse and removing the counterpart on the graphics thread.
  * @param state_queue The ThreadQueue linking to the graphics thread.
  * @param bodies A vector containing the bodies.
- * @param unused_ids The queue containing unused ids, the removed id will be enqueued to this.
  * @param object_id The id of the body to delete.
  * @throws ENGINE_EXCEPTION if the object id is invalid.
  */
