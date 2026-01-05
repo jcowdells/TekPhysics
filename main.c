@@ -32,6 +32,7 @@
 #include "tekgui/text_button.h"
 #include "tekgui/option_window.h"
 #include "tekphys/scenario.h"
+#include "tests/exception_test.h"
 #include "tests/unit_test.h"
 
 #define WINDOW_WIDTH  1280
@@ -1916,7 +1917,6 @@ static exception run() {
         // update camera so that we actually are looking where we want.
         tekSetCameraPosition(&camera, camera_position);
         tekSetCameraRotation(&camera, camera_rotation);
-
     }
 
     tekRunCleanup();
@@ -1930,6 +1930,9 @@ static exception run() {
  */
 int main(void) {
     // welcome to tekphysics :D
+    printf("There was %sa collision.\n", tekTriangleTest() ? "" : "not ");
+    return SUCCESS;
+
     tekInitExceptions();
     const exception tek_exception = run();
     tekLog(tek_exception);

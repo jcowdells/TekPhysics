@@ -689,12 +689,23 @@ int tekCheckTriangleCollision(vec3 triangle_a[3], vec3 triangle_b[3], struct Tek
  * @param triangle_b[3] The second triangle involved in the test.
  * @return 1 if there was a collision between them, 0 otherwise. (I presume)
  */
-int tekTriangleTest(vec3 triangle_a[3], vec3 triangle_b[3]) {
-    // testing collisions...
-    struct TekPolytopeVertex simplex[4];
-    uint len_simplex;
-    float separation;
-    return tekCheckTriangleCollision(triangle_a, triangle_b, simplex, &len_simplex, &separation);
+int tekTriangleTest() {
+    vec3 triangle_a[] = {
+        0.46666431427001953f, 1.510340690612793f, 1.214371681213379f,
+        1.0f, 0.0f, 0.0f,
+        -2.7034502029418945f, -3.8242716789245605f, -0.3502063751220703f
+    };
+    vec3 triangle_b[] = {
+        -0.5204248428344727f, -0.7979059219360352f, -0.9570636749267578f,
+        -5.015390872955322f, -4.310789585113525f, 1.0890388488769531f,
+        0.699742317199707f, 0.5617036819458008f, 1.45734441280365f
+    };
+
+    struct TekPolytopeVertex polytope[4] = {};
+    uint len_simplex = 0;
+    float separation = 0.0f;
+
+    return tekCheckTriangleCollision(triangle_a, triangle_b, &polytope, &len_simplex, &separation);
 }
 
 /**
@@ -1481,6 +1492,10 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
     tekUpdateOBB(&body_b->collider->obb, body_b->transform);
     tekChainThrow(vectorAddItem(&collider_buffer, &pair));
 
+    uint obb_obb_checks = 0;
+    uint obb_triangle_checks = 0;
+    uint triangle_triangle_checks = 0;
+
     // tree traversal.
     while (vectorPopItem(&collider_buffer, &pair)) {
         if (pair[LEFT]->type == COLLIDER_NODE) {
@@ -1509,12 +1524,15 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
                 // use correct collision detection method based on the types of colliders involved
                 if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_NODE)) {
                     sub_collision = tekCheckOBBCollision(&node_a->obb, &node_b->obb);
+                    obb_obb_checks++;
                 } else if ((node_a->type == COLLIDER_NODE) && (node_b->type == COLLIDER_LEAF)) {
                     tekUpdateLeaf(node_b, body_b->transform);
                     sub_collision = tekCheckOBBTrianglesCollision(&node_a->obb, node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3);
+                    obb_triangle_checks++;
                 } else if ((node_a->type == COLLIDER_LEAF) && (node_b->type == COLLIDER_NODE)) {
                     tekUpdateLeaf(node_a, body_a->transform);
                     sub_collision = tekCheckOBBTrianglesCollision(&node_b->obb, node_a->data.leaf.w_vertices, node_a->data.leaf.num_vertices / 3);
+                    obb_triangle_checks++;
                 } else {
                     // triangle-triangle collision is more special
                     // need to create a collision manifold if there is a collision
@@ -1526,6 +1544,8 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
                         node_b->data.leaf.w_vertices, node_b->data.leaf.num_vertices / 3,
                         &sub_collision, &manifold
                         ));
+
+                    triangle_triangle_checks++;
 
                     if (sub_collision) {
                         sub_collision = 0;
@@ -1548,6 +1568,12 @@ exception tekGetCollisionManifolds(TekBody* body_a, TekBody* body_b, flag* colli
             }
         }
     }
+
+    const uint unoptimised = body_a->num_indices * body_b->num_indices / 9;
+    printf("Un optimised: %u triangle-triangle checks.\n", unoptimised);
+    printf("Optimised   : %u obb-obb checks.\n", obb_obb_checks);
+    printf("              %u obb-triangle checks.\n", obb_triangle_checks);
+    printf("              %u triangle-triangle checks.\n", triangle_triangle_checks);
 
     return SUCCESS;
 }

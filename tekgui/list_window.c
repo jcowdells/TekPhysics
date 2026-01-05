@@ -121,7 +121,7 @@ static exception tekGuiListWindowDeleteLookup(TekGuiListWindow* window) {
 
     // free everything else.
     free(keys);
-    tekChainThrow(hashtableDelete(&window->text_lookup));
+    hashtableDelete(&window->text_lookup);
     return SUCCESS;
 }
 

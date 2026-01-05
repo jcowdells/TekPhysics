@@ -85,6 +85,8 @@ add_executable(
         tekphys/scenario.h
         tests/unit_test.c
         tests/unit_test.h
+        tests/exception_test.c
+        tests/exception_test.h
 )
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${OpenBLAS_INCLUDE_DIR})

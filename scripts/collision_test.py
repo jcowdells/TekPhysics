@@ -249,7 +249,6 @@ def check_obb_obb_collision(obb_a: OBB, obb_b: OBB):
         mag_y = np.fabs(obb_b.half_extents[1] * dot_matrix[i][1])
         mag_z = np.fabs(obb_b.half_extents[2] * dot_matrix[i][2])
         if np.fabs(t_array[i]) > obb_a.half_extents[i] + mag_x + mag_y + mag_z:
-            print("Early return @ 1")
             return False
 
     # Intermediate cases
@@ -260,7 +259,6 @@ def check_obb_obb_collision(obb_a: OBB, obb_b: OBB):
         mag_z = np.fabs(obb_a.half_extents[2] * dot_matrix[2][i])
         dot_product = np.fabs(np.dot(translate, obb_b.axes[i]))
         if dot_product > obb_b.half_extents[i] + mag_x + mag_y + mag_z:
-            print("Early return @ 2")
             return False
 
     # Difficult cases
@@ -301,7 +299,6 @@ def check_obb_obb_collision(obb_a: OBB, obb_b: OBB):
             # print(f"|(T.A{axn[ti_a]})R{axn[ri_a]}{axn[j]}-(T.A{axn[ti_b]})R{axn[ri_b]}{axn[j]}| > |{dep[cyc_ll]}AR{axn[cyc_lh]}{axn[j]}| + |{dep[cyc_lh]}AR{axn[cyc_ll]}{axn[j]}| + |{dep[cyc_sl]}BR{axn[i]}{axn[cyc_sh]}| + |{dep[cyc_sh]}BR{axn[i]}{axn[cyc_sl]}|")
 
             if cmp > tst:
-                print("Early return @ 3")
                 return False
 
     return True
@@ -335,7 +332,6 @@ def check_aabb_triangle_collision(half_extents: list[float], triangle: Triangle)
     for i in range(3):
         cmp += half_extents[i] * np.fabs(face_normal[i])
     if tst > cmp:
-        print("Failed 1")
         return False
 
     for i in range(3):
@@ -347,7 +343,6 @@ def check_aabb_triangle_collision(half_extents: list[float], triangle: Triangle)
         tri_max = max(dots[0], dots[1], dots[2])
 
         if (tri_min > half_extents[i]) or (tri_max < -half_extents[i]):
-            print("Failed 2")
             return False
 
     for i in range(3):
@@ -362,10 +357,8 @@ def check_aabb_triangle_collision(half_extents: list[float], triangle: Triangle)
             tri_min = min(dots[0], dots[1], dots[2])
             tri_max = max(dots[0], dots[1], dots[2])
             if (tri_min > projection) or (tri_max < -projection):
-                print("Failed 3")
                 return False
 
-    print("Passed")
     return True
 
 def check_obb_triangle_collision(obb: OBB, triangle: Triangle) -> bool:
@@ -532,20 +525,16 @@ def get_triangle_triangle_collision_normal(triangle_a: Triangle, triangle_b: Tri
 
     if sign_c > 0:
         if sign_d > 0:
-            print("case 1")
             edge_a = np.subtract(triangle_a.vertices[0], triangle_a.vertices[2])
             edge_b = np.subtract(triangle_b.vertices[0], triangle_b.vertices[2])
             return get_triangle_edge_contact_normal(edge_b, edge_a)
         else:
-            print("case 2")
             print(triangle_a, triangle_b)
             return np.multiply(normal_b, -1.0)
     else:
         if sign_d > 0:
-            print("case 3")
             return normal_a
         else:
-            print("case 4")
             edge_a = np.subtract(triangle_a.vertices[0], triangle_a.vertices[1])
             edge_b = np.subtract(triangle_b.vertices[0], triangle_b.vertices[1])
             return get_triangle_edge_contact_normal(edge_a, edge_b)
@@ -591,7 +580,6 @@ def get_triangle_triangle_collision_sat(triangle_a: Triangle, triangle_b: Triang
 
         overlap = min(max_a, max_b) - max(min_a, min_b)
         if overlap < 0:
-            print("Separated @", axis)
             return None
 
         if overlap < min_overlap:
@@ -837,6 +825,7 @@ class OBBCollisionTest(Entity):
         super().__init__()
 
     def update(self):
+        global print_key
         collision = check_obb_obb_collision(self.obb_a.get_obb(), self.obb_b.get_obb())
         if collision:
             self.obb_a.color_setter(TOUCH_COLOUR)
@@ -844,6 +833,12 @@ class OBBCollisionTest(Entity):
         else:
             self.obb_a.color_setter(NORMAL_COLOUR)
             self.obb_b.color_setter(NORMAL_COLOUR)
+
+        if print_key:
+            print_obb("obb_a", self.obb_a.get_obb())
+            print_obb("obb_b", self.obb_b.get_obb())
+            print()
+            print_key = False
 
 class OBBTriangleCollisionTest(Entity):
     def __init__(self, obb_centre: np.ndarray, triangle_a: np.ndarray, triangle_b: np.ndarray, triangle_c: np.ndarray):
@@ -892,7 +887,14 @@ class OBBTriangleCollisionTest(Entity):
             self.obb.color_setter(NORMAL_COLOUR)
             self.triangle.color_setter(NORMAL_COLOUR)
 
-print_key = True
+        global print_key
+        if print_key:
+            print_triangle("triangle", self.triangle.get_triangle())
+            print_obb("obb", self.obb.get_obb())
+            print()
+            print_key = False
+
+print_key = False
 
 def print_vertex(vertex, end="\n"):
     print(str(vertex[0]) + "f, " + str(vertex[1]) + "f, " + str(vertex[2]) + "f", end=end)
@@ -905,6 +907,23 @@ def print_triangle(name, triangle):
         print("    ", end="")
         print_vertex(triangle.vertices[i], end="")
     print("\n};")
+
+def print_copy(vertex, dest):
+    print("glm_vec3_copy((vec3){", end="")
+    print_vertex(vertex, end="")
+    print("}, " + dest + ");")
+
+def print_obb(name, obb):
+    print("struct OBB " + name + " = {};")
+    print_copy(obb.axes[0], f"{name}.w_axes[0]")
+    print_copy(obb.axes[1], f"{name}.w_axes[1]")
+    print_copy(obb.axes[2], f"{name}.w_axes[2]")
+    print("const float " + name + "_half_extents[] = {")
+    print("    ", end="")
+    print_vertex(obb.half_extents)
+    print("};")
+    print("memcpy(" + name + ".w_half_extents, " + name + "_half_extents, sizeof(" + name + "_half_extents));")
+    print_copy(obb.centre, f"{name}.w_centre")
 
 class TriangleCollisionTest(Entity):
     def __init__(self, *vertices):
@@ -931,6 +950,7 @@ class TriangleCollisionTest(Entity):
         if print_key:
             print_triangle("triangle_a", self.triangle_a.get_triangle())
             print_triangle("triangle_b", self.triangle_b.get_triangle())
+            print()
             print_key = False
 
 
@@ -978,6 +998,8 @@ def input(key):
     global print_key
     if key == "p":
         print_key = True
+    else:
+        print_key = False
 
 def main():
     global triangle_index, num_triangles, collision_tests
@@ -1014,6 +1036,8 @@ def main():
     # obb_test = InteractiveOBB(centre=np.array([0, 0 ,0]))
     # triangle_test = InteractiveTriangle(np.array([0, 0, 0]), np.array([1, 0, 0]), np.array([0, 0, 1]))
 
+    # collision_test_0 = OBBCollisionTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]))
+
     # collision_test = OBBTriangleCollisionTest(np.array([0, -1, 0]), np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]))
 
     # collision_test_2 = TriangleNormalTest(np.array([0.0, 1.0, 0.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 2.0, 0.0]), np.array([1.0, 1.0, 0.0]), np.array([0.0, 1.0, 1.0]))
@@ -1025,7 +1049,7 @@ def main():
                                              np.array([0.0, 0.0, 1.0]),
                                              np.array([0.0, 1.0, 1.0]))
 
-    vector = VectorDisplayEntity(np.array([0.0, 0.0, 0.0]), np.array([-1.0, 0.0, 1.0]))
+    # vector = VectorDisplayEntity(np.array([0.0, 0.0, 0.0]), np.array([-1.0, 0.0, 1.0]))
 
     EditorCamera()  # add camera controls for orbiting and moving the camera
 

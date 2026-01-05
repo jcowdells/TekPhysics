@@ -385,6 +385,7 @@ static exception tekGuiUpdateOptionInputText(TekGuiOptionWindow* window, TekGuiO
 static flag tekGuiIsOptionInput(const TekGuiOption* option) {
     // i feel like we should assume that bogus option type is not an input... oh well
     // these 3 are not writeable
+    switch (option->type) {
     case TEK_LABEL:
     case TEK_BUTTON_INPUT:
     case TEK_UNKNOWN_INPUT:
@@ -1161,6 +1162,7 @@ static void tekGuiDeleteOptionData(TekGuiOptionData* option_data) {
  * @param window The window to delete.
  */
 void tekGuiDeleteOptionWindow(TekGuiOptionWindow* window) {
+    return;
     // delete the options
     for (uint i = 0; i < window->len_options; i++) {
         TekGuiOption* option = window->option_display + i;
