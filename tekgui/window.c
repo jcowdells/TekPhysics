@@ -409,5 +409,8 @@ void tekGuiSetWindowBorderColour(TekGuiWindow* window, vec4 colour) {
  * @param window The window to delete.
  */
 void tekGuiDeleteWindow(TekGuiWindow* window) {
-    // TODO: THIS????????????????
+    // free everything we allocated
+    tekGuiDeleteButton(&window->title_button);
+    tekDeleteText(&window->title_text);
+    free(window->title);
 }

@@ -1930,9 +1930,6 @@ static exception run() {
  */
 int main(void) {
     // welcome to tekphysics :D
-    printf("There was %sa collision.\n", tekTriangleTest() ? "" : "not ");
-    return SUCCESS;
-
     tekInitExceptions();
     const exception tek_exception = run();
     tekLog(tek_exception);

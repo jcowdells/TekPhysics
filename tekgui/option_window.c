@@ -1139,7 +1139,8 @@ static void tekGuiDeleteOption(TekGuiOption* option) {
     case TEK_VEC3_INPUT:
     case TEK_VEC4_INPUT:
         tekGuiDeleteTextInput(&option->display.input.text_input);
-        free((void*)option->display.input.name); // free name
+        if (option->display.input.index == 0) // multi-options share the same name, only free it once.
+            free((void*)option->display.input.name); // free name
         break;
     default:
         break;
@@ -1147,22 +1148,10 @@ static void tekGuiDeleteOption(TekGuiOption* option) {
 }
 
 /**
- * Free any memory allocated by option data.
- * @param option_data The option data to delete
- */
-static void tekGuiDeleteOptionData(TekGuiOptionData* option_data) {
-    // only free strings, rest will be deallocated by next call
-    if (option_data->type == TEK_STRING_INPUT)
-        free(option_data->data.string);
-    free(option_data);
-}
-
-/**
  * Free any memory allocated by the option window.
  * @param window The window to delete.
  */
 void tekGuiDeleteOptionWindow(TekGuiOptionWindow* window) {
-    return;
     // delete the options
     for (uint i = 0; i < window->len_options; i++) {
         TekGuiOption* option = window->option_display + i;
@@ -1174,12 +1163,6 @@ void tekGuiDeleteOptionWindow(TekGuiOptionWindow* window) {
     TekGuiOptionData* option_data_array;
     hashtableGetValues(&window->option_data, &option_data_array);
     if (!option_data_array) return;
-
-    // iterate over, delete each option data
-    for (uint i = 0; i < window->option_data.num_items; i++) {
-        TekGuiOptionData* option_data = option_data_array + i;
-        tekGuiDeleteOptionData(option_data);
-    }
 
     // final cleanup
     free(option_data_array);
